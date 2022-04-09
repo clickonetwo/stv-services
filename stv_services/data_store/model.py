@@ -61,8 +61,10 @@ contact_map = sa.Table(
     "contact_map",
     metadata,
     sa.Column("record_id", sa.Text, primary_key=True, nullable=False),
-    sa.Column("uuid", sa.Text, sa.ForeignKey("person_info.uuid")),
-    sa.Column("last_updated", sa.TIMESTAMP(timezone=True), nullable=False),
+    sa.Column(
+        "uuid", sa.Text, sa.ForeignKey("person_info.uuid"), index=True, nullable=True
+    ),
+    sa.Column("last_updated", sa.TIMESTAMP(timezone=True), index=True, nullable=False),
 )
 
 # The injection of people into Airtable historical volunteers
@@ -70,6 +72,32 @@ volunteer_map = sa.Table(
     "volunteer_map",
     metadata,
     sa.Column("record_id", sa.Text, primary_key=True, nullable=False),
-    sa.Column("uuid", sa.Text, sa.ForeignKey("person_info.uuid")),
-    sa.Column("last_updated", sa.TIMESTAMP(timezone=True), nullable=False),
+    sa.Column(
+        "uuid", sa.Text, sa.ForeignKey("person_info.uuid"), index=True, nullable=True
+    ),
+    sa.Column("last_updated", sa.TIMESTAMP(timezone=True), index=True, nullable=False),
+)
+
+# Donation info from Action Network
+donation_info = sa.Table(
+    "donation_info",
+    metadata,
+    sa.Column("uuid", sa.Text, primary_key=True, nullable=False),
+    sa.Column("created_date", sa.TIMESTAMP(timezone=True), nullable=False),
+    sa.Column("modified_date", sa.TIMESTAMP(timezone=True), index=True, nullable=False),
+    sa.Column("amount", sa.Text, nullable=False),
+    sa.Column("recurrence_data", psql.JSONB, nullable=False),
+    sa.Column("donor_id", sa.Text, index=True, nullable=False),
+    sa.Column("fundraising_page_id", sa.Text, index=True, nullable=False),
+)
+
+# The injection of donations into Airtable donations
+volunteer_map = sa.Table(
+    "donation_map",
+    metadata,
+    sa.Column("record_id", sa.Text, primary_key=True, nullable=False),
+    sa.Column(
+        "uuid", sa.Text, sa.ForeignKey("donation_info.uuid"), index=True, nullable=True
+    ),
+    sa.Column("last_updated", sa.TIMESTAMP(timezone=True), index=True, nullable=False),
 )

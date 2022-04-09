@@ -20,42 +20,25 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 #
-import time
-from datetime import datetime
 from typing import Optional
-from urllib.parse import urlencode
 
-import requests
 import sqlalchemy as sa
-from dateutil.parser import parse
-from restnavigator import Navigator
-from sqlalchemy.dialects import postgresql as psql
 
-from ..core import Configuration
-from ..core import Session
+from .utils import validate_hash, ActionNetworkPersistedDict, load_hashes, fetch_hash
 from ..data_store import model, Database
 
 
-class ActionNetworkPerson(dict):
+class ActionNetworkPerson(ActionNetworkPersistedDict):
     def __init__(self, **fields):
-        if not fields.get("uuid"):
-            raise ValueError("uuid field cannot be empty")
         if not fields.get("email") and not fields.get("phone"):
-            raise ValueError("email and phone fields cannot both be empty")
-        fields = {key: value for key, value in fields.items() if value is not None}
-        super().__init__(**fields)
+            raise ValueError(
+                "Person record must have either email or phone information"
+            )
+        super().__init__(model.person_info, **fields)
 
     @classmethod
     def from_action_network(cls, data: dict) -> "ActionNetworkPerson":
-        if not isinstance(data, dict) or len(data) == 0:
-            raise ValueError(f"Not a valid Action Network response: {data}")
-        uuid: Optional[str] = None
-        for id in data.get("identifiers", []):  # type: str
-            if id.startswith("action_network:"):
-                uuid = id
-                break
-        created_date: datetime = parse(data.get("created_date"))
-        modified_date: datetime = parse(data.get("modified_date"))
+        uuid, created_date, modified_date = validate_hash(data)
         given_name: str = data.get("given_name")
         family_name: str = data.get("family_name", "")
         email: Optional[str] = None
@@ -109,45 +92,6 @@ class ActionNetworkPerson(dict):
             custom_fields=custom_fields,
         )
 
-    def persist(self):
-        insert_fields = {key: value for key, value in self.items() if value is not None}
-        update_fields = {
-            key: value for key, value in insert_fields.items() if key != "uuid"
-        }
-        insert_query = psql.insert(model.person_info).values(insert_fields)
-        upsert_query = insert_query.on_conflict_do_update(
-            index_elements=["uuid"], set_=update_fields
-        )
-        with Database.get_global_engine().connect() as conn:
-            conn.execute(upsert_query)
-            conn.commit()
-        pass
-
-    def reload(self):
-        query = sa.select(model.person_info).where(
-            model.person_info.c.uuid == self["uuid"]
-        )
-        with Database.get_global_engine().connect() as conn:
-            result = conn.execute(query).first()
-            if result is None:
-                raise KeyError(f"Can't reload person identified by '{self['uuid']}'")
-            fields = {
-                key: value
-                for key, value in result._asdict().items()
-                if value is not None
-            }
-        self.clear()
-        self.update(fields)
-        pass
-
-    def remove(self):
-        query = sa.delete(model.person_info).where(
-            model.person_info.c.uuid == self["uuid"]
-        )
-        with Database.get_global_engine().connect() as conn:
-            conn.execute(query)
-            conn.commit()
-
     @classmethod
     def lookup(
         cls, uuid: Optional[str] = None, email: Optional[str] = None
@@ -170,61 +114,16 @@ class ActionNetworkPerson(dict):
         return cls(**fields)
 
 
-def load_person(an_id: str) -> ActionNetworkPerson:
-    if not an_id.startswith("action_network:"):
-        raise ValueError(f"Not an action network identifier: '{an_id}'")
-    else:
-        uuid = an_id[len("action_network:") :]
-    config = Configuration.get_global_config()
-    session = Session.get_global_session("action_network")
-    url = config["action_network_api_base_url"] + f"/people/{uuid}"
-    nav = Navigator.hal(url, session=session)
-    data: dict = nav(raise_exc=False)
-    response: requests.Response = nav.response
-    if response.status_code == 404:
-        raise KeyError("No person identified by '{an_id}'")
-    if response.status_code != 200:
-        response.raise_for_status()
+def load_person(hash_id: str) -> ActionNetworkPerson:
+    data = fetch_hash("people", hash_id)
     person = ActionNetworkPerson.from_action_network(data)
     person.persist()
     return person
 
 
 def load_people(query: Optional[str] = None, verbose: bool = True) -> int:
-    config = Configuration.get_global_config()
-    session = Session.get_global_session("action_network")
-    url = config["action_network_api_base_url"] + "/people"
-    if query:
-        query_string = urlencode({"filter": query})
-        url += f"?{query_string}"
-        if verbose:
-            print(f"Loading people from Action Network matching filter={query}...")
-    else:
-        if verbose:
-            print("Loading all people from Action Network...")
-    start_time = datetime.now()
-    start_process_time = time.process_time()
-    pages = Navigator.hal(url, session=session)
-    total_count, total_pages = 0, None
-    for i, page in enumerate(pages):
-        people = page.embedded()["osdi:people"]
-        if (page_count := len(people)) == 0:
-            break
-        total_count += page_count
-        if verbose:
-            if total_pages := page.state.get("total_pages", total_pages):
-                print(f"Processing {page_count} people on page {i+1}/{total_pages}")
-            else:
-                print(f"Processing {page_count} people on page {i+1}...")
-        for person in people:
-            hash: dict = person.state
-            person = ActionNetworkPerson.from_action_network(hash)
-            person.persist()
-    elapsed_process_time = time.process_time() - start_process_time
-    elapsed_time = datetime.now() - start_time
-    if verbose:
-        print(f"Loaded {total_count} people from Action Network.")
-        print(
-            f"Load time was {elapsed_time} (processor time: {elapsed_process_time} seconds)."
-        )
-    return total_count
+    def insert_from_hash(data: dict):
+        person = ActionNetworkPerson.from_action_network(data)
+        person.persist()
+
+    return load_hashes("people", insert_from_hash, query, verbose)

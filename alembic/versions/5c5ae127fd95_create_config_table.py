@@ -20,9 +20,8 @@ depends_on = None
 def upgrade():
     op.create_table(
         "configuration",
-        sa.Column("key", sa.Text(), nullable=False),
-        sa.Column("value", psql.JSONB(), nullable=False),
-        sa.PrimaryKeyConstraint("key"),
+        sa.Column("key", sa.Text, primary_key=True, nullable=False),
+        sa.Column("value", psql.JSONB, nullable=False),
     )
 
 
