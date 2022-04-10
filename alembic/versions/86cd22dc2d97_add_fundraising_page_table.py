@@ -24,7 +24,7 @@ def upgrade():
         sa.Column(
             "modified_date", sa.TIMESTAMP(timezone=True), index=True, nullable=False
         ),
-        sa.Column("origin_system", sa.Text, nullable=True),
+        sa.Column("origin_system", sa.Text, index=True, nullable=True),
         sa.Column("title", sa.Text, index=True, nullable=False),
     )
 

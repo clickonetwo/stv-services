@@ -21,7 +21,9 @@ def upgrade():
     op.create_table(
         "donation_info",
         sa.Column("uuid", sa.Text, primary_key=True, nullable=False),
-        sa.Column("created_date", sa.TIMESTAMP(timezone=True), nullable=False),
+        sa.Column(
+            "created_date", sa.TIMESTAMP(timezone=True), index=True, nullable=False
+        ),
         sa.Column(
             "modified_date", sa.TIMESTAMP(timezone=True), index=True, nullable=False
         ),

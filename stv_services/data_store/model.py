@@ -38,19 +38,19 @@ person_info = sa.Table(
     "person_info",
     metadata,
     sa.Column("uuid", sa.Text, primary_key=True, nullable=False),
-    sa.Column("created_date", sa.TIMESTAMP(timezone=True), nullable=False),
+    sa.Column("created_date", sa.TIMESTAMP(timezone=True), index=True, nullable=False),
     sa.Column("modified_date", sa.TIMESTAMP(timezone=True), index=True, nullable=False),
     sa.Column("email", sa.Text, unique=True, index=True, nullable=False),
     sa.Column("email_status", sa.Text, nullable=True),
-    sa.Column("phone", sa.Text, nullable=True),
+    sa.Column("phone", sa.Text, index=True, nullable=True),
     sa.Column("phone_type", sa.Text, nullable=True),
     sa.Column("phone_status", sa.Text, nullable=True),
     sa.Column("given_name", sa.Text, index=True, nullable=True),
     sa.Column("family_name", sa.Text, index=True, nullable=True),
     sa.Column("street_address", sa.Text, nullable=True),
     sa.Column("locality", sa.Text, nullable=True),
-    sa.Column("region", sa.Text, nullable=True),
-    sa.Column("postal_code", sa.Text, nullable=True),
+    sa.Column("region", sa.Text, index=True, nullable=True),
+    sa.Column("postal_code", sa.Text, index=True, nullable=True),
     sa.Column("country", sa.Text, nullable=True),
     sa.Column("custom_fields", psql.JSONB, nullable=True),
     sa.Column("tags", psql.JSONB, nullable=True),
@@ -83,7 +83,7 @@ donation_info = sa.Table(
     "donation_info",
     metadata,
     sa.Column("uuid", sa.Text, primary_key=True, nullable=False),
-    sa.Column("created_date", sa.TIMESTAMP(timezone=True), nullable=False),
+    sa.Column("created_date", sa.TIMESTAMP(timezone=True), index=True, nullable=False),
     sa.Column("modified_date", sa.TIMESTAMP(timezone=True), index=True, nullable=False),
     sa.Column("amount", sa.Text, nullable=False),
     sa.Column("recurrence_data", psql.JSONB, nullable=False),
@@ -92,7 +92,7 @@ donation_info = sa.Table(
 )
 
 # The injection of donations into Airtable donations
-volunteer_map = sa.Table(
+donation_map = sa.Table(
     "donation_map",
     metadata,
     sa.Column("record_id", sa.Text, primary_key=True, nullable=False),
@@ -102,7 +102,6 @@ volunteer_map = sa.Table(
     sa.Column("last_updated", sa.TIMESTAMP(timezone=True), index=True, nullable=False),
 )
 
-
 # Fundraising page info from Action Network
 fundraising_page_info = sa.Table(
     "fundraising_page_info",
@@ -110,6 +109,6 @@ fundraising_page_info = sa.Table(
     sa.Column("uuid", sa.Text, primary_key=True, nullable=False),
     sa.Column("created_date", sa.TIMESTAMP(timezone=True), nullable=False),
     sa.Column("modified_date", sa.TIMESTAMP(timezone=True), index=True, nullable=False),
-    sa.Column("origin_system", sa.Text, nullable=True),
+    sa.Column("origin_system", sa.Text, index=True, nullable=True),
     sa.Column("title", sa.Text, index=True, nullable=False),
 )
