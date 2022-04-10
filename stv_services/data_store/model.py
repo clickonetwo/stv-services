@@ -101,3 +101,15 @@ volunteer_map = sa.Table(
     ),
     sa.Column("last_updated", sa.TIMESTAMP(timezone=True), index=True, nullable=False),
 )
+
+
+# Fundraising page info from Action Network
+fundraising_page_info = sa.Table(
+    "fundraising_page_info",
+    metadata,
+    sa.Column("uuid", sa.Text, primary_key=True, nullable=False),
+    sa.Column("created_date", sa.TIMESTAMP(timezone=True), nullable=False),
+    sa.Column("modified_date", sa.TIMESTAMP(timezone=True), index=True, nullable=False),
+    sa.Column("origin_system", sa.Text, nullable=True),
+    sa.Column("title", sa.Text, index=True, nullable=False),
+)

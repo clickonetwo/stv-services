@@ -37,7 +37,7 @@ def test_action_network_person():
       "given_name": "John",
       "family_name": "Random",
       "identifiers": [
-        "action_network:dec233c3-bdee-95ca-457c-055b4647b907",
+        "action_network:fake-person-identifier",
         "mobilize:18515363958"
       ],
       "email_addresses": [
@@ -138,7 +138,7 @@ def test_action_network_person():
     """
     data = json.loads(body)
     person = ActionNetworkPerson.from_action_network(data)
-    assert person["uuid"] == "action_network:dec233c3-bdee-95ca-457c-055b4647b907"
+    assert person["uuid"] == "action_network:fake-person-identifier"
     assert person["email"] == "johnqrandom@example.com"
     assert person["phone"] == "15555552222"
     assert person["postal_code"] == "94608"
@@ -156,14 +156,12 @@ def test_action_network_person():
     found_person1 = ActionNetworkPerson.lookup(email="johnqrandom@example.com")
     assert found_person1 == person
     found_person2 = ActionNetworkPerson.lookup(
-        uuid="action_network:dec233c3-bdee-95ca-457c-055b4647b907"
+        uuid="action_network:fake-person-identifier"
     )
     assert found_person2 == found_person1
     person.remove()
     with pytest.raises(KeyError):
-        ActionNetworkPerson.lookup(
-            "action_network:dec233c3-bdee-95ca-457c-055b4647b907"
-        )
+        ActionNetworkPerson.lookup("action_network:fake-person-identifier")
     with pytest.raises(KeyError):
         found_person1.reload()
 
@@ -172,7 +170,7 @@ def test_load_person():
     an_id = "action_network:dec233c3-bdee-457c-95ca-055b4647b907"
     person = load_person(an_id)
     assert person["uuid"] == an_id
-    fake_an_id = "action_network:dec233c3-bdee-95ca-457c-055b4647b907"
+    fake_an_id = "action_network:fake-person-identifier"
     with pytest.raises(KeyError):
         load_person(fake_an_id)
 

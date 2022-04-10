@@ -98,6 +98,25 @@ class ActionNetworkPersistedDict(dict):
             conn.commit()
 
 
+def lookup_hash(
+    table: sa.Table, key_value: str, key_field: Optional[str] = None
+) -> Optional[dict]:
+    if not key_value:
+        raise ValueError("Key value must be supplied for lookup")
+    if not key_field:
+        query = sa.select(table).where(table.c.uuid == key_value)
+    else:
+        query = sa.select(table).where(table.c[key_field] == key_value)
+    with Database.get_global_engine().connect() as conn:
+        result = conn.execute(query).first()
+    if result is None:
+        return None
+    fields = {
+        key: value for key, value in result._asdict().items() if value is not None
+    }
+    return fields
+
+
 def fetch_hash(hash_type: str, hash_id: str) -> dict:
     if not hash_id.startswith("action_network:"):
         raise ValueError(f"Not an action network identifier: '{hash_id}'")

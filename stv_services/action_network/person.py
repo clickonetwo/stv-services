@@ -22,10 +22,14 @@
 #
 from typing import Optional
 
-import sqlalchemy as sa
-
-from .utils import validate_hash, ActionNetworkPersistedDict, load_hashes, fetch_hash
-from ..data_store import model, Database
+from .utils import (
+    validate_hash,
+    ActionNetworkPersistedDict,
+    load_hashes,
+    fetch_hash,
+    lookup_hash,
+)
+from ..data_store import model
 
 
 class ActionNetworkPerson(ActionNetworkPersistedDict):
@@ -97,20 +101,12 @@ class ActionNetworkPerson(ActionNetworkPersistedDict):
         cls, uuid: Optional[str] = None, email: Optional[str] = None
     ) -> "ActionNetworkPerson":
         if uuid:
-            query = sa.select(model.person_info).where(model.person_info.c.uuid == uuid)
-        elif email:
-            query = sa.select(model.person_info).where(
-                model.person_info.c.email == email.lower()
-            )
+            result = lookup_hash(model.person_info, uuid)
         else:
-            raise ValueError("One of uuid or email must be supplied for lookup")
-        with Database.get_global_engine().connect() as conn:
-            result = conn.execute(query).first()
+            result = lookup_hash(model.person_info, email.lower(), "email")
         if result is None:
-            raise KeyError("No person identified by '{uuid or email}'")
-        fields = {
-            key: value for key, value in result._asdict().items() if value is not None
-        }
+            raise KeyError(f"No person identified by '{uuid or email}'")
+        fields = {key: value for key, value in result.items() if value is not None}
         return cls(**fields)
 
 

@@ -32,51 +32,45 @@ from .utils import (
 from ..data_store import model
 
 
-class ActionNetworkDonation(ActionNetworkPersistedDict):
+class ActionNetworkFundraisingPage(ActionNetworkPersistedDict):
     def __init__(self, **fields):
-        for key in ["amount", "recurrence_data", "donor_id", "fundraising_page_id"]:
+        for key in ["title"]:
             if not fields.get(key):
-                raise ValueError("Donation must have field '{key}'")
-        super().__init__(model.donation_info, **fields)
+                raise ValueError("Fundraising page must have field '{key}'")
+        super().__init__(model.fundraising_page_info, **fields)
 
     @classmethod
-    def from_action_network(cls, data: dict) -> "ActionNetworkDonation":
+    def from_action_network(cls, data: dict) -> "ActionNetworkFundraisingPage":
         uuid, created_date, modified_date = validate_hash(data)
-        amount = data.get("amount")
-        recurrence_data = data.get("action_network:recurrence")
-        if donor_id := data.get("action_network:person_id"):
-            donor_id = "action_network:" + donor_id
-        if fundraising_page_id := data.get("action_network:fundraising_page_id"):
-            fundraising_page_id = "action_network:" + fundraising_page_id
+        origin_system = data.get("origin_system")
+        title = data.get("title")
         return cls(
             uuid=uuid,
             created_date=created_date,
             modified_date=modified_date,
-            amount=amount,
-            recurrence_data=recurrence_data,
-            donor_id=donor_id,
-            fundraising_page_id=fundraising_page_id,
+            origin_system=origin_system,
+            title=title,
         )
 
     @classmethod
-    def lookup(cls, uuid: str) -> "ActionNetworkDonation":
-        result = lookup_hash(model.donation_info, uuid)
+    def lookup(cls, uuid: str) -> "ActionNetworkFundraisingPage":
+        result = lookup_hash(model.fundraising_page_info, uuid)
         if result is None:
             raise KeyError("No fundraising page identified by '{uuid}'")
         fields = {key: value for key, value in result.items() if value is not None}
         return cls(**fields)
 
 
-def load_donation(hash_id: str) -> ActionNetworkDonation:
-    data = fetch_hash("donations", hash_id)
-    donation = ActionNetworkDonation.from_action_network(data)
-    donation.persist()
-    return donation
+def load_fundraising_page(hash_id: str) -> ActionNetworkFundraisingPage:
+    data = fetch_hash("fundraising_pages", hash_id)
+    fundraising_page = ActionNetworkFundraisingPage.from_action_network(data)
+    fundraising_page.persist()
+    return fundraising_page
 
 
-def load_donations(query: Optional[str] = None, verbose: bool = True) -> int:
+def load_fundraising_pages(query: Optional[str] = None, verbose: bool = True) -> int:
     def insert_from_hash(data: dict):
-        donation = ActionNetworkDonation.from_action_network(data)
-        donation.persist()
+        fundraising_page = ActionNetworkFundraisingPage.from_action_network(data)
+        fundraising_page.persist()
 
-    return load_hashes("donations", insert_from_hash, query, verbose)
+    return load_hashes("fundraising_pages", insert_from_hash, query, verbose)
