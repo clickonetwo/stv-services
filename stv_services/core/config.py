@@ -34,9 +34,11 @@ class Configuration(dict):
         super().__init__(*args, **kwargs)
 
     @classmethod
-    def get_global_config(cls) -> "Configuration":
+    def get_global_config(cls, reload: bool = False) -> "Configuration":
         if cls._singleton is None:
             cls._singleton = Configuration()
+            cls._singleton.load_from_data_store()
+        elif reload:
             cls._singleton.load_from_data_store()
         return cls._singleton
 
