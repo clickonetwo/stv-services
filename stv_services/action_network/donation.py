@@ -42,7 +42,9 @@ class ActionNetworkDonation(ActionNetworkPersistedDict):
     @classmethod
     def from_action_network(cls, data: dict) -> "ActionNetworkDonation":
         uuid, created_date, modified_date = validate_hash(data)
-        amount = data.get("amount")
+        # donations sometimes get later updates in which the amount is removed
+        # so we treat missing amounts as 0.00 in order to update a prior fetch
+        amount = data.get("amount", "0.00")
         recurrence_data = data.get("action_network:recurrence")
         if donor_id := data.get("action_network:person_id"):
             donor_id = "action_network:" + donor_id
