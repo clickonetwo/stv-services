@@ -36,7 +36,6 @@
 import json
 
 import pytest
-from restnavigator.exc import HALNavigatorError
 
 from stv_services.action_network.fundraising_page import (
     load_fundraising_pages,
@@ -60,7 +59,7 @@ def test_action_network_fundraising_page():
       },
       "modified_date": "2022-04-02T18:02:08Z",
       "origin_system": "ActBlue",
-      "title": "actblue_146845_stv-test-form-3",
+      "title": "act-blue_146845_stv-test-form-3",
       "action_network:hidden": false
     }
     """
@@ -68,13 +67,13 @@ def test_action_network_fundraising_page():
     fundraising_page = ActionNetworkFundraisingPage.from_action_network(data)
     assert fundraising_page["uuid"] == "action_network:fake-fundraising-page-identifier"
     assert fundraising_page["origin_system"] == "ActBlue"
-    assert fundraising_page["title"] == "actblue_146845_stv-test-form-3"
+    assert fundraising_page["title"] == "act-blue_146845_stv-test-form-3"
     fundraising_page.persist()
     fundraising_page["title"] = "wrong title"
     del fundraising_page["origin_system"]
     fundraising_page.reload()
     assert fundraising_page["origin_system"] == "ActBlue"
-    assert fundraising_page["title"] == "actblue_146845_stv-test-form-3"
+    assert fundraising_page["title"] == "act-blue_146845_stv-test-form-3"
     found_fundraising_page = ActionNetworkFundraisingPage.lookup(
         uuid="action_network:fake-fundraising-page-identifier"
     )

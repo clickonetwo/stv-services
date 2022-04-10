@@ -26,17 +26,17 @@ from .utils import (
     validate_hash,
     ActionNetworkPersistedDict,
     fetch_hash,
-    load_hashes,
+    fetch_hashes,
     lookup_hash,
 )
-from ..data_store import model
+from ..data_store import model, Database
 
 
 class ActionNetworkFundraisingPage(ActionNetworkPersistedDict):
     def __init__(self, **fields):
         for key in ["title"]:
             if not fields.get(key):
-                raise ValueError("Fundraising page must have field '{key}'")
+                raise ValueError(f"Fundraising page must have field '{key}': {fields}")
         super().__init__(model.fundraising_page_info, **fields)
 
     @classmethod
@@ -68,9 +68,22 @@ def load_fundraising_page(hash_id: str) -> ActionNetworkFundraisingPage:
     return fundraising_page
 
 
-def load_fundraising_pages(query: Optional[str] = None, verbose: bool = True) -> int:
-    def insert_from_hash(data: dict):
-        fundraising_page = ActionNetworkFundraisingPage.from_action_network(data)
-        fundraising_page.persist()
+def load_fundraising_pages(
+    query: Optional[str] = None, verbose: bool = True, skip_pages: int = 0
+) -> int:
+    def insert_from_hashes(hashes: [dict]):
+        with Database.get_global_engine().connect() as conn:
+            for data in hashes:
+                try:
+                    fundraising_page = ActionNetworkFundraisingPage.from_action_network(
+                        data
+                    )
+                    fundraising_page.persist(conn)
+                except ValueError as err:
+                    if verbose:
+                        print(f"Skipping invalid fundraising page: {err}")
+            conn.commit()
 
-    return load_hashes("fundraising_pages", insert_from_hash, query, verbose)
+    return fetch_hashes(
+        "fundraising_pages", insert_from_hashes, query, verbose, skip_pages
+    )

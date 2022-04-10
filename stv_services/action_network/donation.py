@@ -26,17 +26,17 @@ from .utils import (
     validate_hash,
     ActionNetworkPersistedDict,
     fetch_hash,
-    load_hashes,
+    fetch_hashes,
     lookup_hash,
 )
-from ..data_store import model
+from ..data_store import model, Database
 
 
 class ActionNetworkDonation(ActionNetworkPersistedDict):
     def __init__(self, **fields):
         for key in ["amount", "recurrence_data", "donor_id", "fundraising_page_id"]:
             if not fields.get(key):
-                raise ValueError("Donation must have field '{key}'")
+                raise ValueError(f"Donation must have field '{key}': {fields}")
         super().__init__(model.donation_info, **fields)
 
     @classmethod
@@ -74,9 +74,18 @@ def load_donation(hash_id: str) -> ActionNetworkDonation:
     return donation
 
 
-def load_donations(query: Optional[str] = None, verbose: bool = True) -> int:
-    def insert_from_hash(data: dict):
-        donation = ActionNetworkDonation.from_action_network(data)
-        donation.persist()
+def load_donations(
+    query: Optional[str] = None, verbose: bool = True, skip_pages: int = 0
+) -> int:
+    def insert_from_hashes(hashes: [dict]):
+        with Database.get_global_engine().connect() as conn:
+            for data in hashes:
+                try:
+                    donation = ActionNetworkDonation.from_action_network(data)
+                    donation.persist(conn)
+                except ValueError as err:
+                    if verbose:
+                        print(f"Skipping invalid donation: {err}")
+            conn.commit()
 
-    return load_hashes("donations", insert_from_hash, query, verbose)
+    return fetch_hashes("donations", insert_from_hashes, query, verbose, skip_pages)

@@ -21,7 +21,7 @@
 #  SOFTWARE.
 #
 import os
-from typing import ClassVar, Final
+from typing import ClassVar
 
 import sqlalchemy as sa
 

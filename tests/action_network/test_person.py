@@ -80,7 +80,7 @@ def test_action_network_person():
       "postal_addresses": [
         {
           "address_lines": [
-            "3568 Divisadero St"
+            "3568 Divider St"
           ],
           "locality": "San Francisco",
           "region": "CA",
@@ -95,7 +95,7 @@ def test_action_network_person():
         {
           "primary": true,
           "address_lines": [
-            "3568 Divisadero St"
+            "3568 Divider St"
           ],
           "locality": "San Francisco",
           "region": "CA",
@@ -108,7 +108,7 @@ def test_action_network_person():
         },
         {
           "address_lines": [
-            "3568 Divisadero St"
+            "3568 Divider St"
           ],
           "locality": "San Francisco",
           "region": "CA",
@@ -144,7 +144,7 @@ def test_action_network_person():
     assert person["postal_code"] == "94608"
     assert person["custom_fields"].get("gift in honor") == "Maya Angelou"
     assert person["custom_fields"].get("checkbox value") == 1
-    assert person["custom_fields"].get("logical value") == True
+    assert person["custom_fields"].get("logical value") is True
     person.persist()
     person["postal_code"] = "94707"
     del person["custom_fields"]
@@ -152,7 +152,7 @@ def test_action_network_person():
     assert person["postal_code"] == "94608"
     assert person["custom_fields"].get("gift in honor") == "Maya Angelou"
     assert person["custom_fields"].get("checkbox value") == 1
-    assert person["custom_fields"].get("logical value") == True
+    assert person["custom_fields"].get("logical value") is True
     found_person1 = ActionNetworkPerson.lookup(email="johnqrandom@example.com")
     assert found_person1 == person
     found_person2 = ActionNetworkPerson.lookup(

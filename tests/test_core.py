@@ -51,4 +51,4 @@ def test_save_config():
 
 def test_get_action_network_session():
     session = Session.get_global_session("action_network")
-    assert session != None
+    assert session is not None

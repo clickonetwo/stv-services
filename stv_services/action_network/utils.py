@@ -38,11 +38,12 @@ from ..data_store import Database
 def validate_hash(data: dict) -> (str, datetime, datetime):
     if not isinstance(data, dict) or len(data) == 0:
         raise ValueError(f"Not a valid Action Network hash: {data}")
-    hash_id: str = ""
     for candidate in data.get("identifiers", []):  # type: str
         if candidate.startswith("action_network:"):
             hash_id = candidate
             break
+    else:
+        hash_id = None
     created_date: datetime = parse(data.get("created_date"))
     modified_date: datetime = parse(data.get("modified_date"))
     if not hash_id or not created_date or not modified_date:
@@ -58,11 +59,19 @@ class ActionNetworkPersistedDict(dict):
             or not fields.get("created_date")
             or not fields.get("modified_date")
         ):
-            raise ValueError("uuid, created_date, and modified_date must be present")
+            raise ValueError(
+                f"uuid, created_date, and modified_date must be present: {fields}"
+            )
         fields = {key: value for key, value in fields.items() if value is not None}
         super().__init__(**fields)
 
-    def persist(self):
+    def persist(self, conn: Optional[sa.engine.Connection] = None):
+        """
+        Persist the current object to the datastore.
+
+        If a connection is supplied, then the caller is responsible for the commit.
+        Otherwise, a connection is opened and a commit is done before returning.
+        """
         insert_fields = {key: value for key, value in self.items() if value is not None}
         update_fields = {
             key: value for key, value in insert_fields.items() if key != "uuid"
@@ -71,9 +80,12 @@ class ActionNetworkPersistedDict(dict):
         upsert_query = insert_query.on_conflict_do_update(
             index_elements=["uuid"], set_=update_fields
         )
-        with Database.get_global_engine().connect() as conn:
+        if conn is not None:
             conn.execute(upsert_query)
-            conn.commit()
+        else:
+            with Database.get_global_engine().connect() as conn:
+                conn.execute(upsert_query)
+                conn.commit()
         pass
 
     def reload(self):
@@ -135,46 +147,64 @@ def fetch_hash(hash_type: str, hash_id: str) -> dict:
     return data
 
 
-def load_hashes(
+def fetch_hashes(
     hash_type: str,
-    hash_processor: Callable[[dict], None],
+    page_processor: Callable[[[dict]], None],
     query: Optional[str] = None,
     verbose: bool = True,
+    skip_pages: int = 0,
 ) -> int:
     config = Configuration.get_global_config()
     session = Session.get_global_session("action_network")
     url = config["action_network_api_base_url"] + f"/{hash_type}"
+    query_args = {}
     if query:
-        query_string = urlencode({"filter": query})
-        url += f"?{query_string}"
+        query_args["filter"] = query
         if verbose:
-            print(f"Loading {hash_type} from Action Network matching filter={query}...")
+            print(
+                f"Fetching {hash_type} from Action Network matching filter={query}..."
+            )
     else:
         if verbose:
-            print("Loading all {hash_type} from Action Network...")
+            print(f"Fetching all {hash_type} from Action Network...")
+    if skip_pages:
+        query_args["page"] = skip_pages + 1
+        if verbose:
+            print(f"(Starting import on page {skip_pages + 1})")
+    if query_args:
+        url += "?" + urlencode(query_args)
     start_time = datetime.now()
     start_process_time = process_time()
     pages = Navigator.hal(url, session=session)
-    total_count, total_pages = 0, None
-    for i, page in enumerate(pages):
+    page_number, total_count, last_page = skip_pages, 0, None
+    for page in pages:
         navigators = page.embedded()[f"osdi:{hash_type}"]
         if (page_count := len(navigators)) == 0:
             break
-        total_count += page_count
+        page_number += 1
         if verbose:
-            if total_pages := page.state.get("total_pages", total_pages):
+            if last_page := page.state.get("total_pages", last_page):
                 print(
-                    f"Processing {page_count} {hash_type} on page {i + 1}/{total_pages}"
+                    f"Processing {page_count} {hash_type} on page {page_number}/{last_page}...",
+                    end="",
                 )
             else:
-                print(f"Processing {page_count} {hash_type} on page {i + 1}...")
+                print(
+                    f"Processing {page_count} {hash_type} on page {page_number}...",
+                    end="",
+                )
+        hash_list = []
         for navigator in navigators:
-            hash_processor(navigator.state)
+            hash_list.append(navigator.state)
+        page_processor(hash_list)
+        total_count += page_count
+        if verbose:
+            print(f"({total_count})")
     elapsed_process_time = process_time() - start_process_time
     elapsed_time = datetime.now() - start_time
     if verbose:
-        print(f"Loaded {total_count} {hash_type} from Action Network.")
+        print(f"Fetched {total_count} {hash_type} from Action Network.")
         print(
-            f"Load time was {elapsed_time} (processor time: {elapsed_process_time} seconds)."
+            f"Fetch time was {elapsed_time} (processor time: {elapsed_process_time} seconds)."
         )
     return total_count

@@ -25,19 +25,17 @@ from typing import Optional
 from .utils import (
     validate_hash,
     ActionNetworkPersistedDict,
-    load_hashes,
+    fetch_hashes,
     fetch_hash,
     lookup_hash,
 )
-from ..data_store import model
+from ..data_store import model, Database
 
 
 class ActionNetworkPerson(ActionNetworkPersistedDict):
     def __init__(self, **fields):
         if not fields.get("email") and not fields.get("phone"):
-            raise ValueError(
-                "Person record must have either email or phone information"
-            )
+            raise ValueError(f"Person record must have either email or phone: {fields}")
         super().__init__(model.person_info, **fields)
 
     @classmethod
@@ -117,9 +115,18 @@ def load_person(hash_id: str) -> ActionNetworkPerson:
     return person
 
 
-def load_people(query: Optional[str] = None, verbose: bool = True) -> int:
-    def insert_from_hash(data: dict):
-        person = ActionNetworkPerson.from_action_network(data)
-        person.persist()
+def load_people(
+    query: Optional[str] = None, verbose: bool = True, skip_pages: int = 0
+) -> int:
+    def insert_from_hashes(hashes: [dict]):
+        with Database.get_global_engine().connect() as conn:
+            for data in hashes:
+                try:
+                    person = ActionNetworkPerson.from_action_network(data)
+                    person.persist(conn)
+                except ValueError as err:
+                    if verbose:
+                        print(f"Skipping invalid person: {err}")
+            conn.commit()
 
-    return load_hashes("people", insert_from_hash, query, verbose)
+    return fetch_hashes("people", insert_from_hashes, query, verbose, skip_pages)
