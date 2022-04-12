@@ -1,4 +1,4 @@
-"""create person-related tables
+"""create person table
 
 Revision ID: d8a07c79e3a1
 Revises: 5c5ae127fd95
@@ -40,39 +40,12 @@ def upgrade():
         sa.Column("postal_code", sa.Text, index=True, nullable=True),
         sa.Column("country", sa.Text, nullable=True),
         sa.Column("custom_fields", psql.JSONB, nullable=True),
-        sa.Column("tags", psql.JSONB, nullable=True),
-    )
-    op.create_table(
-        "contact_map",
-        sa.Column("record_id", sa.Text, primary_key=True, nullable=False),
-        sa.Column(
-            "uuid",
-            sa.Text,
-            sa.ForeignKey("person_info.uuid"),
-            index=True,
-            nullable=True,
-        ),
-        sa.Column(
-            "last_updated", sa.TIMESTAMP(timezone=True), index=True, nullable=False
-        ),
-    )
-    op.create_table(
-        "volunteer_map",
-        sa.Column("record_id", sa.Text, primary_key=True, nullable=False),
-        sa.Column(
-            "uuid",
-            sa.Text,
-            sa.ForeignKey("person_info.uuid"),
-            index=True,
-            nullable=True,
-        ),
-        sa.Column(
-            "last_updated", sa.TIMESTAMP(timezone=True), index=True, nullable=False
-        ),
+        sa.Column("total_2020", sa.Integer, index=True, default=-1),
+        sa.Column("summary_2020", sa.Text, default=""),
+        sa.Column("total_2021", sa.Integer, index=True, default=-1),
+        sa.Column("summary_2021", sa.Text, default=""),
     )
 
 
 def downgrade():
-    op.drop_table("volunteer_map")
-    op.drop_table("contact_map")
     op.drop_table("person_info")

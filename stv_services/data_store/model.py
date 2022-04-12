@@ -53,29 +53,40 @@ person_info = sa.Table(
     sa.Column("postal_code", sa.Text, index=True, nullable=True),
     sa.Column("country", sa.Text, nullable=True),
     sa.Column("custom_fields", psql.JSONB, nullable=True),
-    sa.Column("tags", psql.JSONB, nullable=True),
+    sa.Column("total_2020", sa.Integer, index=True, default=-1),
+    sa.Column("summary_2020", sa.Text, default=""),
+    sa.Column("total_2021", sa.Integer, index=True, default=-1),
+    sa.Column("summary_2021", sa.Text, default=""),
 )
 
-# The injection of people into Airtable contacts
-contact_map = sa.Table(
-    "contact_map",
+# The injection of people into Airtable contacts and volunteers
+person_map = sa.Table(
+    "person_map",
     metadata,
     sa.Column("record_id", sa.Text, primary_key=True, nullable=False),
     sa.Column(
-        "uuid", sa.Text, sa.ForeignKey("person_info.uuid"), index=True, nullable=True
+        "uuid",
+        sa.Text,
+        sa.ForeignKey("person_info.uuid"),
+        index=True,
+        nullable=True,
     ),
-    sa.Column("last_updated", sa.TIMESTAMP(timezone=True), index=True, nullable=False),
-)
-
-# The injection of people into Airtable historical volunteers
-volunteer_map = sa.Table(
-    "volunteer_map",
-    metadata,
-    sa.Column("record_id", sa.Text, primary_key=True, nullable=False),
+    sa.Column("is_contact", sa.Boolean, nullable=False),
+    sa.Column("is_volunteer", sa.Boolean, nullable=False),
+    sa.Column("contact_record_id", sa.Text, index=True, nullable=True),
+    sa.Column("volunteer_record_id", sa.Text, index=True, nullable=True),
     sa.Column(
-        "uuid", sa.Text, sa.ForeignKey("person_info.uuid"), index=True, nullable=True
+        "contact_last_updated",
+        sa.TIMESTAMP(timezone=True),
+        index=True,
+        nullable=False,
     ),
-    sa.Column("last_updated", sa.TIMESTAMP(timezone=True), index=True, nullable=False),
+    sa.Column(
+        "volunteer_last_updated",
+        sa.TIMESTAMP(timezone=True),
+        index=True,
+        nullable=False,
+    ),
 )
 
 # Donation info from Action Network
@@ -89,17 +100,6 @@ donation_info = sa.Table(
     sa.Column("recurrence_data", psql.JSONB, nullable=False),
     sa.Column("donor_id", sa.Text, index=True, nullable=False),
     sa.Column("fundraising_page_id", sa.Text, index=True, nullable=False),
-)
-
-# The injection of donations into Airtable donations
-donation_map = sa.Table(
-    "donation_map",
-    metadata,
-    sa.Column("record_id", sa.Text, primary_key=True, nullable=False),
-    sa.Column(
-        "uuid", sa.Text, sa.ForeignKey("donation_info.uuid"), index=True, nullable=True
-    ),
-    sa.Column("last_updated", sa.TIMESTAMP(timezone=True), index=True, nullable=False),
 )
 
 # Fundraising page info from Action Network

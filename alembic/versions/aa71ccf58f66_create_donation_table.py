@@ -1,4 +1,4 @@
-"""create donation related tables
+"""create donation table
 
 Revision ID: aa71ccf58f66
 Revises: d8a07c79e3a1
@@ -32,22 +32,7 @@ def upgrade():
         sa.Column("donor_id", sa.Text, index=True, nullable=False),
         sa.Column("fundraising_page_id", sa.Text, index=True, nullable=False),
     )
-    op.create_table(
-        "donation_map",
-        sa.Column("record_id", sa.Text, primary_key=True, nullable=False),
-        sa.Column(
-            "uuid",
-            sa.Text,
-            sa.ForeignKey("donation_info.uuid"),
-            index=True,
-            nullable=True,
-        ),
-        sa.Column(
-            "last_updated", sa.TIMESTAMP(timezone=True), index=True, nullable=False
-        ),
-    )
 
 
 def downgrade():
-    op.drop_table("donation_map")
     op.drop_table("donation_info")

@@ -77,7 +77,10 @@ def load_donation(hash_id: str) -> ActionNetworkDonation:
 
 
 def load_donations(
-    query: Optional[str] = None, verbose: bool = True, skip_pages: int = 0
+    query: Optional[str] = None,
+    verbose: bool = True,
+    skip_pages: int = 0,
+    max_pages: int = 0,
 ) -> int:
     def insert_from_hashes(hashes: [dict]):
         with Database.get_global_engine().connect() as conn:
@@ -90,4 +93,6 @@ def load_donations(
                         print(f"Skipping invalid donation: {err}")
             conn.commit()
 
-    return fetch_hashes("donations", insert_from_hashes, query, verbose, skip_pages)
+    return fetch_hashes(
+        "donations", insert_from_hashes, query, verbose, skip_pages, max_pages
+    )

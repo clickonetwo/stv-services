@@ -20,7 +20,7 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 #
-from datetime import datetime
+from datetime import datetime, timezone
 from time import process_time
 from typing import Optional, Callable
 from urllib.parse import urlencode
@@ -32,7 +32,7 @@ from restnavigator import Navigator
 from sqlalchemy.dialects import postgresql as psql
 
 from ..core import Configuration, Session
-from ..data_store import Database
+from ..data_store import Database, model
 
 
 def validate_hash(data: dict) -> (str, datetime, datetime):
@@ -153,6 +153,7 @@ def fetch_hashes(
     query: Optional[str] = None,
     verbose: bool = True,
     skip_pages: int = 0,
+    max_pages: int = 0,
 ) -> int:
     config = Configuration.get_global_config()
     session = Session.get_global_session("action_network")
@@ -200,6 +201,10 @@ def fetch_hashes(
         total_count += page_count
         if verbose:
             print(f"({total_count})")
+        if max_pages and page_number >= (skip_pages + max_pages):
+            if verbose:
+                print(f"(Stopped after importing {max_pages} pages)")
+            break
     elapsed_process_time = process_time() - start_process_time
     elapsed_time = datetime.now() - start_time
     if verbose:

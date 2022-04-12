@@ -1,4 +1,4 @@
-"""add fundraising page table
+"""create fundraising page table
 
 Revision ID: 86cd22dc2d97
 Revises: aa71ccf58f66

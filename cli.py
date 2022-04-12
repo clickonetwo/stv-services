@@ -50,36 +50,42 @@ def update_all(ctx: click.Context):
     bulk.update_fundraising_pages(verbose)
     bulk.update_donations(verbose)
     bulk.update_people(verbose)
+    bulk.update_donation_summaries(verbose)
 
 
 @cli.command()
-@click.option(
-    "--skip-pages", default=0, help="Skip this many pages before starting import"
-)
+@click.option("--skip-pages", default=0, help="Skip this many pages")
+@click.option("--max-pages", default=0, help="Import at most this many pages")
 @click.pass_context
-def update_people(ctx: click.Context, skip_pages: int):
+def update_people(ctx: click.Context, skip_pages: int, max_pages: int):
     verbose = ctx.obj["verbose"]
-    bulk.update_people(verbose, skip_pages)
+    bulk.update_people(verbose, skip_pages, max_pages)
 
 
 @cli.command()
-@click.option(
-    "--skip-pages", default=0, help="Skip this many pages before starting import"
-)
+@click.option("--skip-pages", default=0, help="Skip this many pages")
+@click.option("--max-pages", default=0, help="Import at most this many pages")
 @click.pass_context
-def update_donations(ctx: click.Context, skip_pages: int):
+def update_donations(ctx: click.Context, skip_pages: int, max_pages: int):
     verbose = ctx.obj["verbose"]
-    bulk.update_donations(verbose, skip_pages)
+    bulk.update_donations(verbose, skip_pages, max_pages)
 
 
 @cli.command()
-@click.option(
-    "--skip-pages", default=0, help="Skip this many pages before starting import"
-)
+@click.option("--skip-pages", default=0, help="Skip this many pages")
+@click.option("--max-pages", default=0, help="Import at most this many pages")
 @click.pass_context
-def update_fundraising_pages(ctx: click.Context, skip_pages: int):
+def update_fundraising_pages(ctx: click.Context, skip_pages: int, max_pages: int):
     verbose = ctx.obj["verbose"]
-    bulk.update_fundraising_pages(verbose, skip_pages)
+    bulk.update_fundraising_pages(verbose, skip_pages, max_pages)
+
+
+@cli.command()
+@click.option("--force/--no-force", default=True, help="Force re-computation")
+@click.pass_context
+def update_donation_summaries(ctx: click.Context, force: bool = False):
+    verbose = ctx.obj["verbose"]
+    bulk.update_donation_summaries(verbose, force)
 
 
 if __name__ == "__main__":

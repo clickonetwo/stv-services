@@ -20,7 +20,10 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 #
+from datetime import datetime, timezone
 from typing import Optional
+
+import sqlalchemy as sa
 
 from .utils import (
     validate_hash,
@@ -41,6 +44,12 @@ class ActionNetworkPerson(ActionNetworkPersistedDict):
     @classmethod
     def from_action_network(cls, data: dict) -> "ActionNetworkPerson":
         uuid, created_date, modified_date = validate_hash(data)
+        if created_date.year >= 2022:
+            # no need to create donation summaries
+            total_2020, total_2021 = 0, 0
+        else:
+            # sentinel value indicating donation summaries needed
+            total_2020, total_2021 = -1, -1
         given_name: str = data.get("given_name")
         family_name: str = data.get("family_name", "")
         email: Optional[str] = None
@@ -92,6 +101,8 @@ class ActionNetworkPerson(ActionNetworkPersistedDict):
             postal_code=postal_code,
             country=country,
             custom_fields=custom_fields,
+            total_2020=total_2020,
+            total_2021=total_2021,
         )
 
     @classmethod
@@ -116,7 +127,10 @@ def load_person(hash_id: str) -> ActionNetworkPerson:
 
 
 def load_people(
-    query: Optional[str] = None, verbose: bool = True, skip_pages: int = 0
+    query: Optional[str] = None,
+    verbose: bool = True,
+    skip_pages: int = 0,
+    max_pages: int = 0,
 ) -> int:
     def insert_from_hashes(hashes: [dict]):
         with Database.get_global_engine().connect() as conn:
@@ -129,4 +143,33 @@ def load_people(
                         print(f"Skipping invalid person: {err}")
             conn.commit()
 
-    return fetch_hashes("people", insert_from_hashes, query, verbose, skip_pages)
+    return fetch_hashes(
+        "people", insert_from_hashes, query, verbose, skip_pages, max_pages
+    )
+
+
+def compute_donation_summary(
+    conn: sa.engine.Connection, person_id: str, year: int
+) -> (int, str):
+    cutoff_hi = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
+    cutoff_lo = datetime(year, 1, 1, tzinfo=timezone.utc)
+    table = model.donation_info
+    query = (
+        sa.select(table)
+        .where(
+            sa.and_(
+                table.c.donor_id == person_id,
+                table.c.created_date < cutoff_hi,
+                table.c.created_date >= cutoff_lo,
+            )
+        )
+        .order_by(table.c.created_date)
+    )
+    entries, total = [], 0.0
+    rows = conn.execute(query).mappings().all()
+    for row in rows:
+        amount = float(row["amount"])
+        day = row["created_date"].strftime("%m/%d/%y")
+        total += amount
+        entries.append(f"${int(round(amount, 0))} ({day})")
+    return int(round(total, 0)), ", ".join(entries)

@@ -69,7 +69,10 @@ def load_fundraising_page(hash_id: str) -> ActionNetworkFundraisingPage:
 
 
 def load_fundraising_pages(
-    query: Optional[str] = None, verbose: bool = True, skip_pages: int = 0
+    query: Optional[str] = None,
+    verbose: bool = True,
+    skip_pages: int = 0,
+    max_pages: int = 0,
 ) -> int:
     def insert_from_hashes(hashes: [dict]):
         with Database.get_global_engine().connect() as conn:
