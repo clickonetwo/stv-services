@@ -25,6 +25,9 @@ from sqlalchemy.dialects import postgresql as psql
 
 metadata = sa.MetaData()
 
+# field type for timestamp with timezone
+Timestamp = sa.TIMESTAMP(timezone=True)
+
 # Persistence for the `core.Configuration` class
 configuration = sa.Table(
     "configuration",
@@ -38,8 +41,8 @@ person_info = sa.Table(
     "person_info",
     metadata,
     sa.Column("uuid", sa.Text, primary_key=True, nullable=False),
-    sa.Column("created_date", sa.TIMESTAMP(timezone=True), index=True, nullable=False),
-    sa.Column("modified_date", sa.TIMESTAMP(timezone=True), index=True, nullable=False),
+    sa.Column("created_date", Timestamp, index=True, nullable=False),
+    sa.Column("modified_date", Timestamp, index=True, nullable=False),
     sa.Column("email", sa.Text, unique=True, index=True, nullable=False),
     sa.Column("email_status", sa.Text, nullable=True),
     sa.Column("phone", sa.Text, index=True, nullable=True),
@@ -57,36 +60,15 @@ person_info = sa.Table(
     sa.Column("summary_2020", sa.Text, default=""),
     sa.Column("total_2021", sa.Integer, index=True, default=-1),
     sa.Column("summary_2021", sa.Text, default=""),
-)
-
-# The injection of people into Airtable contacts and volunteers
-person_map = sa.Table(
-    "person_map",
-    metadata,
-    sa.Column("record_id", sa.Text, primary_key=True, nullable=False),
-    sa.Column(
-        "uuid",
-        sa.Text,
-        sa.ForeignKey("person_info.uuid"),
-        index=True,
-        nullable=True,
-    ),
-    sa.Column("is_contact", sa.Boolean, nullable=False),
-    sa.Column("is_volunteer", sa.Boolean, nullable=False),
+    sa.Column("is_contact", sa.Boolean, index=True, default=False),
     sa.Column("contact_record_id", sa.Text, index=True, nullable=True),
+    sa.Column("contact_last_updated", Timestamp, index=True, nullable=True),
+    sa.Column("is_volunteer", sa.Boolean, index=True, default=False),
     sa.Column("volunteer_record_id", sa.Text, index=True, nullable=True),
-    sa.Column(
-        "contact_last_updated",
-        sa.TIMESTAMP(timezone=True),
-        index=True,
-        nullable=False,
-    ),
-    sa.Column(
-        "volunteer_last_updated",
-        sa.TIMESTAMP(timezone=True),
-        index=True,
-        nullable=False,
-    ),
+    sa.Column("volunteer_last_updated", Timestamp, index=True, nullable=True),
+    sa.Column("is_funder", sa.Boolean, index=True, default=False),
+    sa.Column("funder_record_id", sa.Text, index=True, nullable=True),
+    sa.Column("funder_last_updated", Timestamp, index=True, nullable=True),
 )
 
 # Donation info from Action Network
@@ -94,8 +76,8 @@ donation_info = sa.Table(
     "donation_info",
     metadata,
     sa.Column("uuid", sa.Text, primary_key=True, nullable=False),
-    sa.Column("created_date", sa.TIMESTAMP(timezone=True), index=True, nullable=False),
-    sa.Column("modified_date", sa.TIMESTAMP(timezone=True), index=True, nullable=False),
+    sa.Column("created_date", Timestamp, index=True, nullable=False),
+    sa.Column("modified_date", Timestamp, index=True, nullable=False),
     sa.Column("amount", sa.Text, nullable=False),
     sa.Column("recurrence_data", psql.JSONB, nullable=False),
     sa.Column("donor_id", sa.Text, index=True, nullable=False),
@@ -107,8 +89,19 @@ fundraising_page_info = sa.Table(
     "fundraising_page_info",
     metadata,
     sa.Column("uuid", sa.Text, primary_key=True, nullable=False),
-    sa.Column("created_date", sa.TIMESTAMP(timezone=True), nullable=False),
-    sa.Column("modified_date", sa.TIMESTAMP(timezone=True), index=True, nullable=False),
+    sa.Column("created_date", Timestamp, nullable=False),
+    sa.Column("modified_date", Timestamp, index=True, nullable=False),
     sa.Column("origin_system", sa.Text, index=True, nullable=True),
     sa.Column("title", sa.Text, index=True, nullable=False),
+)
+
+# Form submission info from Action Network
+submission_info = sa.Table(
+    "submission_info",
+    metadata,
+    sa.Column("uuid", sa.Text, primary_key=True, nullable=False),
+    sa.Column("created_date", Timestamp, nullable=False),
+    sa.Column("modified_date", Timestamp, index=True, nullable=False),
+    sa.Column("person_id", sa.Text, index=True, nullable=False),
+    sa.Column("form_id", sa.Text, index=True, nullable=False),
 )

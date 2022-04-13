@@ -20,14 +20,17 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 #
-from typing import Optional
+from typing import Optional, Any
+
+import sqlalchemy as sa
+from sqlalchemy.engine import Connection
 
 from .utils import (
     validate_hash,
     ActionNetworkPersistedDict,
     fetch_hash,
-    fetch_hashes,
-    lookup_hash,
+    fetch_all_hashes,
+    lookup_objects,
 )
 from ..data_store import model, Database
 
@@ -40,7 +43,7 @@ class ActionNetworkFundraisingPage(ActionNetworkPersistedDict):
         super().__init__(model.fundraising_page_info, **fields)
 
     @classmethod
-    def from_action_network(cls, data: dict) -> "ActionNetworkFundraisingPage":
+    def from_hash(cls, data: dict) -> "ActionNetworkFundraisingPage":
         uuid, created_date, modified_date = validate_hash(data)
         origin_system = data.get("origin_system")
         title = data.get("title")
@@ -53,40 +56,58 @@ class ActionNetworkFundraisingPage(ActionNetworkPersistedDict):
         )
 
     @classmethod
-    def lookup(cls, uuid: str) -> "ActionNetworkFundraisingPage":
-        result = lookup_hash(model.fundraising_page_info, uuid)
-        if result is None:
-            raise KeyError("No fundraising page identified by '{uuid}'")
-        fields = {key: value for key, value in result.items() if value is not None}
-        return cls(**fields)
+    def from_lookup(cls, conn: Connection, uuid: str) -> "ActionNetworkFundraisingPage":
+        query = sa.select(model.fundraising_page_info).where(
+            model.fundraising_page_info.c.uuid == uuid
+        )
+        result = lookup_objects(conn, query, lambda d: cls(**d))
+        if not result:
+            raise KeyError(f"No fundraising page identified by '{uuid}'")
+        return result[0]
+
+    @classmethod
+    def from_query(
+        cls, conn: Connection, query: Any
+    ) -> list["ActionNetworkFundraisingPage"]:
+        """
+        See `.utils.lookup_hashes` for details.
+        """
+        return lookup_objects(conn, query, lambda d: cls(**d))
+
+    @classmethod
+    def from_action_network(
+        cls,
+        conn: Connection,
+        hash_id: str,
+    ) -> "ActionNetworkFundraisingPage":
+        data, _ = fetch_hash("fundraising_pages", hash_id)
+        fundraising_page = ActionNetworkFundraisingPage.from_hash(data)
+        fundraising_page.persist(conn)
+        return fundraising_page
 
 
-def load_fundraising_page(hash_id: str) -> ActionNetworkFundraisingPage:
-    data = fetch_hash("fundraising_pages", hash_id)
-    fundraising_page = ActionNetworkFundraisingPage.from_action_network(data)
-    fundraising_page.persist()
-    return fundraising_page
-
-
-def load_fundraising_pages(
+def import_fundraising_pages(
     query: Optional[str] = None,
     verbose: bool = True,
     skip_pages: int = 0,
     max_pages: int = 0,
 ) -> int:
-    def insert_from_hashes(hashes: [dict]):
-        with Database.get_global_engine().connect() as conn:
-            for data in hashes:
-                try:
-                    fundraising_page = ActionNetworkFundraisingPage.from_action_network(
-                        data
-                    )
-                    fundraising_page.persist(conn)
-                except ValueError as err:
-                    if verbose:
-                        print(f"Skipping invalid fundraising page: {err}")
-            conn.commit()
-
-    return fetch_hashes(
-        "fundraising_pages", insert_from_hashes, query, verbose, skip_pages
+    return fetch_all_hashes(
+        hash_type="fundraising_pages",
+        page_processor=insert_fundraising_pages_from_hashes,
+        query=query,
+        verbose=verbose,
+        skip_pages=skip_pages,
+        max_pages=max_pages,
     )
+
+
+def insert_fundraising_pages_from_hashes(hashes: [dict]):
+    with Database.get_global_engine().connect() as conn:
+        for data in hashes:
+            try:
+                fundraising_page = ActionNetworkFundraisingPage.from_hash(data)
+                fundraising_page.persist(conn)
+            except ValueError as err:
+                print(f"Skipping invalid fundraising page: {err}")
+        conn.commit()

@@ -21,16 +21,20 @@
 #  SOFTWARE.
 #
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, Any
 
 import sqlalchemy as sa
+from sqlalchemy.engine import Connection
 
+from .donation import import_donations_from_hashes
+from .submission import insert_submissions_from_hashes
 from .utils import (
     validate_hash,
     ActionNetworkPersistedDict,
-    fetch_hashes,
+    fetch_all_hashes,
     fetch_hash,
-    lookup_hash,
+    lookup_objects,
+    fetch_related_hashes,
 )
 from ..data_store import model, Database
 
@@ -41,15 +45,94 @@ class ActionNetworkPerson(ActionNetworkPersistedDict):
             raise ValueError(f"Person record must have either email or phone: {fields}")
         super().__init__(model.person_info, **fields)
 
+    def classify_for_airtable(self, conn: sa.engine.Connection):
+        """
+        Reclassify an existing person based on current data.
+        We are careful never to remove a person from a table.
+        """
+        # if they existed before 2022, they are a historical volunteer, else a contact
+        if self["created_date"] < datetime(2022, 1, 1, tzinfo=timezone.utc):
+            self["is_volunteer"] = True
+        else:
+            self["is_contact"] = True
+        if not self["is_contact"]:
+            # see if they have submitted the 2022 signup form or any forms in 2022
+            signup_form_2022 = "action_network:b399bd2b-b9a9-4916-9550-5a8a47e045fb"
+            table = model.submission_info
+            query = sa.select(table).where(
+                sa.and_(
+                    table.c.person_id == self["uuid"],
+                    sa.or_(
+                        table.c.form_id == signup_form_2022,
+                        table.c.created_date
+                        > datetime(2022, 1, 1, tzinfo=timezone.utc),
+                    ),
+                )
+            )
+            signup = conn.execute(query).first()
+            if signup:
+                self["is_contact"] = True
+        if not self["is_funder"]:
+            # find their most recent donation
+            table = model.donation_info
+            query = (
+                sa.select(table)
+                .where(table.c.donor_id == self["uuid"])
+                .order_by(table.c.created_date.desc())
+            )
+            newest = conn.execute(query).mappings().first()
+            if newest is not None:
+                # if they have donated since 11/1/2021, they are a contact and a funder
+                if newest["created_date"] > datetime(2021, 11, 1, tzinfo=timezone.utc):
+                    self["is_contact"] = True
+                    self["is_funder"] = True
+                # if they are a contact and have any donations, they are a funder
+                elif self["is_contact"]:
+                    self["is_funder"] = True
+        self.persist(conn)
+
+    def update_donation_summaries(self, conn: sa.engine.Connection):
+        self._update_donation_summary(conn, 2020)
+        self._update_donation_summary(conn, 2021)
+        self.persist(conn)
+
+    def _update_donation_summary(self, conn: sa.engine.Connection, year: int):
+        total_field, summary_field = f"total_{year}", f"summary_{year}"
+        cutoff_hi = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
+        cutoff_lo = datetime(year, 1, 1, tzinfo=timezone.utc)
+        table = model.donation_info
+        query = (
+            sa.select(table)
+            .where(
+                sa.and_(
+                    table.c.donor_id == self["uuid"],
+                    table.c.created_date < cutoff_hi,
+                    table.c.created_date >= cutoff_lo,
+                )
+            )
+            .order_by(table.c.created_date)
+        )
+        entries, total = [], 0.0
+        rows = conn.execute(query).mappings().all()
+        for row in rows:
+            amount = float(row["amount"])
+            day = row["created_date"].strftime("%m/%d/%y")
+            total += amount
+            entries.append(f"${int(round(amount, 0))} ({day})")
+        self[total_field] = int(round(total, 0))
+        self[summary_field] = ", ".join(entries)
+
     @classmethod
-    def from_action_network(cls, data: dict) -> "ActionNetworkPerson":
+    def from_hash(cls, data: dict) -> "ActionNetworkPerson":
         uuid, created_date, modified_date = validate_hash(data)
+        is_contact, is_volunteer = None, None
         if created_date.year >= 2022:
+            is_contact = True
             # no need to create donation summaries
             total_2020, total_2021 = 0, 0
         else:
-            # sentinel value indicating donation summaries needed
-            total_2020, total_2021 = -1, -1
+            is_volunteer = True
+            total_2020, total_2021 = None, None
         given_name: str = data.get("given_name")
         family_name: str = data.get("family_name", "")
         email: Optional[str] = None
@@ -103,73 +186,89 @@ class ActionNetworkPerson(ActionNetworkPersistedDict):
             custom_fields=custom_fields,
             total_2020=total_2020,
             total_2021=total_2021,
+            is_contact=is_contact,
+            is_volunteer=is_volunteer,
         )
 
     @classmethod
-    def lookup(
-        cls, uuid: Optional[str] = None, email: Optional[str] = None
+    def from_lookup(
+        cls, conn: Connection, uuid: Optional[str] = None, email: Optional[str] = None
     ) -> "ActionNetworkPerson":
         if uuid:
-            result = lookup_hash(model.person_info, uuid)
+            query = sa.select(model.person_info).where(model.person_info.c.uuid == uuid)
+        elif email:
+            query = sa.select(model.person_info).where(
+                model.person_info.c.email == email
+            )
         else:
-            result = lookup_hash(model.person_info, email.lower(), "email")
-        if result is None:
+            raise ValueError("One of uuid or email must be specified for lookup")
+        result = lookup_objects(conn, query, lambda d: cls(**d))
+        if not result:
             raise KeyError(f"No person identified by '{uuid or email}'")
-        fields = {key: value for key, value in result.items() if value is not None}
-        return cls(**fields)
+        return result[0]
+
+    @classmethod
+    def from_query(cls, conn: Connection, query: Any) -> list["ActionNetworkPerson"]:
+        """
+        See `.utils.lookup_hashes` for details.
+        """
+        return lookup_objects(conn, query, lambda d: cls(**d))
+
+    @classmethod
+    def from_action_network(
+        cls,
+        conn: Connection,
+        hash_id: str,
+    ) -> "ActionNetworkPerson":
+        data, _ = fetch_hash("people", hash_id)
+        person = ActionNetworkPerson.from_hash(data)
+        person.persist(conn)
+        return person
 
 
-def load_person(hash_id: str) -> ActionNetworkPerson:
-    data = fetch_hash("people", hash_id)
-    person = ActionNetworkPerson.from_action_network(data)
-    person.persist()
+def import_person(person_id: str, verbose: bool = False):
+    if verbose:
+        print(f"Fetching person '{person_id}' and their donations and submissions...")
+    data, links = fetch_hash("people", person_id)
+    person = ActionNetworkPerson.from_hash(data)
+    with Database.get_global_engine().connect() as conn:
+        person.persist(conn)
+        conn.commit()
+    for curie, nav in links.items():
+        if curie == "osdi:submissions":
+            fetch_related_hashes(
+                url=nav.uri,
+                hash_type="submissions",
+                page_processor=insert_submissions_from_hashes,
+                verbose=verbose,
+            )
+        elif curie == "osdi:donations":
+            fetch_related_hashes(
+                url=nav.uri,
+                hash_type="donations",
+                page_processor=import_donations_from_hashes,
+                verbose=verbose,
+            )
     return person
 
 
-def load_people(
+def import_people(
     query: Optional[str] = None,
     verbose: bool = True,
     skip_pages: int = 0,
     max_pages: int = 0,
 ) -> int:
-    def insert_from_hashes(hashes: [dict]):
-        with Database.get_global_engine().connect() as conn:
-            for data in hashes:
-                try:
-                    person = ActionNetworkPerson.from_action_network(data)
-                    person.persist(conn)
-                except ValueError as err:
-                    if verbose:
-                        print(f"Skipping invalid person: {err}")
-            conn.commit()
-
-    return fetch_hashes(
-        "people", insert_from_hashes, query, verbose, skip_pages, max_pages
+    return fetch_all_hashes(
+        "people", import_people_from_hashes, query, verbose, skip_pages, max_pages
     )
 
 
-def compute_donation_summary(
-    conn: sa.engine.Connection, person_id: str, year: int
-) -> (int, str):
-    cutoff_hi = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
-    cutoff_lo = datetime(year, 1, 1, tzinfo=timezone.utc)
-    table = model.donation_info
-    query = (
-        sa.select(table)
-        .where(
-            sa.and_(
-                table.c.donor_id == person_id,
-                table.c.created_date < cutoff_hi,
-                table.c.created_date >= cutoff_lo,
-            )
-        )
-        .order_by(table.c.created_date)
-    )
-    entries, total = [], 0.0
-    rows = conn.execute(query).mappings().all()
-    for row in rows:
-        amount = float(row["amount"])
-        day = row["created_date"].strftime("%m/%d/%y")
-        total += amount
-        entries.append(f"${int(round(amount, 0))} ({day})")
-    return int(round(total, 0)), ", ".join(entries)
+def import_people_from_hashes(hashes: [dict]):
+    with Database.get_global_engine().connect() as conn:
+        for data in hashes:
+            try:
+                person = ActionNetworkPerson.from_hash(data)
+                person.persist(conn)
+            except ValueError as err:
+                print(f"Skipping invalid person: {err}")
+        conn.commit()

@@ -9,6 +9,9 @@ from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql as psql
 
+# field type for timestamp with timezone
+Timestamp = sa.TIMESTAMP(timezone=True)
+
 
 # revision identifiers, used by Alembic.
 revision = "aa71ccf58f66"
@@ -21,12 +24,8 @@ def upgrade():
     op.create_table(
         "donation_info",
         sa.Column("uuid", sa.Text, primary_key=True, nullable=False),
-        sa.Column(
-            "created_date", sa.TIMESTAMP(timezone=True), index=True, nullable=False
-        ),
-        sa.Column(
-            "modified_date", sa.TIMESTAMP(timezone=True), index=True, nullable=False
-        ),
+        sa.Column("created_date", Timestamp, index=True, nullable=False),
+        sa.Column("modified_date", Timestamp, index=True, nullable=False),
         sa.Column("amount", sa.Text, nullable=False),
         sa.Column("recurrence_data", psql.JSONB, nullable=False),
         sa.Column("donor_id", sa.Text, index=True, nullable=False),

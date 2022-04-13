@@ -38,13 +38,15 @@ import json
 import pytest
 
 from stv_services.action_network.fundraising_page import (
-    load_fundraising_pages,
+    import_fundraising_pages,
     ActionNetworkFundraisingPage,
-    load_fundraising_page,
 )
+from stv_services.data_store import Database
+
+fake_an_id = "action_network:fake-fundraising-page-identifier"
 
 
-def test_action_network_fundraising_page():
+def test_action_network_fundraising_page(clean_db):
     body = """
     {
       "identifiers": [
@@ -64,41 +66,40 @@ def test_action_network_fundraising_page():
     }
     """
     data = json.loads(body)
-    fundraising_page = ActionNetworkFundraisingPage.from_action_network(data)
-    assert fundraising_page["uuid"] == "action_network:fake-fundraising-page-identifier"
+    fundraising_page = ActionNetworkFundraisingPage.from_hash(data)
+    assert fundraising_page["uuid"] == fake_an_id
     assert fundraising_page["origin_system"] == "ActBlue"
     assert fundraising_page["title"] == "act-blue_146845_stv-test-form-3"
-    fundraising_page.persist()
-    fundraising_page["title"] = "wrong title"
-    del fundraising_page["origin_system"]
-    fundraising_page.reload()
-    assert fundraising_page["origin_system"] == "ActBlue"
-    assert fundraising_page["title"] == "act-blue_146845_stv-test-form-3"
-    found_fundraising_page = ActionNetworkFundraisingPage.lookup(
-        uuid="action_network:fake-fundraising-page-identifier"
-    )
-    assert found_fundraising_page == fundraising_page
-    fundraising_page.remove()
-    with pytest.raises(KeyError):
-        ActionNetworkFundraisingPage.lookup(
-            "action_network:fake-fundraising-page-identifier"
+    with Database.get_global_engine().connect() as conn:
+        fundraising_page.persist(conn)
+        fundraising_page["title"] = "wrong title"
+        del fundraising_page["origin_system"]
+        fundraising_page.reload(conn)
+        assert fundraising_page["origin_system"] == "ActBlue"
+        assert fundraising_page["title"] == "act-blue_146845_stv-test-form-3"
+        found_fundraising_page = ActionNetworkFundraisingPage.from_lookup(
+            conn, fake_an_id
         )
-    with pytest.raises(KeyError):
-        found_fundraising_page.reload()
+        assert found_fundraising_page == fundraising_page
+        fundraising_page.remove(conn)
+        with pytest.raises(KeyError):
+            ActionNetworkFundraisingPage.from_lookup(conn, fake_an_id)
+        with pytest.raises(KeyError):
+            found_fundraising_page.reload(conn)
 
 
-def test_load_fundraising_page():
-    an_id = "action_network:7f2decaf-4eee-4a1e-bf5c-9c7d0d4e6726"
-    person = load_fundraising_page(an_id)
-    assert person["uuid"] == an_id
-    fake_an_id = "action_network:fake-fundraising-page-identifier"
-    with pytest.raises(KeyError):
-        load_fundraising_page(fake_an_id)
+def test_import_fundraising_page(clean_db):
+    with Database.get_global_engine().connect() as conn:
+        an_id = "action_network:7f2decaf-4eee-4a1e-bf5c-9c7d0d4e6726"
+        person = ActionNetworkFundraisingPage.from_action_network(conn, an_id)
+        assert person["uuid"] == an_id
+        with pytest.raises(KeyError):
+            ActionNetworkFundraisingPage.from_action_network(conn, fake_an_id)
 
 
 @pytest.mark.slow
-def test_load_fundraising_pages():
-    count = load_fundraising_pages(
+def test_import_fundraising_pages(clean_db):
+    count = import_fundraising_pages(
         f"identifier eq 'action_network:7f2decaf-4eee-4a1e-bf5c-9c7d0d4e6726'"
     )
     assert count == 1

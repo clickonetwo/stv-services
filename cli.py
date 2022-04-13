@@ -47,6 +47,7 @@ def cli(ctx: click.Context, verbose: bool):
 @click.pass_context
 def update_all(ctx: click.Context):
     verbose = ctx.obj["verbose"]
+    bulk.update_submissions(verbose)
     bulk.update_fundraising_pages(verbose)
     bulk.update_donations(verbose)
     bulk.update_people(verbose)
@@ -81,11 +82,25 @@ def update_fundraising_pages(ctx: click.Context, skip_pages: int, max_pages: int
 
 
 @cli.command()
+@click.pass_context
+def update_submissions(ctx: click.Context):
+    verbose = ctx.obj["verbose"]
+    bulk.update_submissions(verbose)
+
+
+@cli.command()
 @click.option("--force/--no-force", default=True, help="Force re-computation")
 @click.pass_context
 def update_donation_summaries(ctx: click.Context, force: bool = False):
     verbose = ctx.obj["verbose"]
     bulk.update_donation_summaries(verbose, force)
+
+
+@cli.command()
+@click.pass_context
+def update_airtable_classifications(ctx: click.Context):
+    verbose = ctx.obj["verbose"]
+    bulk.update_airtable_classifications(verbose)
 
 
 if __name__ == "__main__":

@@ -39,13 +39,15 @@ import pytest
 from restnavigator.exc import HALNavigatorError
 
 from stv_services.action_network.donation import (
-    load_donations,
+    import_donations,
     ActionNetworkDonation,
-    load_donation,
 )
+from stv_services.data_store import Database
+
+fake_an_id = "action_network:fake-donation-identifier"
 
 
-def test_action_network_donation():
+def test_action_network_donation(clean_db):
     body = """
     {
       "identifiers": [
@@ -79,42 +81,41 @@ def test_action_network_donation():
     }
     """
     data = json.loads(body)
-    donation = ActionNetworkDonation.from_action_network(data)
-    assert donation["uuid"] == "action_network:fake-donation-identifier"
+    donation = ActionNetworkDonation.from_hash(data)
+    assert donation["uuid"] == fake_an_id
     assert donation["amount"] == "40.00"
     assert donation["recurrence_data"].get("recurring") is False
-    donation.persist()
-    donation["amount"] = "100.00"
-    del donation["recurrence_data"]
-    donation.reload()
-    assert donation["amount"] == "40.00"
-    assert donation["recurrence_data"].get("recurring") is False
-    found_donation = ActionNetworkDonation.lookup(
-        uuid="action_network:fake-donation-identifier"
-    )
-    assert found_donation == donation
-    donation.remove()
-    with pytest.raises(KeyError):
-        ActionNetworkDonation.lookup("action_network:fake-donation-identifier")
-    with pytest.raises(KeyError):
-        found_donation.reload()
+    with Database.get_global_engine().connect() as conn:
+        donation.persist(conn)
+        donation["amount"] = "100.00"
+        del donation["recurrence_data"]
+        donation.reload(conn)
+        assert donation["amount"] == "40.00"
+        assert donation["recurrence_data"].get("recurring") is False
+        found_donation = ActionNetworkDonation.from_lookup(conn, fake_an_id)
+        assert found_donation == donation
+        donation.remove(conn)
+        with pytest.raises(KeyError):
+            ActionNetworkDonation.from_lookup(conn, fake_an_id)
+        with pytest.raises(KeyError):
+            found_donation.reload(conn)
 
 
-def test_load_donation():
-    an_id = "action_network:c3b8160a-59d4-4f22-83c6-7ce09b873c4a"
-    person = load_donation(an_id)
-    assert person["uuid"] == an_id
-    fake_an_id = "action_network:fake-donation-identifier"
-    # there's a bug in Action Network - this should be a KeyError,
-    # but they are returning an HTML 404 response rather than JSON.
-    # TODO: change this back to KeyError when they fix their bug.
-    with pytest.raises(HALNavigatorError):
-        load_donation(fake_an_id)
+def test_import_donation(clean_db):
+    with Database.get_global_engine().connect() as conn:
+        an_id = "action_network:c3b8160a-59d4-4f22-83c6-7ce09b873c4a"
+        donation = ActionNetworkDonation.from_action_network(conn, an_id)
+        assert donation["uuid"] == an_id
+        # there's a bug in Action Network - this should be a KeyError,
+        # but they are returning an HTML 404 response rather than JSON.
+        # TODO: change this back to KeyError when they fix their bug.
+        with pytest.raises(HALNavigatorError):
+            ActionNetworkDonation.from_action_network(conn, fake_an_id)
 
 
 @pytest.mark.slow
-def test_load_donations():
-    count = load_donations(
+def test_import_donations(clean_db):
+    count = import_donations(
         f"identifier eq 'action_network:c3b8160a-59d4-4f22-83c6-7ce09b873c4a'"
     )
     assert count == 1

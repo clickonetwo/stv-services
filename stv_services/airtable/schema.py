@@ -20,13 +20,16 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 #
+from collections import namedtuple
 from typing import Dict
 
 from ..core import Configuration, Session
 
+FieldInfo = namedtuple("AirtableSchema", ["field_name", "column_name", "column_type"])
 
-def fetch_and_validate_airtable_schema(
-    base_name: str, table_name: str, expected_schema: [(str, str, str)]
+
+def fetch_and_validate_table_schema(
+    base_name: str, table_name: str, expected_schema: [FieldInfo]
 ) -> (dict, dict):
     config = Configuration.get_global_config()
     session = Session.get_global_session("airtable")
@@ -34,7 +37,7 @@ def fetch_and_validate_airtable_schema(
     url = config["airtable_api_base_url"] + f"/meta/bases/{base_id}/tables"
     base_schema = session.get(url).json()
     column_ids, column_fields, column_types = {}, {}, {}
-    for field_name, column_name, column_type in expected_schema:
+    for field_name, column_name, column_type, _ in expected_schema:
         column_fields[column_name] = field_name
         column_types[column_name] = column_type
     for table in base_schema["tables"]:  # type: dict
@@ -42,13 +45,18 @@ def fetch_and_validate_airtable_schema(
             for field in table.get("fields"):  # type: Dict[str, str]
                 if (column_name := field.get("name")) in column_fields:
                     column_ids[column_name] = field.get("id")
-                    etype, atype = column_types[column_name], field.get("type")
-                    if etype != atype:
+                    e_type, a_type = column_types[column_name], field.get("type")
+                    if e_type != a_type:
                         raise TypeError(
                             f"Airtable field {column_name} "
-                            f"has expected type {etype} "
-                            f"but actual type {atype}"
+                            f"has expected type {e_type} "
+                            f"but actual type {a_type}"
                         )
+    missing = [
+        f_name for f_name, _, _, _ in expected_schema if not column_ids.get(f_name)
+    ]
+    if missing:
+        raise KeyError(f"Table schema is missing fields for: {missing}")
     return column_ids
 
 
