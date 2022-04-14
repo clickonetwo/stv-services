@@ -181,37 +181,77 @@ def test_import_person(clean_db):
             ActionNetworkPerson.from_action_network(conn, fake_an_id)
 
 
-def test_import_person_related(clean_db):
-    historical_donor = "action_network:04bfa631-fa5f-404e-8c63-a9e51a753bdc"
-    historical_donor_donations = [
-        "action_network:f008946f-37d5-4d66-9f46-9336df9e5b9c",
-        "action_network:5e14edb5-5bd4-4f85-83db-74e14af15efb",
-        "action_network:146a1343-b2af-4cdb-9f31-b5fcdf5c94ce",
-        "action_network:e22be3a8-7229-4b0f-9267-bd6b9fa755ef",
-        "action_network:105a358b-cbba-4389-9d01-7c6933ced370",
-        "action_network:347bf8de-71e7-491d-a73e-4d1b79bae7d9",
-        "action_network:687b4b15-9e92-4c48-a7f4-5edaec5a0831",
-        "action_network:a0deb800-d94b-4568-ae26-d12fc6a5e363",
-        "action_network:f2a2e08d-0562-49e9-a5c6-bdc14d7dfa9d",
-        "action_network:63bd0d69-d6ff-4d93-93ee-c0f948b07988",
-        "action_network:6d5b56e7-aeb5-48ec-ae05-8b68a7e1f538",
-        "action_network:2701a5ca-1e34-46d4-bb29-4829f999f2f3",
-        "action_network:c02b9ee0-bb1a-48ec-88cb-3c0ca12ee63d",
-    ]
-    import_person(historical_donor, verbose=True)
+def test_import_person_related(clean_db, test_ids):
+    import_person(test_ids["historical_donor"], verbose=True)
     with Database.get_global_engine().connect() as conn:
-        for donation_id in historical_donor_donations:
+        for donation_id in test_ids["historical_donor_donations"]:
             donation = ActionNetworkDonation.from_lookup(conn, donation_id)
-            assert donation["donor_id"] == historical_donor
+            assert donation["donor_id"] == test_ids["historical_donor"]
     current_signup_non_donor = "action_network:986ac371-7e7d-4607-b0fa-b68a8a29add6"
     current_signup_non_donor_submissions = [
         "action_network:26042188-c143-4211-863f-0d9a2b0919c7"
     ]
-    import_person(current_signup_non_donor, verbose=True)
+    import_person(test_ids["current_signup_non_donor"], verbose=True)
     with Database.get_global_engine().connect() as conn:
-        for submission_id in current_signup_non_donor_submissions:
+        for submission_id in test_ids["current_signup_non_donor_submissions"]:
             submission = ActionNetworkSubmission.from_lookup(conn, submission_id)
-            assert submission["person_id"] == current_signup_non_donor
+            assert submission["person_id"] == test_ids["current_signup_non_donor"]
+
+
+def test_compute_donation_summaries(known_db):
+    with Database.get_global_engine().connect() as conn:
+        person = ActionNetworkPerson.from_lookup(
+            conn, uuid=known_db["historical_donor"]
+        )
+        person.update_donation_summaries(conn)
+        assert person["total_2020"] == 2750
+        assert person["total_2021"] == 250
+
+
+def test_classify_for_airtable(known_db):
+    with Database.get_global_engine().connect() as conn:
+        # historical donors are not contacts, but if
+        # they are made contacts they are also funders
+        person = ActionNetworkPerson.from_lookup(
+            conn, uuid=known_db["historical_donor"]
+        )
+        person.classify_for_airtable(conn)
+        assert person["is_volunteer"] is True
+        assert person["is_contact"] is False
+        assert person["is_funder"] is False
+        person["is_contact"] = True
+        person.classify_for_airtable(conn)
+        assert person["is_funder"] is True
+        # new sign-ups are not volunteers or funders,
+        # but they are contacts.
+        person = ActionNetworkPerson.from_lookup(
+            conn, uuid=known_db["current_signup_non_donor"]
+        )
+        person.classify_for_airtable(conn)
+        assert person["is_volunteer"] is False
+        assert person["is_contact"] is True
+        assert person["is_funder"] is False
+        # new donors are contacts and funders,
+        # but they are not volunteers.
+        person = ActionNetworkPerson.from_lookup(
+            conn, uuid=known_db["current_donor_non_signup"]
+        )
+        person.classify_for_airtable(conn)
+        assert person["is_volunteer"] is False
+        assert person["is_contact"] is True
+        assert person["is_funder"] is True
+        # historical sign-ups are only volunteers,
+        # and not funders even if they are made contacts
+        person = ActionNetworkPerson.from_lookup(
+            conn, uuid=known_db["historical_signup_non_donor"]
+        )
+        person.classify_for_airtable(conn)
+        assert person["is_volunteer"] is True
+        assert person["is_contact"] is False
+        assert person["is_funder"] is False
+        person["is_contact"] = True
+        person.classify_for_airtable(conn)
+        assert person["is_funder"] is False
 
 
 @pytest.mark.slow
