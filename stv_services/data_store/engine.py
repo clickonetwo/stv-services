@@ -25,6 +25,8 @@ from typing import ClassVar
 
 import sqlalchemy as sa
 
+from . import model
+
 
 def get_engine_url(default_url: str = None) -> str:
     url = os.getenv("DATABASE_URL", default_url or "postgresql://localhost:5432/stv")
@@ -49,3 +51,12 @@ class Database:
         if cls._singleton is None:
             cls._singleton = cls.get_new_engine()
         return cls._singleton
+
+    @classmethod
+    def clear_all_action_network_data(cls):
+        with cls.get_global_engine().connect() as conn:
+            conn.execute(sa.delete(model.person_info))
+            conn.execute(sa.delete(model.donation_info))
+            conn.execute(sa.delete(model.submission_info))
+            conn.execute(sa.delete(model.fundraising_page_info))
+            conn.commit()

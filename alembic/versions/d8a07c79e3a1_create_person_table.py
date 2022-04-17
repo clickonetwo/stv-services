@@ -9,6 +9,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql as psql
 
+from stv_services.data_store.model import epoch
+
 # field type for timestamp with timezone
 Timestamp = sa.TIMESTAMP(timezone=True)
 
@@ -43,14 +45,14 @@ def upgrade():
         sa.Column("total_2021", sa.Integer, index=True, default=-1),
         sa.Column("summary_2021", sa.Text, default=""),
         sa.Column("is_contact", sa.Boolean, index=True, default=False),
-        sa.Column("contact_record_id", sa.Text, index=True, nullable=True),
-        sa.Column("contact_last_updated", Timestamp, index=True, nullable=True),
+        sa.Column("contact_record_id", sa.Text, index=True, default=""),
+        sa.Column("contact_last_updated", Timestamp, index=True, default=epoch),
         sa.Column("is_volunteer", sa.Boolean, index=True, default=False),
-        sa.Column("volunteer_record_id", sa.Text, index=True, nullable=True),
-        sa.Column("volunteer_last_updated", Timestamp, index=True, nullable=True),
+        sa.Column("volunteer_record_id", sa.Text, index=True, default=""),
+        sa.Column("volunteer_last_updated", Timestamp, index=True, default=epoch),
         sa.Column("is_funder", sa.Boolean, index=True, default=False),
-        sa.Column("funder_record_id", sa.Text, index=True, nullable=True),
-        sa.Column("funder_last_updated", Timestamp, index=True, nullable=True),
+        sa.Column("funder_record_id", sa.Text, index=True, default=""),
+        sa.Column("funder_last_updated", Timestamp, index=True, default=epoch),
     )
 
 

@@ -25,39 +25,37 @@ from typing import Dict
 
 from ..core import Configuration, Session
 
-FieldInfo = namedtuple("AirtableSchema", ["field_name", "column_name", "column_type"])
+FieldInfo = namedtuple("FieldInfo", ["name", "type", "source"])
 
 
 def fetch_and_validate_table_schema(
-    base_name: str, table_name: str, expected_schema: [FieldInfo]
-) -> (dict, dict):
+    base_name: str, table_name: str, schema: dict[str, FieldInfo]
+) -> dict:
     config = Configuration.get_global_config()
-    session = Session.get_global_session("airtable")
     base_id = fetch_airtable_base_id(base_name)
     url = config["airtable_api_base_url"] + f"/meta/bases/{base_id}/tables"
+    session = Session.get_global_session("airtable")
     base_schema = session.get(url).json()
-    column_ids, column_fields, column_types = {}, {}, {}
-    for field_name, column_name, column_type, _ in expected_schema:
-        column_fields[column_name] = field_name
-        column_types[column_name] = column_type
+    column_ids = {}
+    column_fields = {info.name: name for name, info in schema.items()}
     for table in base_schema["tables"]:  # type: dict
         if table.get("name") == table_name:
+            table_id = table.get("id")
             for field in table.get("fields"):  # type: Dict[str, str]
-                if (column_name := field.get("name")) in column_fields:
-                    column_ids[column_name] = field.get("id")
-                    e_type, a_type = column_types[column_name], field.get("type")
-                    if e_type != a_type:
+                if (name := field.get("name")) in column_fields:
+                    column_ids[column_fields[name]] = field.get("id")
+                    if schema[column_fields[name]].type != field.get("type"):
                         raise TypeError(
-                            f"Airtable field {column_name} "
-                            f"has expected type {e_type} "
-                            f"but actual type {a_type}"
+                            f"Airtable field {name} "
+                            f"has expected type {schema[column_fields[name]].type} "
+                            f"but actual type {field.get('type')}"
                         )
-    missing = [
-        f_name for f_name, _, _, _ in expected_schema if not column_ids.get(f_name)
-    ]
-    if missing:
+            break
+    else:
+        raise KeyError(f"Base schema has no table named '{table_name}'")
+    if missing := set(schema.keys()) - set(column_ids.keys()):
         raise KeyError(f"Table schema is missing fields for: {missing}")
-    return column_ids
+    return dict(base_id=base_id, table_id=table_id, column_ids=column_ids)
 
 
 def fetch_airtable_base_id(base_name: str) -> str:

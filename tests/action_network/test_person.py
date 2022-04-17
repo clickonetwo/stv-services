@@ -181,21 +181,21 @@ def test_import_person(clean_db):
             ActionNetworkPerson.from_action_network(conn, fake_an_id)
 
 
-def test_import_person_related(clean_db, test_ids):
-    import_person(test_ids["historical_donor"], verbose=True)
+def test_import_person_related(clean_db, known_db):
+    import_person(known_db["historical_donor"], verbose=True)
     with Database.get_global_engine().connect() as conn:
-        for donation_id in test_ids["historical_donor_donations"]:
+        for donation_id in known_db["historical_donor_donations"]:
             donation = ActionNetworkDonation.from_lookup(conn, donation_id)
-            assert donation["donor_id"] == test_ids["historical_donor"]
+            assert donation["donor_id"] == known_db["historical_donor"]
     current_signup_non_donor = "action_network:986ac371-7e7d-4607-b0fa-b68a8a29add6"
     current_signup_non_donor_submissions = [
         "action_network:26042188-c143-4211-863f-0d9a2b0919c7"
     ]
-    import_person(test_ids["current_signup_non_donor"], verbose=True)
+    import_person(known_db["current_signup_non_donor"], verbose=True)
     with Database.get_global_engine().connect() as conn:
-        for submission_id in test_ids["current_signup_non_donor_submissions"]:
+        for submission_id in known_db["current_signup_non_donor_submissions"]:
             submission = ActionNetworkSubmission.from_lookup(conn, submission_id)
-            assert submission["person_id"] == test_ids["current_signup_non_donor"]
+            assert submission["person_id"] == known_db["current_signup_non_donor"]
 
 
 def test_compute_donation_summaries(known_db):

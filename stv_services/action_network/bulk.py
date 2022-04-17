@@ -101,9 +101,9 @@ def update_donation_summaries(verbose: bool = True, force: bool = False):
     if verbose:
         print(f"Updating donation summaries for people...", end="")
         progress_time = start_time
-    table, sentinel = model.person_info, -1
+    table, sentinel = model.person_info, model.not_computed
     if force:
-        query = sa.select(table.c.uuid)
+        query = sa.select(table)
     else:
         query = sa.select(table).where(table.c.total_2020 == sentinel)
     with Database.get_global_engine().connect() as conn:
@@ -133,7 +133,7 @@ def update_airtable_classifications(verbose: bool = True):
         print(f"Updating Airtable classifications for people...", end="")
         progress_time = start_time
     table = model.person_info
-    query = sa.select(table.c.uuid)
+    query = sa.select(table)
     with Database.get_global_engine().connect() as conn:
         people = ActionNetworkPerson.from_query(conn, query)
         for person in people:

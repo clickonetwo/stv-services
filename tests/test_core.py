@@ -20,8 +20,11 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 #
+import sqlalchemy as sa
+
 from stv_services.core import Session
 from stv_services.core.config import Configuration
+from stv_services.data_store import Database, model
 
 
 def test_load_config():
@@ -52,3 +55,16 @@ def test_save_config():
 def test_get_action_network_session():
     session = Session.get_global_session("action_network")
     assert session is not None
+
+
+def test_clear_database():
+    Database.clear_all_action_network_data()
+    with Database.get_global_engine().connect() as conn:
+        for table in [
+            model.person_info,
+            model.donation_info,
+            model.submission_info,
+            model.fundraising_page_info,
+        ]:
+            result = conn.execute(sa.select(table)).mappings().all()
+            assert len(result) == 0

@@ -20,6 +20,8 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 #
+from datetime import datetime, timezone
+
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql as psql
 
@@ -27,6 +29,10 @@ metadata = sa.MetaData()
 
 # field type for timestamp with timezone
 Timestamp = sa.TIMESTAMP(timezone=True)
+epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
+
+# sentinel value for not-yet-computed donation totals
+not_computed = -1
 
 # Persistence for the `core.Configuration` class
 configuration = sa.Table(
@@ -56,19 +62,19 @@ person_info = sa.Table(
     sa.Column("postal_code", sa.Text, index=True, nullable=True),
     sa.Column("country", sa.Text, nullable=True),
     sa.Column("custom_fields", psql.JSONB, nullable=True),
-    sa.Column("total_2020", sa.Integer, index=True, default=-1),
+    sa.Column("total_2020", sa.Integer, index=True, default=not_computed),
     sa.Column("summary_2020", sa.Text, default=""),
-    sa.Column("total_2021", sa.Integer, index=True, default=-1),
+    sa.Column("total_2021", sa.Integer, index=True, default=not_computed),
     sa.Column("summary_2021", sa.Text, default=""),
     sa.Column("is_contact", sa.Boolean, index=True, default=False),
-    sa.Column("contact_record_id", sa.Text, index=True, nullable=True),
-    sa.Column("contact_last_updated", Timestamp, index=True, nullable=True),
+    sa.Column("contact_record_id", sa.Text, index=True, default=""),
+    sa.Column("contact_last_updated", Timestamp, index=True, default=epoch),
     sa.Column("is_volunteer", sa.Boolean, index=True, default=False),
-    sa.Column("volunteer_record_id", sa.Text, index=True, nullable=True),
-    sa.Column("volunteer_last_updated", Timestamp, index=True, nullable=True),
+    sa.Column("volunteer_record_id", sa.Text, index=True, default=""),
+    sa.Column("volunteer_last_updated", Timestamp, index=True, default=epoch),
     sa.Column("is_funder", sa.Boolean, index=True, default=False),
-    sa.Column("funder_record_id", sa.Text, index=True, nullable=True),
-    sa.Column("funder_last_updated", Timestamp, index=True, nullable=True),
+    sa.Column("funder_record_id", sa.Text, index=True, default=""),
+    sa.Column("funder_last_updated", Timestamp, index=True, default=epoch),
 )
 
 # Donation info from Action Network

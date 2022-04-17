@@ -20,6 +20,7 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 #
+from os import getenv
 from typing import ClassVar
 
 import sqlalchemy as sa
@@ -29,9 +30,20 @@ from ..data_store import model, Database
 
 class Configuration(dict):
     _singleton: ClassVar["Configuration"] = None
+    _env: ClassVar[str] = "DEV"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+    @classmethod
+    def get_env(cls) -> str:
+        return cls._env
+
+    @classmethod
+    def set_env(cls, env: str):
+        if env.upper() not in ["DEV", "STG", "PRD"]:
+            raise ValueError(f"Environment ('{str.upper()}') must be DEV, STG, or PRD")
+        _env = str.upper()
 
     @classmethod
     def get_global_config(cls, reload: bool = False) -> "Configuration":
@@ -59,3 +71,7 @@ class Configuration(dict):
                 new = [dict(key=key, value=val) for key, val in self.items()]
                 conn.execute(sa.insert(model.configuration), new)
             conn.commit()
+
+
+if env := getenv("ENV"):
+    Configuration.set_env(env)

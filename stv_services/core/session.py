@@ -23,12 +23,14 @@
 from typing import ClassVar, Dict
 
 import requests
+from pyairtable import Api
 
 from .config import Configuration
 
 
 class Session:
     sessions: ClassVar[Dict[str, requests.Session]] = {}
+    api: ClassVar[Api] = None
     config: ClassVar[Configuration] = Configuration.get_global_config()
 
     @classmethod
@@ -51,3 +53,10 @@ class Session:
                     f"no session available because '{service}' is not a known service"
                 )
         return session
+
+    @classmethod
+    def get_airtable_api(cls) -> Api:
+        if cls.api is None:
+            api_key = cls.config["airtable_api_key"]
+            cls.api = Api(api_key, timeout=(3.5, 27))
+        return cls.api
