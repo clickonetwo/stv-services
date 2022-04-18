@@ -25,9 +25,12 @@ Command-line Interface to STV services.
 
 This cli provides bulk import and maintenance operations.
 """
+import os.path
+
 import click
 
 from stv_services.action_network import bulk
+from stv_services.external.spreadsheet import import_spreadsheet
 
 
 @click.group()
@@ -101,6 +104,23 @@ def update_donation_summaries(ctx: click.Context, force: bool = False):
 def update_airtable_classifications(ctx: click.Context):
     verbose = ctx.obj["verbose"]
     bulk.update_airtable_classifications(verbose)
+
+
+@cli.command()
+@click.option("--path", help="Import from this path")
+@click.pass_context
+def import_external_data(ctx: click.Context, path: str = None):
+    verbose = ctx.obj["verbose"]
+    if not path:
+        path = "./local/Cleaned Up Data Spreadsheet for Integration.csv"
+    if not os.path.isfile(path):
+        raise ValueError("Can't find spreadsheet at path '{}'")
+    if verbose:
+        print(f"Importing from spreadsheet at '{path}'...")
+    success, total = import_spreadsheet(path, verbose=verbose)
+    if verbose:
+        print(f"Imported {success} if {total} rows successfully.")
+        print(f"See error messages above for details of any errors.")
 
 
 if __name__ == "__main__":

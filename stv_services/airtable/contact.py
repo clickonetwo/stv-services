@@ -20,22 +20,18 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 #
-from datetime import datetime, timezone
-from typing import Dict
 
-import sqlalchemy as sa
-from pyairtable import Table
 from sqlalchemy.engine import Connection
 
-from .schema import fetch_and_validate_table_schema, FieldInfo, fetch_airtable_base_id
+from .schema import fetch_and_validate_table_schema, FieldInfo
 from .utils import (
-    insert_airtable_records,
-    update_airtable_records,
-    delete_airtable_records,
+    insert_people,
+    update_people,
+    upsert_people,
+    delete_people,
 )
 from ..action_network.person import ActionNetworkPerson
 from ..core import Configuration
-from ..data_store import Database, model
 
 contact_table_name = "Contacts"
 contact_table_schema = {
@@ -46,17 +42,18 @@ contact_table_schema = {
     "street_address": FieldInfo("Address*", "multilineText", "person"),
     "locality": FieldInfo("City*", "singleLineText", "person"),
     "region": FieldInfo("State*", "singleLineText", "person"),
-    "postal_code": FieldInfo("Zip code*", "singleLineText", "person"),
+    "postal_code": FieldInfo("Zip Code*", "singleLineText", "person"),
     "total_2020": FieldInfo("2020 Total Donations*", "currency", "person"),
     "summary_2020": FieldInfo("2020 Donations Summary*", "multilineText", "person"),
     "total_2021": FieldInfo("2021 Total Donations*", "currency", "person"),
     "summary_2021": FieldInfo("2021 Donations Summary*", "multilineText", "person"),
-    "is_funder": FieldInfo("In Fundraising table?", "checkbox", "person"),
-    "custom_fields": FieldInfo("2022 Signup Interests*", "multipleSelects", "compute"),
+    "is_funder": FieldInfo("In Fundraising Table?", "checkbox", "person"),
+    "custom1": FieldInfo("2022 Signup Interests*", "multipleSelects", "compute"),
+    "custom2": FieldInfo("2022 Signup Notes*", "multilineText", "compute"),
 }
-contact_custom_field_map = {
-    "2022_calls": "Make calls",
-    "2022_doors": "Knock on doors",
+custom1_field_map = {
+    "2022_calls": "Phone Bank",
+    "2022_doors": "Door Knock",
     "2022_fundraise": "Fundraise",
     "2022_recruit": "Recruit friends",
     "2022_podlead": "Start a Pod",
@@ -83,62 +80,30 @@ def create_contact_record(person: ActionNetworkPerson) -> dict:
             # not all fields have values, so only assign if there is one
             if value := person.get(field_name):
                 record[column_ids[field_name]] = value
+    custom_fields = person["custom_fields"]
     interests = []
-    for field_name, selection_text in contact_custom_field_map.items():
-        if person["custom_fields"].get(field_name):
+    for field_name, selection_text in custom1_field_map.items():
+        if custom_fields.get(field_name):
             interests.append(selection_text)
-    record[column_ids["custom_fields"]] = interests
+    record[column_ids["custom1"]] = interests
+    record[column_ids["custom2"]] = custom_fields.get("2022_notes", "")
     return record
 
 
 def insert_contacts(conn: Connection, people: list[ActionNetworkPerson]) -> int:
-    if not people:
-        return 0
-    schema = Configuration.get_global_config()["airtable_stv_contact_schema"]
-    records = list(map(create_contact_record, people))
-    record_ids = insert_airtable_records(schema, records)
-    for record_id, person in zip(record_ids, people):
-        person["contact_record_id"] = record_id
-        person["contact_last_updated"] = person["modified_date"]
-        person.persist(conn)
-    return len(people)
+    pairs = [(person, create_contact_record(person)) for person in people]
+    return insert_people(conn, "contact", pairs)
 
 
 def update_contacts(conn: Connection, people: list[ActionNetworkPerson]) -> int:
-    if not people:
-        return 0
-    schema = Configuration.get_global_config()["airtable_stv_contact_schema"]
-    updates = []
-    for person in people:
-        record_id = person["contact_record_id"]
-        record = create_contact_record(person)
-        updates.append({"id": record_id, "fields": record})
-    update_airtable_records(schema, updates)
-    for person in people:
-        person["contact_last_updated"] = person["modified_date"]
-        person.persist(conn)
-    return len(people)
+    pairs = [(person, create_contact_record(person)) for person in people]
+    return update_people(conn, "contact", pairs)
 
 
 def upsert_contacts(conn: Connection, people: list[ActionNetworkPerson]) -> (int, int):
-    inserts, updates = [], []
-    for person in people:
-        if person.get("contact_record_id"):
-            updates.append(person)
-        else:
-            inserts.append(person)
-    i_count = insert_contacts(conn, inserts)
-    u_count = update_contacts(conn, updates)
-    return i_count, u_count
+    pairs = [(person, create_contact_record(person)) for person in people]
+    return upsert_people(conn, "contact", pairs)
 
 
-def delete_contacts(conn: Connection, people: list[ActionNetworkPerson]):
-    schema = Configuration.get_global_config()["airtable_stv_contact_schema"]
-    deletes = []
-    for person in people:
-        if record_id := person.get("contact_record_id"):
-            deletes.append(record_id)
-            person["contact_record_id"] = ""
-            person["contact_last_updated"] = model.epoch
-    delete_airtable_records(schema, deletes)
-    return len(deletes)
+def delete_contacts(conn: Connection, people: list[ActionNetworkPerson]) -> int:
+    return delete_people(conn, "contact", people)

@@ -77,6 +77,27 @@ person_info = sa.Table(
     sa.Column("funder_last_updated", Timestamp, index=True, default=epoch),
 )
 
+# Externally-sourced Person info
+external_info = sa.Table(
+    "external_info",
+    metadata,
+    sa.Column("email", sa.Text, primary_key=True, nullable=False),
+    sa.Column("shifts_2020", sa.Integer, default=0),
+    sa.Column("events_2020", sa.Integer, default=0),
+    sa.Column("connect_2020", sa.Text, default=""),
+    sa.Column("assigns_2020", sa.Text, default=""),
+    sa.Column("notes_2020", sa.Text, default=""),
+    sa.Column("history_2020", sa.Text, default=""),
+    sa.Column("fundraise_2020", sa.Boolean, default=False),
+    sa.Column("doorknock_2020", sa.Boolean, default=False),
+    sa.Column("phonebank_2020", sa.Boolean, default=False),
+    sa.Column("recruit_2020", sa.Boolean, default=False),
+    sa.Column("delegate_ga_2020", sa.Boolean, default=False),
+    sa.Column("delegate_pa_2020", sa.Boolean, default=False),
+    sa.Column("delegate_az_2020", sa.Boolean, default=False),
+    sa.Column("delegate_fl_2020", sa.Boolean, default=False),
+)
+
 # Donation info from Action Network
 donation_info = sa.Table(
     "donation_info",

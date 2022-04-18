@@ -20,12 +20,16 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 #
-import pytest
+import os
 
+import pytest
 
 #
 # mark slow tests
 #
+from stv_services.external.spreadsheet import import_spreadsheet
+
+
 def pytest_addoption(parser):
     parser.addoption(
         "--run-slow", action="store_true", default=False, help="run slow tests"
@@ -102,7 +106,6 @@ def test_ids() -> dict:
 def known_db(clean_db, test_ids) -> dict:
     from stv_services.action_network.person import import_person
     from stv_services.action_network import bulk
-    from stv_services.data_store import Database
 
     import_person(test_ids["historical_signup_non_donor"], verbose=False)
     import_person(test_ids["historical_donor"], verbose=False)
@@ -112,11 +115,22 @@ def known_db(clean_db, test_ids) -> dict:
     import_person(test_ids["signup_2022_non_donor"], verbose=False)
     bulk.update_donation_summaries(verbose=False, force=True)
     bulk.update_airtable_classifications(verbose=False)
+    import_spreadsheet("./tests/external/Test Spreadsheet.csv")
+    return test_ids
+
+
+@pytest.fixture()
+def reload_db(clean_db, test_ids) -> dict:
+    os.system("./restore-known-db.sh")
     return test_ids
 
 
 @pytest.fixture(scope="session")
 def ensure_schemas() -> dict:
     from stv_services.airtable.contact import verify_contact_schema
+    from stv_services.airtable.volunteer import verify_volunteer_schema
 
-    return dict(contact_schema=verify_contact_schema())
+    return dict(
+        contact_schema=verify_contact_schema(),
+        volunteer_schema=verify_volunteer_schema(),
+    )
