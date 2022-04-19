@@ -98,16 +98,14 @@ def delete_people(
 
 
 def field_names(person_type: str) -> (str, str, str):
-    if person_type in ["contact", "volunteer", "fundraiser"]:
+    if person_type in ["contact", "volunteer", "funder"]:
         return (
             f"airtable_stv_{person_type}_schema",
             f"{person_type}_record_id",
             f"{person_type}_last_updated",
         )
     else:
-        raise ValueError(
-            f"Type ({person_type}) must be contact, volunteer, or fundraiser"
-        )
+        raise ValueError(f"Type ({person_type}) must be contact, volunteer, or funder")
 
 
 #
