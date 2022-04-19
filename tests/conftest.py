@@ -121,7 +121,7 @@ def known_db(clean_db, test_ids) -> dict:
 
 @pytest.fixture()
 def reload_db(clean_db, test_ids) -> dict:
-    os.system("./restore-known-db.sh")
+    os.system("tests/restore-known-db.sh")
     return test_ids
 
 

@@ -1,0 +1,122 @@
+--
+-- PostgreSQL database dump
+--
+
+-- Dumped from database version 14.2
+-- Dumped by pg_dump version 14.2
+
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+--
+-- Data for Name: alembic_version; Type: TABLE DATA; Schema: public; Owner: dbrotsky
+--
+
+COPY public.alembic_version (version_num) FROM stdin;
+d4b3730f33de
+\.
+
+
+--
+-- Data for Name: donation_info; Type: TABLE DATA; Schema: public; Owner: dbrotsky
+--
+
+COPY public.donation_info (uuid, created_date, modified_date, amount, recurrence_data, donor_id, fundraising_page_id) FROM stdin;
+action_network:f008946f-37d5-4d66-9f46-9336df9e5b9c	2019-12-15 20:07:51-05	2021-01-16 19:15:16-05	250.00	{"recurring": false}	action_network:04bfa631-fa5f-404e-8c63-a9e51a753bdc	action_network:34c0efd5-4dce-449e-afff-ffd211074250
+action_network:5e14edb5-5bd4-4f85-83db-74e14af15efb	2020-01-16 17:56:41-05	2021-01-16 19:15:16-05	250.00	{"recurring": false}	action_network:04bfa631-fa5f-404e-8c63-a9e51a753bdc	action_network:34c0efd5-4dce-449e-afff-ffd211074250
+action_network:146a1343-b2af-4cdb-9f31-b5fcdf5c94ce	2020-02-16 16:46:17-05	2021-01-16 19:15:16-05	250.00	{"recurring": false}	action_network:04bfa631-fa5f-404e-8c63-a9e51a753bdc	action_network:34c0efd5-4dce-449e-afff-ffd211074250
+action_network:e22be3a8-7229-4b0f-9267-bd6b9fa755ef	2020-03-16 17:53:09-04	2021-01-16 19:15:16-05	250.00	{"recurring": false}	action_network:04bfa631-fa5f-404e-8c63-a9e51a753bdc	action_network:34c0efd5-4dce-449e-afff-ffd211074250
+action_network:105a358b-cbba-4389-9d01-7c6933ced370	2020-04-16 18:28:20-04	2021-01-16 19:15:16-05	250.00	{"recurring": false}	action_network:04bfa631-fa5f-404e-8c63-a9e51a753bdc	action_network:34c0efd5-4dce-449e-afff-ffd211074250
+action_network:347bf8de-71e7-491d-a73e-4d1b79bae7d9	2020-05-16 17:49:52-04	2021-01-16 19:15:16-05	250.00	{"recurring": false}	action_network:04bfa631-fa5f-404e-8c63-a9e51a753bdc	action_network:34c0efd5-4dce-449e-afff-ffd211074250
+action_network:687b4b15-9e92-4c48-a7f4-5edaec5a0831	2020-06-16 18:12:24-04	2021-01-16 19:15:16-05	250.00	{"recurring": false}	action_network:04bfa631-fa5f-404e-8c63-a9e51a753bdc	action_network:34c0efd5-4dce-449e-afff-ffd211074250
+action_network:a0deb800-d94b-4568-ae26-d12fc6a5e363	2020-07-16 18:04:39-04	2021-01-16 19:15:16-05	250.00	{"recurring": false}	action_network:04bfa631-fa5f-404e-8c63-a9e51a753bdc	action_network:34c0efd5-4dce-449e-afff-ffd211074250
+action_network:f2a2e08d-0562-49e9-a5c6-bdc14d7dfa9d	2020-08-16 17:49:59-04	2021-01-16 19:15:16-05	250.00	{"recurring": false}	action_network:04bfa631-fa5f-404e-8c63-a9e51a753bdc	action_network:34c0efd5-4dce-449e-afff-ffd211074250
+action_network:63bd0d69-d6ff-4d93-93ee-c0f948b07988	2020-10-16 18:04:23-04	2021-01-16 19:15:16-05	250.00	{"recurring": false}	action_network:04bfa631-fa5f-404e-8c63-a9e51a753bdc	action_network:34c0efd5-4dce-449e-afff-ffd211074250
+action_network:6d5b56e7-aeb5-48ec-ae05-8b68a7e1f538	2020-11-16 16:30:22-05	2021-01-16 19:15:16-05	250.00	{"recurring": false}	action_network:04bfa631-fa5f-404e-8c63-a9e51a753bdc	action_network:34c0efd5-4dce-449e-afff-ffd211074250
+action_network:2701a5ca-1e34-46d4-bb29-4829f999f2f3	2020-12-16 16:46:32-05	2021-01-16 19:15:16-05	250.00	{"recurring": false}	action_network:04bfa631-fa5f-404e-8c63-a9e51a753bdc	action_network:34c0efd5-4dce-449e-afff-ffd211074250
+action_network:c02b9ee0-bb1a-48ec-88cb-3c0ca12ee63d	2021-01-16 16:22:41-05	2021-01-16 19:15:16-05	250.00	{"recurring": false}	action_network:04bfa631-fa5f-404e-8c63-a9e51a753bdc	action_network:34c0efd5-4dce-449e-afff-ffd211074250
+action_network:bb448264-37e9-479d-a53b-30f45fa491a9	2022-03-29 16:39:47-04	2022-03-29 16:41:50-04	1.00	{"recurring": false}	action_network:870b9897-fec4-41bd-8e95-d2702c1f6ca4	action_network:beb6cf80-15bc-40a0-bb7f-3323129e1905
+\.
+
+
+--
+-- Data for Name: external_info; Type: TABLE DATA; Schema: public; Owner: dbrotsky
+--
+
+COPY public.external_info (email, shifts_2020, events_2020, connect_2020, assigns_2020, notes_2020, history_2020, fundraise_2020, doorknock_2020, phonebank_2020, recruit_2020, delegate_ga_2020, delegate_pa_2020, delegate_az_2020, delegate_fl_2020) FROM stdin;
+voters@brotsky.com	0	0	SFR AF,CJJC	[ACTIVE] Virtual House Party-2020-08-18,[ACTIVE] Major Donor Fundraising Committee ,[ACTIVE] Fundraising Page 	Needs a follow up / texted 11/14		t	t	t	t	f	f	t	f
+dev@brotsky.com	10	0		[ASK] Pod Leader,[ASK] Virtual House Party	wants to join a committee / plug in after the march 3 primary (we should get back in touch then)	07/19 No response to asks by Alexandra Lalama	f	f	f	f	t	f	f	f
+dan@clickonetwo.io	15	0	Catalyst AF		Needs a follow up / wants to go but 4 yo kid would need to come and still figuring out job stuff for next year	08/12  by Staff Member	f	f	f	t	f	f	f	t
+dan+test-donation-1@clickonetwo.io	0	0	CPA AF		Needs a follow up / volunteer with CPAAF - interested in coming but wants to read a bit more LUCHA and work is a bit in flux		f	f	f	f	f	f	f	f
+dan+uppercase-signup-1@clickonetwo.io	0	0			Needs a follow up / Voicemail box full 2/12	08/12  by Staff Member	t	f	f	f	t	f	f	f
+dan+test-2022-form@clickonetwo.io	27	11		[ASK] Pod Leader	Very interested in AZ for two weeks. Has friend whomight be one week.		f	f	f	f	f	f	f	f
+user_7@example.com	1	0			Needs a follow up / Very interested in AZ for 2 weeks. Trying to recruit others.		f	t	f	f	f	t	f	f
+user_8@example.com	0	0			Needs a follow up / texted 11/14	08/12  by Staff Member	f	f	f	f	f	f	f	f
+user_9@example.com	0	0			Needs a follow up / texted 11/14		f	f	f	f	f	f	f	f
+user_10@example.com	0	0			Needs a follow up / texted 11/14	08/12  by Staff Member	f	f	f	f	f	f	f	f
+user_11@example.com	5	0			Needs a follow up / texted 11/14		f	f	f	f	f	f	f	f
+user_12@example.com	1	0			Needs a follow up / texted 11/14	08/12  by Staff Member	f	f	f	f	f	f	f	f
+user_13@example.com	0	0			Needs a follow up / texted 11/14		f	f	f	f	f	f	f	f
+user_14@example.com	0	0			Needs a follow up / texted 11/14		f	f	f	f	f	f	f	f
+user_16@example.com	0	0			Needs a follow up / texted 11/14		t	t	t	t	f	f	f	f
+user_17@example.com	0	0			texted 11/14	08/12 Declined asks by Staff Member	f	f	f	f	f	f	f	f
+user_18@example.com	2	0			Needs a follow up / talked on 12/19 - said she will come unless she ends up going somewhere for a few months instead, can help recruit folks in the new year	08/12  by Staff Member	f	f	t	f	f	f	t	f
+user_19@example.com	17	0			Talked 2/3 - coming with his sister, interested in thinking about how to make it a positive experience for volunteers		f	f	f	f	f	f	f	f
+user_20@example.com	7	0	CPA AF	[ACTIVE] Phone Bank Leader	SIgned up to be Phone Bank Captain / Still planning to be with us. Maybe on for SF Hoppy hour.	08/12  by Staff Member	f	f	f	f	f	f	f	f
+user_21@example.com	3	0		[ASK] Pod Leader	Needs a follow up / Still interested. Send Happy hour email. she is a comms whiz, and great trainer. recruit as volunteer for comms cmte, maybe PE. Also, to reach out to her community to sign up	08/12  by Staff Member	f	f	f	f	f	f	f	f
+user_22@example.com	0	0			Needs a follow up / Still interested!		f	f	f	f	f	f	f	f
+user_23@example.com	0	0			Needs a follow up / Still interested but probably for less than 2 weeks		f	f	f	f	f	f	f	f
+user_24@example.com	2	0	SFR AF,CJJC		Needs a follow up / spoke to 11/14: yes able to go.	08/12  by Staff Member	f	f	f	f	f	f	f	f
+\.
+
+
+--
+-- Data for Name: fundraising_page_info; Type: TABLE DATA; Schema: public; Owner: dbrotsky
+--
+
+COPY public.fundraising_page_info (uuid, created_date, modified_date, origin_system, title) FROM stdin;
+\.
+
+
+--
+-- Data for Name: person_info; Type: TABLE DATA; Schema: public; Owner: dbrotsky
+--
+
+COPY public.person_info (uuid, created_date, modified_date, email, email_status, phone, phone_type, phone_status, given_name, family_name, street_address, locality, region, postal_code, country, custom_fields, total_2020, summary_2020, total_2021, summary_2021, is_contact, contact_record_id, contact_last_updated, is_volunteer, volunteer_record_id, volunteer_last_updated, is_funder, funder_record_id, funder_last_updated) FROM stdin;
+action_network:870b9897-fec4-41bd-8e95-d2702c1f6ca4	2022-03-29 16:41:50-04	2022-03-29 16:41:50-04	dan+test-donation-1@clickonetwo.io	subscribed	\N	Mobile	unsubscribed	Daniel	Brotsky	451 Kentucky Ave	Berkeley	CA	94707	US	{"employer": "Not Employed", "occupation": "Not Employed"}	0		0		t		1969-12-31 19:00:00-05	f		1969-12-31 19:00:00-05	t		1969-12-31 19:00:00-05
+action_network:35596ac2-388d-4552-8fde-14f40563ef9a	2020-03-03 00:11:55-05	2022-03-20 16:40:16-04	dev@brotsky.com	unsubscribed	\N	Mobile	unsubscribed	Test SIgn-up 1	Brotsky	Test Address 1	Test City 1	CA	94707	US	{"grv_why": "why i am interested", "svr-need": "everything!", "grv_phone": "mobile phone", "grv_resume": "resume link", "grv_school": "school", "grv_skills": "skills or experiences", "pay_my_way": "1", "svr-ongoing": "ongoing", "grv_comments": "what else to tell us, how we heard", "grv_end_date": "end date", "grv_location": "summer location", "grv_grad_date": "grad date", "grv_languages": "other languages than english", "grv_start_date": "start date", "in-person-days": "# of days", "svr-manage-svs": "Cannot Manage SVs", "in-person-dates": "start date - end date", "svr-connecttext": "1", "svr-hoursneeded": "13 as a test", "svr-connectemail": "1", "svr-connectslack": "1", "svs-availability": "never", "svs-hoursperweek": "too many", "in-person-housing": "My housing", "in-person-campaign": "Arizona", "svs-workpreference": "integration", "grv_hours_available": "2", "in-person-how-heard": "developer", "in-person-languages": "language", "in-person-other-info": "developer signup", "in-person-pod-members": "other pod people", "in-person-race-ethnicity": "race", "in-person-transport-help": "No"}	0		0		f		1969-12-31 19:00:00-05	t		1969-12-31 19:00:00-05	f		1969-12-31 19:00:00-05
+action_network:04bfa631-fa5f-404e-8c63-a9e51a753bdc	2016-07-28 14:51:15-04	2022-04-04 19:42:54-04	voters@brotsky.com	unsubscribed	\N	Mobile	unsubscribed	Shawna & Daniel	Brotsky	451 Kentucky Ave	Berkeley	CA	94707	US	{"gift in honor": "No", "STV follow up ": "yes", "are you employed": "employed", "occupation and employer": "Software Developer, Adobe"}	2750	$250 (01/16/20), $250 (02/16/20), $250 (03/16/20), $250 (04/16/20), $250 (05/16/20), $250 (06/16/20), $250 (07/16/20), $250 (08/16/20), $250 (10/16/20), $250 (11/16/20), $250 (12/16/20)	250	$250 (01/16/21)	f		1969-12-31 19:00:00-05	t		1969-12-31 19:00:00-05	f		1969-12-31 19:00:00-05
+action_network:986ac371-7e7d-4607-b0fa-b68a8a29add6	2022-04-02 14:21:08-04	2022-04-02 14:21:08-04	dan+uppercase-signup-1@clickonetwo.io	subscribed	\N	Mobile	unsubscribed	Daniel	Brotsky	\N	Berkeley	CA	94707	US	{"2022_notes": "This is a test signup - ignore it!"}	0		0		t		1969-12-31 19:00:00-05	f		1969-12-31 19:00:00-05	f		1969-12-31 19:00:00-05
+action_network:dec233c3-bdee-457c-95ca-055b4647b907	2022-03-21 13:13:17-04	2022-04-12 22:57:19-04	dan@clickonetwo.io	subscribed	\N	Mobile	unsubscribed	\N		\N	\N		\N	US	{}	0		0		t		1969-12-31 19:00:00-05	f		1969-12-31 19:00:00-05	f		1969-12-31 19:00:00-05
+action_network:3ef41022-47b4-4ac7-a6f1-ab266d2a16d2	2022-04-16 20:21:41-04	2022-04-16 20:21:41-04	dan+test-2022-form@clickonetwo.io	unsubscribed	\N	Mobile	unsubscribed	Dan-test-signup-2022	Brotsky	\N	Berkeley	CA	94707	US	{"2022_calls": "1", "2022_doors": "1", "2022_notes": "Please ignore this form, it's a test.", "2022_podlead": "1", "2022_recruit": "1", "2022_fundraise": "1", "2022_branchlead": "1"}	0		0		t		1969-12-31 19:00:00-05	f		1969-12-31 19:00:00-05	f		1969-12-31 19:00:00-05
+\.
+
+
+--
+-- Data for Name: submission_info; Type: TABLE DATA; Schema: public; Owner: dbrotsky
+--
+
+COPY public.submission_info (uuid, created_date, modified_date, person_id, form_id) FROM stdin;
+action_network:2fd8a74f-bcc6-4416-a121-e6eec2ed6871	2020-03-09 03:46:45-04	2020-03-09 03:46:45-04	action_network:35596ac2-388d-4552-8fde-14f40563ef9a	action_network:d7a73085-2395-4de7-8f9b-147c8fcc1ab2
+action_network:14ad05ed-622c-4925-a338-250f6675c93f	2020-06-20 19:46:11-04	2020-06-20 19:46:11-04	action_network:35596ac2-388d-4552-8fde-14f40563ef9a	action_network:22201f7c-ce6a-488e-a129-e452c5a46f7d
+action_network:a3e8cc11-c0c8-4e50-971d-991a7c7e2203	2020-06-20 20:59:37-04	2020-06-20 20:59:37-04	action_network:35596ac2-388d-4552-8fde-14f40563ef9a	action_network:22201f7c-ce6a-488e-a129-e452c5a46f7d
+action_network:c88ac814-82c2-46e1-a0f1-20bf03dffd76	2020-09-26 19:31:22-04	2020-09-26 19:31:22-04	action_network:35596ac2-388d-4552-8fde-14f40563ef9a	action_network:565427aa-eb19-42b0-8b84-4ea8675b1a0b
+action_network:a5fa268e-93a2-402b-b866-5848d1f312a3	2020-10-08 06:35:03-04	2020-10-08 06:35:03-04	action_network:35596ac2-388d-4552-8fde-14f40563ef9a	action_network:741f4abb-651c-4ed9-b517-f0313b7c1cd5
+action_network:17f05911-97cd-43da-96fd-355f4d37f85c	2020-10-08 06:35:35-04	2020-10-08 06:35:35-04	action_network:35596ac2-388d-4552-8fde-14f40563ef9a	action_network:a65048fe-ce7c-4aa6-ae4e-730e9d145075
+action_network:26042188-c143-4211-863f-0d9a2b0919c7	2022-04-02 14:21:08-04	2022-04-02 14:21:08-04	action_network:986ac371-7e7d-4607-b0fa-b68a8a29add6	action_network:b399bd2b-b9a9-4916-9550-5a8a47e045fb
+action_network:f07fb887-8802-42d2-a513-d5e85e5e0651	2022-04-16 20:21:41-04	2022-04-16 20:21:41-04	action_network:3ef41022-47b4-4ac7-a6f1-ab266d2a16d2	action_network:b399bd2b-b9a9-4916-9550-5a8a47e045fb
+\.
+
+
+--
+-- PostgreSQL database dump complete
+--
+

@@ -31,7 +31,7 @@ def test_import_canned_data():
     assert total == 24
 
 
-@pytest.mark.slow
+@pytest.mark.skip
 def test_import_actual_spreadsheet():
     success, total = import_spreadsheet(
         "./local/Cleaned Up Data Spreadsheet for Integration.csv"
