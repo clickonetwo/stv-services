@@ -29,7 +29,9 @@ import os.path
 
 import click
 
-from stv_services.action_network import bulk
+from stv_services.action_network import bulk as an_bulk
+from stv_services.airtable import bulk as at_bulk
+from stv_services.data_store import Database
 from stv_services.external.spreadsheet import import_spreadsheet
 
 
@@ -50,11 +52,15 @@ def cli(ctx: click.Context, verbose: bool):
 @click.pass_context
 def update_all(ctx: click.Context):
     verbose = ctx.obj["verbose"]
-    bulk.update_submissions(verbose)
-    bulk.update_fundraising_pages(verbose)
-    bulk.update_donations(verbose)
-    bulk.update_people(verbose)
-    bulk.update_donation_summaries(verbose)
+    an_bulk.update_submissions(verbose)
+    an_bulk.update_fundraising_pages(verbose)
+    an_bulk.update_donations(verbose)
+    an_bulk.update_people(verbose)
+    an_bulk.update_donation_summaries(verbose)
+    an_bulk.update_airtable_classifications(verbose)
+    at_bulk.update_volunteers(verbose)
+    at_bulk.update_contacts(verbose)
+    at_bulk.update_funders(verbose)
 
 
 @cli.command()
@@ -63,7 +69,7 @@ def update_all(ctx: click.Context):
 @click.pass_context
 def update_people(ctx: click.Context, skip_pages: int, max_pages: int):
     verbose = ctx.obj["verbose"]
-    bulk.update_people(verbose, skip_pages, max_pages)
+    an_bulk.update_people(verbose, skip_pages, max_pages)
 
 
 @cli.command()
@@ -72,7 +78,7 @@ def update_people(ctx: click.Context, skip_pages: int, max_pages: int):
 @click.pass_context
 def update_donations(ctx: click.Context, skip_pages: int, max_pages: int):
     verbose = ctx.obj["verbose"]
-    bulk.update_donations(verbose, skip_pages, max_pages)
+    an_bulk.update_donations(verbose, skip_pages, max_pages)
 
 
 @cli.command()
@@ -81,35 +87,20 @@ def update_donations(ctx: click.Context, skip_pages: int, max_pages: int):
 @click.pass_context
 def update_fundraising_pages(ctx: click.Context, skip_pages: int, max_pages: int):
     verbose = ctx.obj["verbose"]
-    bulk.update_fundraising_pages(verbose, skip_pages, max_pages)
+    an_bulk.update_fundraising_pages(verbose, skip_pages, max_pages)
 
 
 @cli.command()
 @click.pass_context
 def update_submissions(ctx: click.Context):
     verbose = ctx.obj["verbose"]
-    bulk.update_submissions(verbose)
-
-
-@cli.command()
-@click.option("--force/--no-force", default=True, help="Force re-computation")
-@click.pass_context
-def update_donation_summaries(ctx: click.Context, force: bool = False):
-    verbose = ctx.obj["verbose"]
-    bulk.update_donation_summaries(verbose, force)
-
-
-@cli.command()
-@click.pass_context
-def update_airtable_classifications(ctx: click.Context):
-    verbose = ctx.obj["verbose"]
-    bulk.update_airtable_classifications(verbose)
+    an_bulk.update_submissions(verbose)
 
 
 @cli.command()
 @click.option("--path", help="Import from this path")
 @click.pass_context
-def import_external_data(ctx: click.Context, path: str = None):
+def update_external_data(ctx: click.Context, path: str = None):
     verbose = ctx.obj["verbose"]
     if not path:
         path = "./local/Cleaned Up Data Spreadsheet for Integration.csv"
@@ -119,8 +110,94 @@ def import_external_data(ctx: click.Context, path: str = None):
         print(f"Importing from spreadsheet at '{path}'...")
     success, total = import_spreadsheet(path, verbose=verbose)
     if verbose:
-        print(f"Imported {success} if {total} rows successfully.")
+        print(f"Imported {success} of {total} rows successfully.")
         print(f"See error messages above for details of any errors.")
+
+
+@cli.command()
+@click.option("--force/--no-force", default=False, help="Force re-computation")
+@click.pass_context
+def update_donation_summaries(ctx: click.Context, force: bool = False):
+    verbose = ctx.obj["verbose"]
+    an_bulk.update_donation_summaries(verbose, force)
+
+
+@cli.command()
+@click.pass_context
+def update_airtable_classifications(ctx: click.Context):
+    verbose = ctx.obj["verbose"]
+    an_bulk.update_airtable_classifications(verbose)
+
+
+@cli.command()
+@click.pass_context
+def verify_airtable_schemas(ctx: click.Context):
+    verbose = ctx.obj["verbose"]
+    if verbose:
+        print("Verifying Airtable schemas...")
+    at_bulk.verify_schemas(verbose)
+    if verbose:
+        print("Done.")
+
+
+@cli.command()
+@click.option("--force/--no-force", default=False, help="Force update of all")
+@click.pass_context
+def update_contacts(ctx: click.Context, force: bool = False):
+    verbose = ctx.obj["verbose"]
+    at_bulk.update_contacts(verbose, force)
+
+
+@cli.command()
+@click.option("--force/--no-force", default=False, help="Force update of all")
+@click.pass_context
+def update_volunteers(ctx: click.Context, force: bool = False):
+    verbose = ctx.obj["verbose"]
+    at_bulk.update_volunteers(verbose, force)
+
+
+@cli.command()
+@click.option("--force/--no-force", default=False, help="Force update of all")
+@click.pass_context
+def update_funders(ctx: click.Context, force: bool = False):
+    verbose = ctx.obj["verbose"]
+    at_bulk.update_funders(verbose, force)
+
+
+@cli.command()
+@click.pass_context
+def remove_contacts(ctx: click.Context):
+    verbose = ctx.obj["verbose"]
+    at_bulk.remove_contacts(verbose)
+
+
+@cli.command()
+@click.pass_context
+def remove_volunteers(ctx: click.Context):
+    verbose = ctx.obj["verbose"]
+    at_bulk.remove_volunteers(verbose)
+
+
+@cli.command()
+@click.pass_context
+def remove_funders(ctx: click.Context):
+    verbose = ctx.obj["verbose"]
+    at_bulk.remove_funders(verbose)
+
+
+@cli.command()
+@click.option("--confirm/--no-confirm", default=False, help="Yes, do it")
+@click.pass_context
+def delete_action_network_data(ctx: click.Context, confirm: bool = False):
+    verbose = ctx.obj["verbose"]
+    if not confirm:
+        print("You must specify the '--confirm' flag to delete data")
+        return
+    if verbose:
+        print("Deleting all Action Network data...")
+    Database.clear_all_action_network_data()
+    if verbose:
+        print("Done.")
 
 
 if __name__ == "__main__":

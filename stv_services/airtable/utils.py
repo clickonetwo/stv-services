@@ -20,11 +20,14 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 #
+
+import sqlalchemy as sa
 from sqlalchemy.engine import Connection
 
 from ..action_network.person import ActionNetworkPerson
 from ..core import Configuration, Session
 from ..data_store import model
+
 
 #
 # templated person-based calls
@@ -34,7 +37,7 @@ def insert_people(
 ) -> int:
     if not pairs:
         return 0
-    schema_name, id_field, date_field = field_names(person_type)
+    schema_name, _, id_field, date_field = field_names(person_type)
     schema = Configuration.get_global_config()[schema_name]
     record_ids = insert_airtable_records(schema, [pair[1] for pair in pairs])
     for record_id, person in zip(record_ids, [pair[0] for pair in pairs]):
@@ -49,7 +52,7 @@ def update_people(
 ) -> int:
     if not pairs:
         return 0
-    schema_name, id_field, date_field = field_names(person_type)
+    schema_name, _, id_field, date_field = field_names(person_type)
     schema = Configuration.get_global_config()[schema_name]
     updates = []
     for person, record in pairs:
@@ -65,7 +68,7 @@ def update_people(
 def upsert_people(
     conn: Connection, person_type: str, pairs: list[(ActionNetworkPerson, dict)]
 ) -> (int, int):
-    _, id_field, _ = field_names(person_type)
+    _, _, id_field, _ = field_names(person_type)
     inserts, updates = [], []
     for person, record in pairs:
         if person.get(id_field):
@@ -82,7 +85,7 @@ def delete_people(
 ) -> int:
     if not people:
         return 0
-    schema_name, id_field, date_field = field_names(person_type)
+    schema_name, _, id_field, date_field = field_names(person_type)
     schema = Configuration.get_global_config()[schema_name]
     deletes, deleted_people = [], []
     for person in people:
@@ -97,10 +100,29 @@ def delete_people(
     return len(deletes)
 
 
-def field_names(person_type: str) -> (str, str, str):
+def find_people_to_update(conn: Connection, person_type: str, force: bool = False):
+    _, is_field, id_field, date_field = field_names(person_type)
+    if force:
+        query = sa.select(model.person_info).where(model.person_info.c[id_field] != "")
+    else:
+        query = sa.select(model.person_info).where(
+            sa.and_(
+                model.person_info.c[is_field],
+                sa.or_(
+                    model.person_info.c[id_field] == "",
+                    model.person_info.c.modified_date > model.person_info.c[date_field],
+                ),
+            )
+        )
+    people = ActionNetworkPerson.from_query(conn, query)
+    return people
+
+
+def field_names(person_type: str) -> (str, str, str, str):
     if person_type in ["contact", "volunteer", "funder"]:
         return (
             f"airtable_stv_{person_type}_schema",
+            f"is_{person_type}",
             f"{person_type}_record_id",
             f"{person_type}_last_updated",
         )
@@ -118,6 +140,8 @@ def insert_airtable_records(schema: dict, records: list[dict]) -> list[str]:
     base_id = schema["base_id"]
     table_id = schema["table_id"]
     response: list[dict] = api.batch_create(base_id, table_id, records, typecast=True)
+    if Configuration.get_env() == "DEV":
+        assert len(response) == len(records)
     return [row["id"] for row in response]
 
 
@@ -135,11 +159,66 @@ def update_airtable_records(schema: dict, updates: list[dict]):
 
 
 def delete_airtable_records(schema: dict, record_ids: list[str]):
+    from requests import HTTPError
+
     if not record_ids:
         return
     api = Session.get_airtable_api()
     base_id = schema["base_id"]
     table_id = schema["table_id"]
-    response: list[dict] = api.batch_delete(base_id, table_id, record_ids)
-    if Configuration.get_env() == "DEV":
-        assert set(r["id"] for r in response) == set(record_ids)
+    try:
+        api.batch_delete(base_id, table_id, record_ids)
+    except HTTPError as err:
+        if err.response.status_code != 404:
+            raise
+
+
+#
+# bulk processing of existing airtable records
+#
+# def process_airtable_records(
+#     schema: dict, processor: Callable[[list[dict]], None], fields: list[str] = None
+# ):
+#     api = Session.get_airtable_api()
+#     base_id = schema["base_id"]
+#     table_id = schema["table_id"]
+#     if fields:
+#         iterator = api.iterate(base_id, table_id, fields=fields)
+#     else:
+#         iterator = api.iterate(base_id, table_id)
+#     for page in iterator:
+#         processor(page)
+#
+#
+# def sync_airtable_records(
+#     hash_type: str,
+#     page_processor: Callable[[list[dict]], None],
+#     query: str = None,
+#     verbose: bool = True,
+#     skip_pages: int = 0,
+#     max_pages: int = 0,
+# ) -> int:
+#     config = Configuration.get_global_config()
+#     url = config["action_network_api_base_url"] + f"/{hash_type}"
+#     query_args = {}
+#     if query:
+#         query_args["filter"] = query
+#         if verbose:
+#             print(f"Fetching {hash_type} matching filter={query}...")
+#     else:
+#         if verbose:
+#             print(f"Fetching all {hash_type}...")
+#     if skip_pages:
+#         query_args["page"] = skip_pages + 1
+#         if verbose:
+#             print(f"(Starting import on page {skip_pages + 1})")
+#     if query_args:
+#         url += "?" + urlencode(query_args)
+#     return fetch_hash_pages(
+#         hash_type=hash_type,
+#         url=url,
+#         page_processor=page_processor,
+#         verbose=verbose,
+#         skip_pages=skip_pages,
+#         max_pages=max_pages,
+#     )
