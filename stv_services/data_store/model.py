@@ -110,7 +110,7 @@ donation_info = sa.Table(
     sa.Column("donor_id", sa.Text, index=True, nullable=False),
     sa.Column("fundraising_page_id", sa.Text, index=True, nullable=False),
     sa.Column("donation_record_id", sa.Text, index=True, default=""),
-    sa.Column("donation_last_updated", sa.Text, index=True, default=epoch),
+    sa.Column("donation_last_updated", Timestamp, index=True, default=epoch),
 )
 
 # Fundraising page info from Action Network
