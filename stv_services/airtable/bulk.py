@@ -26,6 +26,11 @@ from stv_services.airtable.contact import (
     verify_contact_schema,
     delete_contacts,
 )
+from stv_services.airtable.donation import (
+    find_donations_to_update,
+    upsert_donations,
+    delete_donations,
+)
 from stv_services.airtable.funder import (
     upsert_funders,
     verify_funder_schema,
@@ -90,6 +95,17 @@ def update_funders(verbose: bool = True, force: bool = False):
         conn.commit()
 
 
+def update_donation_records(verbose: bool = True, force: bool = False):
+    with Database.get_global_engine().connect() as conn:
+        donations = find_donations_to_update(conn, force)
+        if verbose:
+            print(f"Updating {len(donations)} donations...")
+        count = upsert_donations(conn, donations)
+        if verbose:
+            print(f"Updated {count} donations.")
+        conn.commit()
+
+
 def remove_contacts(verbose: bool = True):
     with Database.get_global_engine().connect() as conn:
         people = find_people_to_update(conn, "contact", True)
@@ -120,4 +136,15 @@ def remove_funders(verbose: bool = True):
         count = delete_funders(conn, people)
         if verbose:
             print(f"Deleted {count} funders.")
+        conn.commit()
+
+
+def remove_donation_records(verbose: bool = True):
+    with Database.get_global_engine().connect() as conn:
+        donations = find_donations_to_update(conn, True)
+        if verbose:
+            print(f"Deleting {len(donations)} donations...")
+        count = delete_donations(conn, donations)
+        if verbose:
+            print(f"Deleted {count} donations.")
         conn.commit()

@@ -5,9 +5,11 @@ Revises: d8a07c79e3a1
 Create Date: 2022-04-08 22:32:49.803094-07:00
 
 """
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects import postgresql as psql
+
+from stv_services.data_store.model import epoch
 
 # field type for timestamp with timezone
 Timestamp = sa.TIMESTAMP(timezone=True)
@@ -30,6 +32,8 @@ def upgrade():
         sa.Column("recurrence_data", psql.JSONB, nullable=False),
         sa.Column("donor_id", sa.Text, index=True, nullable=False),
         sa.Column("fundraising_page_id", sa.Text, index=True, nullable=False),
+        sa.Column("donation_record_id", sa.Text, index=True, default=""),
+        sa.Column("donation_last_updated", sa.Text, index=True, default=epoch),
     )
 
 

@@ -61,6 +61,7 @@ def update_all(ctx: click.Context):
     at_bulk.update_volunteers(verbose)
     at_bulk.update_contacts(verbose)
     at_bulk.update_funders(verbose)
+    at_bulk.update_donation_records(verbose)
 
 
 @cli.command()
@@ -165,6 +166,14 @@ def update_funders(ctx: click.Context, force: bool = False):
 
 
 @cli.command()
+@click.option("--force/--no-force", default=False, help="Force update of all")
+@click.pass_context
+def update_donation_records(ctx: click.Context, force: bool = False):
+    verbose = ctx.obj["verbose"]
+    at_bulk.update_donation_records(verbose, force)
+
+
+@cli.command()
 @click.pass_context
 def remove_contacts(ctx: click.Context):
     verbose = ctx.obj["verbose"]
@@ -183,6 +192,13 @@ def remove_volunteers(ctx: click.Context):
 def remove_funders(ctx: click.Context):
     verbose = ctx.obj["verbose"]
     at_bulk.remove_funders(verbose)
+
+
+@cli.command()
+@click.pass_context
+def remove_donation_records(ctx: click.Context):
+    verbose = ctx.obj["verbose"]
+    at_bulk.remove_donation_records(verbose)
 
 
 @cli.command()
