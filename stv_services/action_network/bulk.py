@@ -28,6 +28,7 @@ import sqlalchemy as sa
 from .donation import import_donations
 from .fundraising_page import import_fundraising_pages
 from .person import import_people, ActionNetworkPerson
+from .submission import import_submissions
 from ..core import Configuration
 from ..data_store import model, Database
 
@@ -83,7 +84,7 @@ def update_submissions(verbose: bool = True):
     """Import Action Network submissions created or updated since the last report"""
     config = Configuration.get_global_config()
     start_timestamp = datetime.now(timezone.utc)
-    import_fundraising_pages(
+    import_submissions(
         query=get_update_filter(config.get("submissions_last_update_timestamp")),
         verbose=verbose,
     )
