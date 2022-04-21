@@ -27,9 +27,6 @@ import pytest
 #
 # mark slow tests
 #
-from stv_services.external.spreadsheet import import_spreadsheet
-
-
 def pytest_addoption(parser):
     parser.addoption(
         "--run-slow", action="store_true", default=False, help="run slow tests"
@@ -104,18 +101,18 @@ def test_ids() -> dict:
 
 @pytest.fixture()
 def known_db(clean_db, test_ids) -> dict:
-    from stv_services.action_network.person import import_person
     from stv_services.action_network import bulk
+    from stv_services import external
 
-    import_person(test_ids["historical_signup_non_donor"], verbose=False)
-    import_person(test_ids["historical_donor"], verbose=False)
-    import_person(test_ids["current_donor_non_signup"], verbose=False)
-    import_person(test_ids["current_signup_non_donor"], verbose=False)
-    import_person(test_ids["new_user_non_signup_non_donor"], verbose=False)
-    import_person(test_ids["signup_2022_non_donor"], verbose=False)
+    bulk.import_person_cluster(test_ids["historical_signup_non_donor"], verbose=False)
+    bulk.import_person_cluster(test_ids["historical_donor"], verbose=False)
+    bulk.import_person_cluster(test_ids["current_donor_non_signup"], verbose=False)
+    bulk.import_person_cluster(test_ids["current_signup_non_donor"], verbose=False)
+    bulk.import_person_cluster(test_ids["new_user_non_signup_non_donor"], verbose=False)
+    bulk.import_person_cluster(test_ids["signup_2022_non_donor"], verbose=False)
     bulk.update_donation_summaries(verbose=False, force=True)
     bulk.update_airtable_classifications(verbose=False)
-    import_spreadsheet("./tests/external/Test Spreadsheet.csv")
+    external.import_spreadsheet("./tests/external/Test Spreadsheet.csv")
     return test_ids
 
 

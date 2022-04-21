@@ -65,37 +65,47 @@ def update_all(ctx: click.Context):
 
 
 @cli.command()
+@click.option("--force/--no-force", default=False, help="Force update of all")
 @click.option("--skip-pages", default=0, help="Skip this many pages")
 @click.option("--max-pages", default=0, help="Import at most this many pages")
 @click.pass_context
-def update_people(ctx: click.Context, skip_pages: int, max_pages: int):
+def update_people(ctx: click.Context, force: bool, skip_pages: int, max_pages: int):
     verbose = ctx.obj["verbose"]
-    an_bulk.update_people(verbose, skip_pages, max_pages)
+    an_bulk.update_people(
+        verbose=verbose, force=force, skip_pages=skip_pages, max_pages=max_pages
+    )
 
 
 @cli.command()
+@click.option("--force/--no-force", default=False, help="Force update of all")
 @click.option("--skip-pages", default=0, help="Skip this many pages")
 @click.option("--max-pages", default=0, help="Import at most this many pages")
 @click.pass_context
-def update_donations(ctx: click.Context, skip_pages: int, max_pages: int):
+def update_donations(ctx: click.Context, force: bool, skip_pages: int, max_pages: int):
     verbose = ctx.obj["verbose"]
-    an_bulk.update_donations(verbose, skip_pages, max_pages)
+    an_bulk.update_donations(verbose, force, skip_pages, max_pages)
 
 
 @cli.command()
+@click.option("--force/--no-force", default=False, help="Force update of all")
 @click.option("--skip-pages", default=0, help="Skip this many pages")
 @click.option("--max-pages", default=0, help="Import at most this many pages")
 @click.pass_context
-def update_fundraising_pages(ctx: click.Context, skip_pages: int, max_pages: int):
+def update_fundraising_pages(
+    ctx: click.Context, force: bool, skip_pages: int, max_pages: int
+):
     verbose = ctx.obj["verbose"]
-    an_bulk.update_fundraising_pages(verbose, skip_pages, max_pages)
+    an_bulk.update_fundraising_pages(
+        verbose=verbose, force=force, skip_pages=skip_pages, max_pages=max_pages
+    )
 
 
 @cli.command()
+@click.option("--force/--no-force", default=False, help="Force update of all")
 @click.pass_context
-def update_submissions(ctx: click.Context):
+def update_submissions(ctx: click.Context, force: bool):
     verbose = ctx.obj["verbose"]
-    an_bulk.update_submissions(verbose)
+    an_bulk.update_submissions(verbose=verbose, force=force)
 
 
 @cli.command()

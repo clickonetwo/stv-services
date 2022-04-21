@@ -26,15 +26,12 @@ from typing import Optional, Any
 import sqlalchemy as sa
 from sqlalchemy.engine import Connection
 
-from .donation import import_donations_from_hashes
-from .submission import insert_submissions_from_hashes
 from .utils import (
     validate_hash,
     ActionNetworkPersistedDict,
     fetch_all_hashes,
     fetch_hash,
     lookup_objects,
-    fetch_related_hashes,
 )
 from ..data_store import model, Database
 
@@ -224,32 +221,6 @@ class ActionNetworkPerson(ActionNetworkPersistedDict):
         person = ActionNetworkPerson.from_hash(data)
         person.persist(conn)
         return person
-
-
-def import_person(person_id: str, verbose: bool = False):
-    if verbose:
-        print(f"Fetching person '{person_id}' and their donations and submissions...")
-    data, links = fetch_hash("people", person_id)
-    person = ActionNetworkPerson.from_hash(data)
-    with Database.get_global_engine().connect() as conn:
-        person.persist(conn)
-        conn.commit()
-    for curie, nav in links.items():
-        if curie == "osdi:submissions":
-            fetch_related_hashes(
-                url=nav.uri,
-                hash_type="submissions",
-                page_processor=insert_submissions_from_hashes,
-                verbose=verbose,
-            )
-        elif curie == "osdi:donations":
-            fetch_related_hashes(
-                url=nav.uri,
-                hash_type="donations",
-                page_processor=import_donations_from_hashes,
-                verbose=verbose,
-            )
-    return person
 
 
 def import_people(

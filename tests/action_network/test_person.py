@@ -24,11 +24,11 @@ import json
 
 import pytest
 
+from stv_services.action_network.bulk import import_person_cluster
 from stv_services.action_network.donation import ActionNetworkDonation
 from stv_services.action_network.person import (
     import_people,
     ActionNetworkPerson,
-    import_person,
 )
 from stv_services.action_network.submission import ActionNetworkSubmission
 from stv_services.data_store import Database
@@ -182,16 +182,12 @@ def test_import_person(clean_db):
 
 
 def test_import_person_related(reload_db):
-    import_person(reload_db["historical_donor"], verbose=True)
+    import_person_cluster(reload_db["historical_donor"], verbose=True)
     with Database.get_global_engine().connect() as conn:
         for donation_id in reload_db["historical_donor_donations"]:
             donation = ActionNetworkDonation.from_lookup(conn, donation_id)
             assert donation["donor_id"] == reload_db["historical_donor"]
-    current_signup_non_donor = "action_network:986ac371-7e7d-4607-b0fa-b68a8a29add6"
-    current_signup_non_donor_submissions = [
-        "action_network:26042188-c143-4211-863f-0d9a2b0919c7"
-    ]
-    import_person(reload_db["current_signup_non_donor"], verbose=True)
+    import_person_cluster(reload_db["current_signup_non_donor"], verbose=True)
     with Database.get_global_engine().connect() as conn:
         for submission_id in reload_db["current_signup_non_donor_submissions"]:
             submission = ActionNetworkSubmission.from_lookup(conn, submission_id)

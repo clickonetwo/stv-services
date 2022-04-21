@@ -168,8 +168,8 @@ def find_donations_to_update(conn: Connection, force: bool = False):
                 model.donation_info.c.created_date > cutoff,
                 sa.or_(
                     model.donation_info.c.donation_record_id == "",
-                    model.person_info.c.modified_date
-                    > model.person_info.c.donation_last_updated,
+                    model.donation_info.c.modified_date
+                    > model.donation_info.c.donation_last_updated,
                 ),
             )
         )
