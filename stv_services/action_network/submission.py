@@ -25,7 +25,6 @@ from typing import Optional, Any
 import sqlalchemy as sa
 from sqlalchemy.future import Connection
 
-from .person import ActionNetworkPerson
 from .utils import (
     validate_hash,
     ActionNetworkPersistedDict,
@@ -103,14 +102,6 @@ def insert_submissions_from_hashes(hashes: [dict]):
             try:
                 submission = ActionNetworkSubmission.from_hash(data)
                 submission.persist(conn)
-                # make sure we have this submitter
-                submitter = ActionNetworkPerson.from_lookup(
-                    conn, uuid=submission["person_id"]
-                )
-                if not submitter:
-                    ActionNetworkPerson.from_action_network(
-                        conn, submission["person_id"]
-                    )
             except ValueError as err:
                 print(f"Skipping invalid submission: {err}")
         conn.commit()
