@@ -23,11 +23,12 @@
 """
 Command-line Interface to STV services.
 
-This stv provides bulk import and maintenance operations.
+This CLI provides bulk import and maintenance operations.
 """
 import os.path
 
 import click
+from click_shell import shell
 
 from stv_services.action_network import bulk as an_bulk
 from stv_services.airtable import bulk as at_bulk
@@ -36,7 +37,7 @@ from stv_services.data_store import Database
 from stv_services.external.spreadsheet import import_spreadsheet
 
 
-@click.group()
+@shell(prompt="stv> ")
 @click.option(
     "--verbose/--no-verbose",
     default=True,
