@@ -113,7 +113,7 @@ def bulk_upsert_records(
         inserts += i
         updates += u
     if verbose:
-        print(f"(({inserts+updates}))")
+        print(f"({inserts+updates})")
         print(f"Updated {inserts+updates} records ({inserts} new, {updates} existing).")
 
 
