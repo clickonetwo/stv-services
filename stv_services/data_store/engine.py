@@ -24,7 +24,7 @@ import os
 from typing import ClassVar
 
 import sqlalchemy as sa
-from sqlalchemy.future import Engine
+from sqlalchemy.future import Engine, Connection
 
 from . import model
 
@@ -55,7 +55,7 @@ class Database:
 
     @classmethod
     def clear_all_action_network_data(cls):
-        with cls.get_global_engine().connect() as conn:
+        with cls.get_global_engine().connect() as conn:  # type: Connection
             conn.execute(sa.delete(model.person_info))
             conn.execute(sa.delete(model.donation_info))
             conn.execute(sa.delete(model.submission_info))

@@ -21,6 +21,7 @@
 #  SOFTWARE.
 #
 import sqlalchemy as sa
+from sqlalchemy.future import Connection
 
 from stv_services.action_network.person import ActionNetworkPerson
 from stv_services.airtable import contact
@@ -35,11 +36,11 @@ def test_validate_contact_schema():
 
 
 def test_create_contact_record(reload_db, ensure_schemas):
-    with Database.get_global_engine().connect() as conn:
+    with Database.get_global_engine().connect() as conn:  # type: Connection
         person = ActionNetworkPerson.from_lookup(
             conn, uuid=reload_db["current_signup_non_donor"]
         )
-    record = contact.create_contact_record(person)
+        record = contact.create_contact_record(conn, person)
     column_ids = ensure_schemas["contact_schema"]["column_ids"]
     reverse_column_ids = {v: k for k, v in column_ids.items()}
     for column_id, val in record.items():
@@ -49,21 +50,21 @@ def test_create_contact_record(reload_db, ensure_schemas):
 
 
 def test_insert_then_update_then_delete_contact_records(reload_db, ensure_schemas):
-    with Database.get_global_engine().connect() as conn:
+    with Database.get_global_engine().connect() as conn:  # type: Connection
         query = sa.select(model.person_info)
         people = ActionNetworkPerson.from_query(conn, query)
         inserts, updates = contact.upsert_contacts(conn, people)
         assert inserts == len(people)
         assert updates == 0
         conn.commit()
-    with Database.get_global_engine().connect() as conn:
+    with Database.get_global_engine().connect() as conn:  # type: Connection
         query = sa.select(model.person_info)
         people = ActionNetworkPerson.from_query(conn, query)
         inserts, updates = contact.upsert_contacts(conn, people)
         assert inserts == 0
         assert updates == len(people)
         conn.commit()
-    with Database.get_global_engine().connect() as conn:
+    with Database.get_global_engine().connect() as conn:  # type: Connection
         query = sa.select(model.person_info)
         people = ActionNetworkPerson.from_query(conn, query)
         deletes = contact.delete_contacts(conn, people)

@@ -24,6 +24,7 @@ from os import getenv
 from typing import ClassVar
 
 import sqlalchemy as sa
+from sqlalchemy.future import Connection
 
 from ..data_store import model, Database
 
@@ -59,13 +60,13 @@ class Configuration(dict):
         # out with the old
         self.clear()
         # in with the new
-        with db.connect() as conn:
+        with db.connect() as conn:  # type: Connection
             for key, val in conn.execute(sa.select(model.configuration)):
                 self[key] = val
 
     def save_to_data_store(self):
         db = Database.get_global_engine()
-        with db.connect() as conn:
+        with db.connect() as conn:  # type: Connection
             # out with the old
             conn.execute(sa.delete(model.configuration))
             # in with the new

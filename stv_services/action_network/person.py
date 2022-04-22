@@ -235,7 +235,7 @@ def import_people(
 
 
 def import_people_from_hashes(hashes: [dict]):
-    with Database.get_global_engine().connect() as conn:
+    with Database.get_global_engine().connect() as conn:  # type: Connection
         for data in hashes:
             try:
                 person = ActionNetworkPerson.from_hash(data)

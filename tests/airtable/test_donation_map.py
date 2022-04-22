@@ -22,6 +22,7 @@
 #
 import pytest
 from requests import HTTPError
+from sqlalchemy.future import Connection
 
 from stv_services.action_network.donation import ActionNetworkDonation
 from stv_services.action_network.person import ActionNetworkPerson
@@ -37,7 +38,7 @@ def test_validate_donation_schema():
 
 
 def test_create_donation_record(reload_db, ensure_schemas):
-    with Database.get_global_engine().connect() as conn:
+    with Database.get_global_engine().connect() as conn:  # type: Connection
         donor = ActionNetworkPerson.from_lookup(
             conn, uuid=reload_db["historical_donor"]
         )
@@ -55,7 +56,7 @@ def test_create_donation_record(reload_db, ensure_schemas):
 
 
 def test_insert_then_update_then_delete_donation_record(reload_db, ensure_schemas):
-    with Database.get_global_engine().connect() as conn:
+    with Database.get_global_engine().connect() as conn:  # type: Connection
         donor = ActionNetworkPerson.from_lookup(
             conn, uuid=reload_db["historical_donor"]
         )
@@ -67,7 +68,7 @@ def test_insert_then_update_then_delete_donation_record(reload_db, ensure_schema
                 conn, uuid=reload_db["historical_donor_donations"][0]
             ),
         ]
-        with pytest.raises(HTTPError) as err:
+        with pytest.raises(HTTPError) as err:  # type: HTTPError
             # can't insert a record with a fake ID
             donation.upsert_donations(conn, donations)
             assert err.response.status_code == 422

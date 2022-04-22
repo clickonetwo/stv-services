@@ -97,7 +97,7 @@ def import_submissions(
 
 
 def insert_submissions_from_hashes(hashes: [dict]):
-    with Database.get_global_engine().connect() as conn:
+    with Database.get_global_engine().connect() as conn:  # type: Connection
         for data in hashes:
             try:
                 submission = ActionNetworkSubmission.from_hash(data)

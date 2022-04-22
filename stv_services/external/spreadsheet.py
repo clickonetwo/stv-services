@@ -24,6 +24,7 @@ import csv
 from collections import namedtuple
 
 import sqlalchemy as sa
+from sqlalchemy.future import Connection
 
 from stv_services.data_store import Database, model
 
@@ -78,7 +79,7 @@ def import_spreadsheet(file_path: str, verbose: bool = False) -> (int, int):
                         f"Discarding row {prior['input row']} because '{email}' is also on row {i}."
                     )
             vals[email] = row_vals
-    with Database.get_global_engine().connect() as conn:
+    with Database.get_global_engine().connect() as conn:  # type: Connection
         # out with the old
         conn.execute(sa.delete(model.external_info))
         # in with the new

@@ -21,6 +21,7 @@
 #  SOFTWARE.
 #
 import sqlalchemy as sa
+from sqlalchemy.future import Connection
 
 from stv_services.action_network.person import ActionNetworkPerson
 from stv_services.airtable import funder, contact
@@ -35,12 +36,12 @@ def test_validate_funder_schema():
 
 
 def test_create_funder_record(reload_db, ensure_schemas):
-    with Database.get_global_engine().connect() as conn:
+    with Database.get_global_engine().connect() as conn:  # type: Connection
         person = ActionNetworkPerson.from_lookup(
             conn, uuid=reload_db["current_signup_non_donor"]
         )
         person["contact_record_id"] = "test_id"
-    record = funder.create_funder_record(person)
+        record = funder.create_funder_record(conn, person)
     column_ids = ensure_schemas["funder_schema"]["column_ids"]
     reverse_column_ids = {v: k for k, v in column_ids.items()}
     for column_id, val in record.items():
@@ -51,33 +52,33 @@ def test_create_funder_record(reload_db, ensure_schemas):
 
 def test_insert_then_update_then_delete_funder_records(reload_db, ensure_schemas):
     # make them contacts first, because funders must be contacts
-    with Database.get_global_engine().connect() as conn:
+    with Database.get_global_engine().connect() as conn:  # type: Connection
         query = sa.select(model.person_info)
         people = ActionNetworkPerson.from_query(conn, query)
         contact.upsert_contacts(conn, people)
         conn.commit()
-    with Database.get_global_engine().connect() as conn:
+    with Database.get_global_engine().connect() as conn:  # type: Connection
         query = sa.select(model.person_info)
         people = ActionNetworkPerson.from_query(conn, query)
         inserts, updates = funder.upsert_funders(conn, people)
         assert inserts == len(people)
         assert updates == 0
         conn.commit()
-    with Database.get_global_engine().connect() as conn:
+    with Database.get_global_engine().connect() as conn:  # type: Connection
         query = sa.select(model.person_info)
         people = ActionNetworkPerson.from_query(conn, query)
         inserts, updates = funder.upsert_funders(conn, people)
         assert inserts == 0
         assert updates == len(people)
         conn.commit()
-    with Database.get_global_engine().connect() as conn:
+    with Database.get_global_engine().connect() as conn:  # type: Connection
         query = sa.select(model.person_info)
         people = ActionNetworkPerson.from_query(conn, query)
         deletes = funder.delete_funders(conn, people)
         assert deletes == len(people)
         conn.commit()
     # remove them from contacts
-    with Database.get_global_engine().connect() as conn:
+    with Database.get_global_engine().connect() as conn:  # type: Connection
         query = sa.select(model.person_info)
         people = ActionNetworkPerson.from_query(conn, query)
         contact.delete_contacts(conn, people)

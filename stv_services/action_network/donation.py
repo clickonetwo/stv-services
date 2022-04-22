@@ -107,7 +107,7 @@ def import_donations(
 
 
 def import_donations_from_hashes(hashes: [dict]):
-    with Database.get_global_engine().connect() as conn:
+    with Database.get_global_engine().connect() as conn:  # type: Connection
         for data in hashes:
             try:
                 donation = ActionNetworkDonation.from_hash(data)

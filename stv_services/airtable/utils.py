@@ -32,7 +32,7 @@ from ..data_store import model
 def find_records_to_update(dict_type: str, force: bool = False):
     table, _, is_field, id_field, date_field = table_fields(dict_type)
     if force:
-        query = sa.select(table).where(table.c[id_field] != "")
+        query = sa.select(table).where(table.c[is_field])
     else:
         query = sa.select(table).where(
             sa.and_(
