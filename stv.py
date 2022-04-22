@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 #  MIT License
 #
 #  Copyright (c) 2022 Daniel C. Brotsky
@@ -236,6 +237,33 @@ def delete_action_network_data(ctx: click.Context, confirm: bool = False):
     config.save_to_data_store()
     if verbose:
         print("Done.")
+
+
+@stv.command()
+@click.option("--path", help="Import from this path")
+@click.pass_context
+def load_config(ctx: click.Context, path: str = None):
+    verbose = ctx.obj["verbose"]
+    if verbose:
+        print(f"Loading configuration from {path or 'stdin'}...")
+    config = Configuration.get_global_config()
+    config.load_from_file(path)
+    config.save_to_data_store()
+    if verbose:
+        print(f"Loaded {len(config)} key/value pairs.")
+
+
+@stv.command()
+@click.option("--path", help="Dump to this path")
+@click.pass_context
+def dump_config(ctx: click.Context, path: str = None):
+    verbose = ctx.obj["verbose"]
+    if verbose:
+        print(f"Dumping configuration to {path or 'stdout'}...")
+    config = Configuration.get_global_config()
+    config.save_to_file(path)
+    if verbose:
+        print(f"Saved {len(config)} key/value pairs.")
 
 
 if __name__ == "__main__":

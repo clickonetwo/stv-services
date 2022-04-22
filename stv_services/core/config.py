@@ -20,6 +20,8 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 #
+import json
+import sys
 from os import getenv
 from typing import ClassVar
 
@@ -74,6 +76,27 @@ class Configuration(dict):
                 new = [dict(key=key, value=val) for key, val in self.items()]
                 conn.execute(sa.insert(model.configuration), new)
             conn.commit()
+
+    def load_from_file(self, path: str = None):
+        if not path:
+            json_data = json.load(sys.stdin)
+        else:
+            with open(path) as f:
+                json_data = json.load(f)
+        if not isinstance(json_data, dict):
+            raise ValueError(f"No configuration dictionary in input: {repr(json_data)}")
+        self.clear()
+        self.update(json_data)
+
+    def save_to_file(self, path: str = None):
+        simple_dict = dict(self)
+        if not path:
+            json.dump(simple_dict, sys.stdout, indent=2)
+            print("")  # add trailing newline
+        else:
+            with open(path, "w") as f:
+                json.dump(simple_dict, f, indent=2)
+                print("", file=f)  # add trailing newline
 
 
 if env := getenv("ENV"):
