@@ -71,7 +71,7 @@ def verify_contact_schema() -> dict:
     return access_info
 
 
-def create_contact_record(person: ActionNetworkPerson) -> dict:
+def create_contact_record(_: Connection, person: ActionNetworkPerson) -> dict:
     config = Configuration.get_global_config()
     column_ids = config["airtable_stv_contact_schema"]["column_ids"]
     record = dict()
@@ -91,17 +91,17 @@ def create_contact_record(person: ActionNetworkPerson) -> dict:
 
 
 def insert_contacts(conn: Connection, people: list[ActionNetworkPerson]) -> int:
-    pairs = [(person, create_contact_record(person)) for person in people]
+    pairs = [(person, create_contact_record(conn, person)) for person in people]
     return insert_records(conn, "contact", pairs)
 
 
 def update_contacts(conn: Connection, people: list[ActionNetworkPerson]) -> int:
-    pairs = [(person, create_contact_record(person)) for person in people]
+    pairs = [(person, create_contact_record(conn, person)) for person in people]
     return update_records(conn, "contact", pairs)
 
 
 def upsert_contacts(conn: Connection, people: list[ActionNetworkPerson]) -> (int, int):
-    pairs = [(person, create_contact_record(person)) for person in people]
+    pairs = [(person, create_contact_record(conn, person)) for person in people]
     return upsert_records(conn, "contact", pairs)
 
 
