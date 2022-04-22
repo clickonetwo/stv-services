@@ -24,7 +24,7 @@ from datetime import datetime, timezone
 from typing import Optional, Any
 
 import sqlalchemy as sa
-from sqlalchemy.engine import Connection
+from sqlalchemy.future import Connection
 
 from .utils import (
     validate_hash,
@@ -42,7 +42,7 @@ class ActionNetworkPerson(ActionNetworkPersistedDict):
             raise ValueError(f"Person record must have either email or phone: {fields}")
         super().__init__(model.person_info, **fields)
 
-    def classify_for_airtable(self, conn: sa.engine.Connection):
+    def classify_for_airtable(self, conn: sa.future.Connection):
         """
         Reclassify an existing person based on current data.
         We are careful never to remove a person from a table.
@@ -88,12 +88,12 @@ class ActionNetworkPerson(ActionNetworkPersistedDict):
                     self["is_funder"] = True
         self.persist(conn)
 
-    def update_donation_summaries(self, conn: sa.engine.Connection):
+    def update_donation_summaries(self, conn: sa.future.Connection):
         self._update_donation_summary(conn, 2020)
         self._update_donation_summary(conn, 2021)
         self.persist(conn)
 
-    def _update_donation_summary(self, conn: sa.engine.Connection, year: int):
+    def _update_donation_summary(self, conn: sa.future.Connection, year: int):
         total_field, summary_field = f"total_{year}", f"summary_{year}"
         cutoff_hi = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
         cutoff_lo = datetime(year, 1, 1, tzinfo=timezone.utc)

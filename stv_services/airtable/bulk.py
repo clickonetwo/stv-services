@@ -20,28 +20,19 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 #
+from sqlalchemy.future import Connection
 
-from stv_services.airtable.contact import (
-    upsert_contacts,
-    verify_contact_schema,
-    delete_contacts,
+from stv_services.action_network.donation import ActionNetworkDonation
+from stv_services.action_network.person import ActionNetworkPerson
+from stv_services.action_network.utils import ActionNetworkPersistedDict
+from stv_services.airtable.contact import verify_contact_schema
+from stv_services.airtable.funder import verify_funder_schema
+from stv_services.airtable.utils import (
+    find_records_to_update,
+    delete_records,
+    upsert_records,
 )
-from stv_services.airtable.donation import (
-    find_donations_to_update,
-    upsert_donations,
-    delete_donations,
-)
-from stv_services.airtable.funder import (
-    upsert_funders,
-    verify_funder_schema,
-    delete_funders,
-)
-from stv_services.airtable.utils import find_people_to_update
-from stv_services.airtable.volunteer import (
-    upsert_volunteers,
-    verify_volunteer_schema,
-    delete_volunteers,
-)
+from stv_services.airtable.volunteer import verify_volunteer_schema
 from stv_services.core import Configuration
 from stv_services.data_store import Database
 
@@ -64,87 +55,109 @@ def verify_schemas(verbose: bool = True):
 
 def update_contacts(verbose: bool = True, force: bool = False):
     with Database.get_global_engine().connect() as conn:
-        people = find_people_to_update(conn, "contact", force)
-        if verbose:
-            print(f"Updating {len(people)} contacts...")
-        inserts, updates = upsert_contacts(conn, people)
-        if verbose:
-            print(f"Inserted {inserts} new and updated {updates} existing contacts.")
+        people = ActionNetworkPerson.from_query(
+            conn, find_records_to_update("contact", force)
+        )
+        bulk_upsert_records(conn, "contact", people, verbose)
         conn.commit()
 
 
 def update_volunteers(verbose: bool = True, force: bool = False):
     with Database.get_global_engine().connect() as conn:
-        people = find_people_to_update(conn, "volunteer", force)
-        if verbose:
-            print(f"Updating {len(people)} volunteers...")
-        count = upsert_volunteers(conn, people)
-        if verbose:
-            print(f"Updated {count} volunteers.")
+        people = ActionNetworkPerson.from_query(
+            conn, find_records_to_update("volunteer", force)
+        )
+        bulk_upsert_records(conn, "volunteer", people, verbose)
         conn.commit()
 
 
 def update_funders(verbose: bool = True, force: bool = False):
     with Database.get_global_engine().connect() as conn:
-        people = find_people_to_update(conn, "funder", force)
-        if verbose:
-            print(f"Updating {len(people)} funders...")
-        count = upsert_funders(conn, people)
-        if verbose:
-            print(f"Updated {count} funders.")
+        people = ActionNetworkPerson.from_query(
+            conn, find_records_to_update("funder", force)
+        )
+        bulk_upsert_records(conn, "funder", people, verbose)
         conn.commit()
 
 
 def update_donation_records(verbose: bool = True, force: bool = False):
     with Database.get_global_engine().connect() as conn:
-        donations = find_donations_to_update(conn, force)
-        if verbose:
-            print(f"Updating {len(donations)} donations...")
-        count = upsert_donations(conn, donations)
-        if verbose:
-            print(f"Updated {count} donations.")
+        donations = find_records_to_update("donation", force)
+        bulk_upsert_records(conn, "donation", donations, verbose)
         conn.commit()
+
+
+def bulk_upsert_records(
+    conn: Connection,
+    record_type: str,
+    dicts: list[ActionNetworkPersistedDict],
+    verbose: bool = True,
+):
+    total, inserts, updates = len(dicts), 0, 0
+    if verbose:
+        print(f"Updating {total} {record_type} records...", end="")
+    for start in range(0, total, 50):
+        if verbose and inserts + updates > 0:
+            print(f"({inserts+updates})...", end="")
+        i, u = upsert_records(conn, record_type, dicts[start : min(start + 50, total)])
+        inserts += i
+        updates += u
+    if verbose:
+        print(f"(({inserts+updates}))")
+        print(f"Updated {inserts+updates} records ({inserts} new, {updates} existing).")
 
 
 def remove_contacts(verbose: bool = True):
     with Database.get_global_engine().connect() as conn:
-        people = find_people_to_update(conn, "contact", True)
-        if verbose:
-            print(f"Deleting {len(people)} contacts...")
-        count = delete_contacts(conn, people)
-        if verbose:
-            print(f"Deleted {count} contacts.")
+        people = ActionNetworkPerson.from_query(
+            conn, find_records_to_update("contact", True)
+        )
+        bulk_remove_records(conn, "person", people, verbose)
         conn.commit()
 
 
 def remove_volunteers(verbose: bool = True):
     with Database.get_global_engine().connect() as conn:
-        people = find_people_to_update(conn, "volunteer", True)
-        if verbose:
-            print(f"Deleting {len(people)} volunteers...")
-        count = delete_volunteers(conn, people)
-        if verbose:
-            print(f"Deleted {count} volunteers.")
+        people = ActionNetworkPerson.from_query(
+            conn, find_records_to_update("volunteer", True)
+        )
+        bulk_remove_records(conn, "volunteer", people, verbose)
         conn.commit()
 
 
 def remove_funders(verbose: bool = True):
     with Database.get_global_engine().connect() as conn:
-        people = find_people_to_update(conn, "funder", True)
-        if verbose:
-            print(f"Deleting {len(people)} funders...")
-        count = delete_funders(conn, people)
-        if verbose:
-            print(f"Deleted {count} funders.")
+        people = ActionNetworkPerson.from_query(
+            conn, find_records_to_update("funder", True)
+        )
+        bulk_remove_records(conn, "funder", people, verbose)
         conn.commit()
 
 
 def remove_donation_records(verbose: bool = True):
     with Database.get_global_engine().connect() as conn:
-        donations = find_donations_to_update(conn, True)
-        if verbose:
-            print(f"Deleting {len(donations)} donations...")
-        count = delete_donations(conn, donations)
-        if verbose:
-            print(f"Deleted {count} donations.")
+        donations = ActionNetworkDonation.from_query(
+            conn, find_records_to_update("donation", True)
+        )
+        bulk_remove_records(conn, "donation", donations, verbose)
         conn.commit()
+
+
+def bulk_remove_records(
+    conn: Connection,
+    record_type: str,
+    dicts: list[ActionNetworkPersistedDict],
+    verbose: bool = True,
+):
+    total, deletes = len(dicts), 0
+    if verbose:
+        print(f"Deleting {total} {record_type} records...", end="")
+    for start in range(0, total, 50):
+        if verbose and deletes > 0:
+            print(f"({deletes})...", end="")
+        deletes += delete_records(
+            conn, record_type, dicts[start : min(start + 50, total)]
+        )
+    if verbose:
+        print(f"({deletes})")
+        print(f"Deleted {deletes} records.")

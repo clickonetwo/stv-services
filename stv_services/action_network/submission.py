@@ -23,7 +23,7 @@
 from typing import Optional, Any
 
 import sqlalchemy as sa
-from sqlalchemy.engine import Connection
+from sqlalchemy.future import Connection
 
 from .person import ActionNetworkPerson
 from .utils import (

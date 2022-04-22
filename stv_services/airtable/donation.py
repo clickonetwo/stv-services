@@ -20,16 +20,16 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 #
-from datetime import datetime, timezone
 
 import sqlalchemy as sa
-from sqlalchemy.engine import Connection
+from sqlalchemy.future import Connection
 
 from .schema import fetch_and_validate_table_schema, FieldInfo
 from .utils import (
-    insert_airtable_records,
-    update_airtable_records,
-    delete_airtable_records,
+    insert_records,
+    update_records,
+    upsert_records,
+    delete_records,
 )
 from ..action_network.donation import ActionNetworkDonation
 from ..core import Configuration
@@ -97,81 +97,27 @@ def create_donation_record(conn: Connection, donation: ActionNetworkDonation) ->
 
 
 def insert_donations(conn: Connection, donations: list[ActionNetworkDonation]) -> int:
-    if not donations:
-        return 0
-    records = [create_donation_record(conn, donation) for donation in donations]
-    schema = Configuration.get_global_config()["airtable_stv_donation_schema"]
-    record_ids = insert_airtable_records(schema, records)
-    for record_id, donation in zip(record_ids, donations):
-        donation["donation_record_id"] = record_id
-        donation["donation_last_modified"] = donation["modified_date"]
-        donation.persist(conn)
-    return len(record_ids)
+    pairs = [
+        (donation, create_donation_record(conn, donation)) for donation in donations
+    ]
+    return insert_records(conn, "donation", pairs)
 
 
 def update_donations(conn: Connection, donations: list[ActionNetworkDonation]) -> int:
-    if not donations:
-        return 0
-    schema = Configuration.get_global_config()["airtable_stv_donation_schema"]
-    updates = []
-    for donation in donations:
-        record_id = donation["donation_record_id"]
-        record = create_donation_record(conn, donation)
-        updates.append({"id": record_id, "fields": record})
-    update_airtable_records(schema, updates)
-    for donation in donations:
-        donation["donation_last_modified"] = donation["modified_date"]
-        donation.persist(conn)
-    return len(donations)
+    pairs = [
+        (donation, create_donation_record(conn, donation)) for donation in donations
+    ]
+    return update_records(conn, "donation", pairs)
 
 
 def upsert_donations(
     conn: Connection, donations: list[ActionNetworkDonation]
 ) -> (int, int):
-    inserts, updates = [], []
-    for donation in donations:
-        if donation.get("donation_record_id"):
-            updates.append(donation)
-        else:
-            inserts.append(donation)
-    i_count = insert_donations(conn, inserts)
-    u_count = update_donations(conn, updates)
-    return i_count, u_count
+    pairs = [
+        (donation, create_donation_record(conn, donation)) for donation in donations
+    ]
+    return upsert_records(conn, "donation", pairs)
 
 
 def delete_donations(conn: Connection, donations: list[ActionNetworkDonation]) -> int:
-    if not donations:
-        return 0
-    schema = Configuration.get_global_config()["airtable_stv_donation_schema"]
-    deletes, deleted_donations = [], []
-    for donation in donations:
-        if record_id := donation.get("donation_record_id"):
-            deletes.append(record_id)
-            deleted_donations.append(donation)
-    delete_airtable_records(schema, deletes)
-    for donation in deleted_donations:
-        donation["donation_record_id"] = ""
-        donation["donation_last_modified"] = model.epoch
-        donation.persist(conn)
-    return len(deletes)
-
-
-def find_donations_to_update(conn: Connection, force: bool = False):
-    cutoff = datetime(2022, 1, 1, tzinfo=timezone.utc)
-    if force:
-        query = sa.select(model.donation_info).where(
-            model.donation_info.c.created_date > cutoff
-        )
-    else:
-        query = sa.select(model.donation_info).where(
-            sa.and_(
-                model.donation_info.c.created_date > cutoff,
-                sa.or_(
-                    model.donation_info.c.donation_record_id == "",
-                    model.donation_info.c.modified_date
-                    > model.donation_info.c.donation_last_updated,
-                ),
-            )
-        )
-    donations = ActionNetworkDonation.from_query(conn, query)
-    return donations
+    return delete_records(conn, "donation", donations)

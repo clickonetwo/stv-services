@@ -40,10 +40,10 @@ class Configuration(dict):
         return cls._env
 
     @classmethod
-    def set_env(cls, env: str):
-        if env.upper() not in ["DEV", "STG", "PRD"]:
-            raise ValueError(f"Environment ('{str.upper()}') must be DEV, STG, or PRD")
-        _env = str.upper()
+    def set_env(cls, new: str):
+        if new.upper() not in ["DEV", "STG", "PRD"]:
+            raise ValueError(f"Environment ('{new.upper()}') must be DEV, STG, or PRD")
+        _env = new.upper()
 
     @classmethod
     def get_global_config(cls, reload: bool = False) -> "Configuration":
@@ -54,7 +54,8 @@ class Configuration(dict):
             cls._singleton.load_from_data_store()
         return cls._singleton
 
-    def load_from_data_store(self, db: sa.engine.Engine = Database.get_global_engine()):
+    def load_from_data_store(self):
+        db = Database.get_global_engine()
         # out with the old
         self.clear()
         # in with the new
@@ -62,7 +63,8 @@ class Configuration(dict):
             for key, val in conn.execute(sa.select(model.configuration)):
                 self[key] = val
 
-    def save_to_data_store(self, db: sa.engine.Engine = Database.get_global_engine()):
+    def save_to_data_store(self):
+        db = Database.get_global_engine()
         with db.connect() as conn:
             # out with the old
             conn.execute(sa.delete(model.configuration))

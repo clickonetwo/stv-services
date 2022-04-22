@@ -30,7 +30,7 @@ import sqlalchemy as sa
 from dateutil.parser import parse
 from restnavigator import Navigator
 from sqlalchemy.dialects import postgresql as psql
-from sqlalchemy.engine import Connection
+from sqlalchemy.future import Connection
 
 from ..core import Configuration, Session
 

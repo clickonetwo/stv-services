@@ -22,14 +22,14 @@
 #
 import sqlalchemy as sa
 
-from sqlalchemy.engine import Connection
+from sqlalchemy.future import Connection
 
 from .schema import fetch_and_validate_table_schema, FieldInfo
 from .utils import (
-    insert_people,
-    update_people,
-    upsert_people,
-    delete_people,
+    insert_records,
+    update_records,
+    upsert_records,
+    delete_records,
 )
 from ..action_network.person import ActionNetworkPerson
 from ..core import Configuration
@@ -104,20 +104,20 @@ def create_volunteer_record(conn: Connection, person: ActionNetworkPerson) -> di
 
 def insert_volunteers(conn: Connection, people: list[ActionNetworkPerson]) -> int:
     pairs = [(person, create_volunteer_record(conn, person)) for person in people]
-    return insert_people(conn, "volunteer", pairs)
+    return insert_records(conn, "volunteer", pairs)
 
 
 def update_volunteers(conn: Connection, people: list[ActionNetworkPerson]) -> int:
     pairs = [(person, create_volunteer_record(conn, person)) for person in people]
-    return update_people(conn, "volunteer", pairs)
+    return update_records(conn, "volunteer", pairs)
 
 
 def upsert_volunteers(
     conn: Connection, people: list[ActionNetworkPerson]
 ) -> (int, int):
     pairs = [(person, create_volunteer_record(conn, person)) for person in people]
-    return upsert_people(conn, "volunteer", pairs)
+    return upsert_records(conn, "volunteer", pairs)
 
 
 def delete_volunteers(conn: Connection, people: list[ActionNetworkPerson]) -> int:
-    return delete_people(conn, "volunteer", people)
+    return delete_records(conn, "volunteer", people)

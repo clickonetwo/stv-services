@@ -22,118 +22,122 @@
 #
 
 import sqlalchemy as sa
-from sqlalchemy.engine import Connection
+from sqlalchemy.future import Connection
 
-from ..action_network.person import ActionNetworkPerson
+from ..action_network.utils import ActionNetworkPersistedDict
 from ..core import Configuration, Session
 from ..data_store import model
 
 
-#
-# templated person-based calls
-#
-def insert_people(
-    conn: Connection, person_type: str, pairs: list[(ActionNetworkPerson, dict)]
-) -> int:
-    if not pairs:
-        return 0
-    schema_name, _, id_field, date_field = field_names(person_type)
-    schema = Configuration.get_global_config()[schema_name]
-    record_ids = insert_airtable_records(schema, [pair[1] for pair in pairs])
-    for record_id, person in zip(record_ids, [pair[0] for pair in pairs]):
-        person[id_field] = record_id
-        person[date_field] = person["modified_date"]
-        person.persist(conn)
-    return len(record_ids)
-
-
-def update_people(
-    conn: Connection, person_type: str, pairs: list[(ActionNetworkPerson, dict)]
-) -> int:
-    if not pairs:
-        return 0
-    schema_name, _, id_field, date_field = field_names(person_type)
-    schema = Configuration.get_global_config()[schema_name]
-    updates = []
-    for person, record in pairs:
-        record_id = person[id_field]
-        updates.append({"id": record_id, "fields": record})
-    update_airtable_records(schema, updates)
-    for person, _ in pairs:
-        person[date_field] = person["modified_date"]
-        person.persist(conn)
-    return len(pairs)
-
-
-def upsert_people(
-    conn: Connection, person_type: str, pairs: list[(ActionNetworkPerson, dict)]
-) -> (int, int):
-    _, _, id_field, _ = field_names(person_type)
-    inserts, updates = [], []
-    for person, record in pairs:
-        if person.get(id_field):
-            updates.append((person, record))
-        else:
-            inserts.append((person, record))
-    i_count = insert_people(conn, person_type, inserts)
-    u_count = update_people(conn, person_type, updates)
-    return i_count, u_count
-
-
-def delete_people(
-    conn: Connection, person_type: str, people: list[ActionNetworkPerson]
-) -> int:
-    if not people:
-        return 0
-    schema_name, _, id_field, date_field = field_names(person_type)
-    schema = Configuration.get_global_config()[schema_name]
-    deletes, deleted_people = [], []
-    for person in people:
-        if record_id := person.get(id_field):
-            deletes.append(record_id)
-            deleted_people.append(person)
-    delete_airtable_records(schema, deletes)
-    for person in deleted_people:
-        person[id_field] = ""
-        person[date_field] = model.epoch
-        person.persist(conn)
-    return len(deletes)
-
-
-def find_people_to_update(conn: Connection, person_type: str, force: bool = False):
-    _, is_field, id_field, date_field = field_names(person_type)
+def find_records_to_update(dict_type: str, force: bool = False):
+    table, _, is_field, id_field, date_field = table_fields(dict_type)
     if force:
-        query = sa.select(model.person_info).where(model.person_info.c[id_field] != "")
+        query = sa.select(table).where(table.c[id_field] != "")
     else:
-        query = sa.select(model.person_info).where(
+        query = sa.select(table).where(
             sa.and_(
-                model.person_info.c[is_field],
+                table.c[is_field],
                 sa.or_(
-                    model.person_info.c[id_field] == "",
-                    model.person_info.c.modified_date > model.person_info.c[date_field],
+                    table.c[id_field] == "",
+                    table.c.modified_date > table.c[date_field],
                 ),
             )
         )
-    people = ActionNetworkPerson.from_query(conn, query)
-    return people
+    return query
 
 
-def field_names(person_type: str) -> (str, str, str, str):
-    if person_type in ["contact", "volunteer", "funder"]:
-        return (
-            f"airtable_stv_{person_type}_schema",
-            f"is_{person_type}",
-            f"{person_type}_record_id",
-            f"{person_type}_last_updated",
-        )
-    else:
-        raise ValueError(f"Type ({person_type}) must be contact, volunteer, or funder")
+#
+# generic calls for inserting Action Network records into Airtable
+#
+def insert_records(
+    conn: Connection, dict_type: str, pairs: list[(ActionNetworkPersistedDict, dict)]
+) -> int:
+    if not pairs:
+        return 0
+    _, schema_name, _, id_field, date_field = table_fields(dict_type)
+    schema = Configuration.get_global_config()[schema_name]
+    record_ids = _insert_records(schema, [pair[1] for pair in pairs])
+    for record_id, p_dict in zip(record_ids, [pair[0] for pair in pairs]):
+        p_dict[id_field] = record_id
+        p_dict[date_field] = p_dict["modified_date"]
+        p_dict.persist(conn)
+    return len(record_ids)
+
+
+def update_records(
+    conn: Connection, person_type: str, pairs: list[(ActionNetworkPersistedDict, dict)]
+) -> int:
+    if not pairs:
+        return 0
+    _, schema_name, _, id_field, date_field = table_fields(person_type)
+    schema = Configuration.get_global_config()[schema_name]
+    updates = []
+    for p_dict, record in pairs:
+        record_id = p_dict[id_field]
+        updates.append({"id": record_id, "fields": record})
+    _update_records(schema, updates)
+    for p_dict, _ in pairs:
+        p_dict[date_field] = p_dict["modified_date"]
+        p_dict.persist(conn)
+    return len(pairs)
+
+
+def upsert_records(
+    conn: Connection, person_type: str, pairs: list[(ActionNetworkPersistedDict, dict)]
+) -> (int, int):
+    _, _, _, id_field, _ = table_fields(person_type)
+    inserts, updates = [], []
+    for p_dict, record in pairs:
+        if p_dict.get(id_field):
+            updates.append((p_dict, record))
+        else:
+            inserts.append((p_dict, record))
+    i_count = insert_records(conn, person_type, inserts)
+    u_count = update_records(conn, person_type, updates)
+    return i_count, u_count
+
+
+def delete_records(
+    conn: Connection, person_type: str, dicts: list[ActionNetworkPersistedDict]
+) -> int:
+    if not dicts:
+        return 0
+    _, schema_name, _, id_field, date_field = table_fields(person_type)
+    schema = Configuration.get_global_config()[schema_name]
+    deletes, deleted_people = [], []
+    for p_dict in dicts:
+        if record_id := p_dict.get(id_field):
+            deletes.append(record_id)
+            deleted_people.append(p_dict)
+    _delete_records(schema, deletes)
+    for p_dict in deleted_people:
+        p_dict[id_field] = ""
+        p_dict[date_field] = model.epoch
+        p_dict.persist(conn)
+    return len(deletes)
+
+
+def table_fields(dict_type: str) -> (sa.Table, str, str, str, str):
+    if Configuration.get_env() == "DEV" and dict_type not in {
+        "donation",
+        "contact",
+        "volunteer",
+        "funder",
+    }:
+        raise ValueError(f"Unknown persisted dict type: {dict_type}")
+    return (
+        model.donation_info if type == "donation" else model.person_info,
+        f"airtable_stv_{dict_type}_schema",
+        f"is_{dict_type}",
+        f"{dict_type}_record_id",
+        f"{dict_type}_last_updated",
+    )
 
 
 #
 # underlying airtable calls
 #
-def insert_airtable_records(schema: dict, records: list[dict]) -> list[str]:
+def _insert_records(schema: dict, records: list[dict]) -> list[str]:
     if not records:
         return []
     api = Session.get_airtable_api()
@@ -145,7 +149,7 @@ def insert_airtable_records(schema: dict, records: list[dict]) -> list[str]:
     return [row["id"] for row in response]
 
 
-def update_airtable_records(schema: dict, updates: list[dict]):
+def _update_records(schema: dict, updates: list[dict]):
     if not updates:
         return
     api = Session.get_airtable_api()
@@ -158,7 +162,7 @@ def update_airtable_records(schema: dict, updates: list[dict]):
         assert set(r["id"] for r in response) == set(u["id"] for u in updates)
 
 
-def delete_airtable_records(schema: dict, record_ids: list[str]):
+def _delete_records(schema: dict, record_ids: list[str]):
     from requests import HTTPError
 
     if not record_ids:

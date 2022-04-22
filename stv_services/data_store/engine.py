@@ -24,6 +24,7 @@ import os
 from typing import ClassVar
 
 import sqlalchemy as sa
+from sqlalchemy.future import Engine
 
 from . import model
 
@@ -40,14 +41,14 @@ def get_engine_url(default_url: str = None) -> str:
 
 
 class Database:
-    _singleton: ClassVar[sa.engine.Engine] = None
+    _singleton: ClassVar[Engine] = None
 
     @staticmethod
-    def get_new_engine() -> sa.engine.Engine:
+    def get_new_engine() -> Engine:
         return sa.create_engine(get_engine_url(), future=True)
 
     @classmethod
-    def get_global_engine(cls) -> sa.engine.Engine:
+    def get_global_engine(cls) -> Engine:
         if cls._singleton is None:
             cls._singleton = cls.get_new_engine()
         return cls._singleton

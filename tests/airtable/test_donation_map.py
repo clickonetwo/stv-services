@@ -21,14 +21,13 @@
 #  SOFTWARE.
 #
 import pytest
-import sqlalchemy as sa
 from requests import HTTPError
 
 from stv_services.action_network.donation import ActionNetworkDonation
 from stv_services.action_network.person import ActionNetworkPerson
 from stv_services.airtable import donation
 from stv_services.core import Configuration
-from stv_services.data_store import Database, model
+from stv_services.data_store import Database
 
 
 def test_validate_donation_schema():
@@ -50,7 +49,6 @@ def test_create_donation_record(reload_db, ensure_schemas):
         )
         record = donation.create_donation_record(conn, donation0)
         column_ids = ensure_schemas["donation_schema"]["column_ids"]
-        reverse_column_ids = {v: k for k, v in column_ids.items()}
         assert record[column_ids["donor_id"]] == ["fake-record-id"]
         # make sure we don't mess up the donor record!
         conn.rollback()
@@ -71,7 +69,7 @@ def test_insert_then_update_then_delete_donation_record(reload_db, ensure_schema
         ]
         with pytest.raises(HTTPError) as err:
             # can't insert a record with a fake ID
-            inserts, updates = donation.upsert_donations(conn, donations)
+            donation.upsert_donations(conn, donations)
             assert err.response.status_code == 422
         # don't leave the contact messed up
         conn.rollback()

@@ -21,14 +21,14 @@
 #  SOFTWARE.
 #
 
-from sqlalchemy.engine import Connection
+from sqlalchemy.future import Connection
 
 from .schema import fetch_and_validate_table_schema, FieldInfo
 from .utils import (
-    insert_people,
-    update_people,
-    upsert_people,
-    delete_people,
+    insert_records,
+    update_records,
+    upsert_records,
+    delete_records,
 )
 from ..action_network.person import ActionNetworkPerson
 from ..core import Configuration
@@ -92,21 +92,21 @@ def create_contact_record(person: ActionNetworkPerson) -> dict:
 
 def insert_contacts(conn: Connection, people: list[ActionNetworkPerson]) -> int:
     pairs = [(person, create_contact_record(person)) for person in people]
-    return insert_people(conn, "contact", pairs)
+    return insert_records(conn, "contact", pairs)
 
 
 def update_contacts(conn: Connection, people: list[ActionNetworkPerson]) -> int:
     pairs = [(person, create_contact_record(person)) for person in people]
-    return update_people(conn, "contact", pairs)
+    return update_records(conn, "contact", pairs)
 
 
 def upsert_contacts(conn: Connection, people: list[ActionNetworkPerson]) -> (int, int):
     pairs = [(person, create_contact_record(person)) for person in people]
-    return upsert_people(conn, "contact", pairs)
+    return upsert_records(conn, "contact", pairs)
 
 
 def delete_contacts(conn: Connection, people: list[ActionNetworkPerson]) -> int:
-    return delete_people(conn, "contact", people)
+    return delete_records(conn, "contact", people)
 
 
 # def sync_contacts(conn: Connection, people: list[ActionNetworkPerson]) -> (dict, dict):
