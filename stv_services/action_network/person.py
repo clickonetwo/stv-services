@@ -52,7 +52,7 @@ class ActionNetworkPerson(ActionNetworkPersistedDict):
             self["is_volunteer"] = True
         else:
             self["is_contact"] = True
-        if not self["is_contact"]:
+        if not self.get("has_submission"):
             # see if they have submitted the 2022 signup form or any forms in 2022
             signup_form_2022 = "action_network:b399bd2b-b9a9-4916-9550-5a8a47e045fb"
             table = model.submission_info
@@ -68,8 +68,9 @@ class ActionNetworkPerson(ActionNetworkPersistedDict):
             )
             signup = conn.execute(query).first()
             if signup:
+                self["has_submission"] = True
                 self["is_contact"] = True
-        if not self["is_funder"]:
+        if not self.get("is_funder"):
             # find their most recent donation
             table = model.donation_info
             query = (
@@ -84,7 +85,7 @@ class ActionNetworkPerson(ActionNetworkPersistedDict):
                     self["is_contact"] = True
                     self["is_funder"] = True
                 # if they are a contact and have any donations, they are a funder
-                elif self["is_contact"]:
+                elif self.get("is_contact"):
                     self["is_funder"] = True
         self.persist(conn)
 

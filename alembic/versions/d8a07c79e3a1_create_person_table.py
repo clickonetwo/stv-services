@@ -40,6 +40,7 @@ def upgrade():
         sa.Column("postal_code", sa.Text, index=True, nullable=True),
         sa.Column("country", sa.Text, nullable=True),
         sa.Column("custom_fields", psql.JSONB, nullable=True),
+        sa.Column("has_submission", sa.Boolean, default=False),
         sa.Column("total_2020", sa.Integer, index=True, default=-1),
         sa.Column("summary_2020", sa.Text, default=""),
         sa.Column("total_2021", sa.Integer, index=True, default=-1),

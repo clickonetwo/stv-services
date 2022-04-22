@@ -62,6 +62,7 @@ person_info = sa.Table(
     sa.Column("postal_code", sa.Text, index=True, nullable=True),
     sa.Column("country", sa.Text, nullable=True),
     sa.Column("custom_fields", psql.JSONB, nullable=True),
+    sa.Column("has_submission", sa.Boolean, default=False),
     sa.Column("total_2020", sa.Integer, index=True, default=not_computed),
     sa.Column("summary_2020", sa.Text, default=""),
     sa.Column("total_2021", sa.Integer, index=True, default=not_computed),
@@ -109,6 +110,7 @@ donation_info = sa.Table(
     sa.Column("recurrence_data", psql.JSONB, nullable=False),
     sa.Column("donor_id", sa.Text, index=True, nullable=False),
     sa.Column("fundraising_page_id", sa.Text, index=True, nullable=False),
+    sa.Column("is_donation", sa.Boolean, index=True, default=False),
     sa.Column("donation_record_id", sa.Text, index=True, default=""),
     sa.Column("donation_last_updated", Timestamp, index=True, default=epoch),
 )

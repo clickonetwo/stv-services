@@ -20,6 +20,7 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 #
+from datetime import datetime, timezone
 from typing import Optional, Any
 
 import sqlalchemy as sa
@@ -45,9 +46,12 @@ class ActionNetworkDonation(ActionNetworkPersistedDict):
     @classmethod
     def from_hash(cls, data: dict) -> "ActionNetworkDonation":
         uuid, created_date, modified_date = validate_hash(data)
+        # only donations made in 2022 go to Airtable
+        is_donation = created_date >= datetime(2022, 1, 1, tzinfo=timezone.utc)
         # donations sometimes get later updates in which the amount is removed,
-        # so we treat missing amounts as 0.00 in order to update a prior fetch
-        amount = data.get("amount", "0.00")
+        # so we treat missing (or explicitly null) amounts as 0.00 in order to
+        # update a prior fetch with the new value
+        amount = data.get("amount") or "0.00"
         recurrence_data = data.get("action_network:recurrence")
         if donor_id := data.get("action_network:person_id"):
             donor_id = "action_network:" + donor_id
@@ -57,6 +61,7 @@ class ActionNetworkDonation(ActionNetworkPersistedDict):
             uuid=uuid,
             created_date=created_date,
             modified_date=modified_date,
+            is_donation=is_donation,
             amount=amount,
             recurrence_data=recurrence_data,
             donor_id=donor_id,

@@ -43,6 +43,7 @@ contact_table_schema = {
     "locality": FieldInfo("City*", "singleLineText", "person"),
     "region": FieldInfo("State*", "singleLineText", "person"),
     "postal_code": FieldInfo("Zip Code*", "singleLineText", "person"),
+    "has_submission": FieldInfo("Filled Out STV Form?*", "checkbox", "person"),
     "total_2020": FieldInfo("2020 Total Donations*", "currency", "person"),
     "summary_2020": FieldInfo("2020 Donations Summary*", "multilineText", "person"),
     "total_2021": FieldInfo("2021 Total Donations*", "currency", "person"),
