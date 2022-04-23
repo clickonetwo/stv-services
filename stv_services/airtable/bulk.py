@@ -28,7 +28,10 @@ from stv_services.action_network.donation import ActionNetworkDonation
 from stv_services.action_network.person import ActionNetworkPerson
 from stv_services.action_network.utils import ActionNetworkPersistedDict
 from stv_services.airtable.contact import verify_contact_schema, create_contact_record
-from stv_services.airtable.donation import create_donation_record
+from stv_services.airtable.donation import (
+    create_donation_record,
+    verify_donation_schema,
+)
 from stv_services.airtable.funder import verify_funder_schema, create_funder_record
 from stv_services.airtable.utils import (
     find_records_to_update,
@@ -54,6 +57,9 @@ def verify_schemas(verbose: bool = True):
     if verbose:
         print("Verifying funder schema...")
     verify_funder_schema()
+    if verbose:
+        print("Verifying donation schema...")
+    verify_donation_schema()
     if verbose:
         print("Saving verified schemas...")
     config.save_to_data_store()
