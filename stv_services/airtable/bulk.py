@@ -88,7 +88,9 @@ def update_funders(verbose: bool = True, force: bool = False):
 
 def update_donation_records(verbose: bool = True, force: bool = False):
     with Database.get_global_engine().connect() as conn:  # type: Connection
-        donations = find_records_to_update("donation", force)
+        donations = ActionNetworkDonation.from_query(
+            conn, find_records_to_update("donation", force)
+        )
         bulk_upsert_records(
             conn, "donation", create_donation_record, donations, verbose
         )
