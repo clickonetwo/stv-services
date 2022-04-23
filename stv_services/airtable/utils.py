@@ -126,7 +126,7 @@ def table_fields(dict_type: str) -> (sa.Table, str, str, str, str):
     }:
         raise ValueError(f"Unknown persisted dict type: {dict_type}")
     return (
-        model.donation_info if type == "donation" else model.person_info,
+        model.donation_info if dict_type == "donation" else model.person_info,
         f"airtable_stv_{dict_type}_schema",
         f"is_{dict_type}",
         f"{dict_type}_record_id",
