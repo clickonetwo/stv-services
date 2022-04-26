@@ -28,7 +28,7 @@ from typing import ClassVar
 import sqlalchemy as sa
 from sqlalchemy.future import Connection
 
-from ..data_store import model, Database
+from ..data_store import model, Postgres
 
 
 class Configuration(dict):
@@ -58,7 +58,7 @@ class Configuration(dict):
         return cls._singleton
 
     def load_from_data_store(self):
-        db = Database.get_global_engine()
+        db = Postgres.get_global_engine()
         # out with the old
         self.clear()
         # in with the new
@@ -67,7 +67,7 @@ class Configuration(dict):
                 self[key] = val
 
     def save_to_data_store(self):
-        db = Database.get_global_engine()
+        db = Postgres.get_global_engine()
         with db.connect() as conn:  # type: Connection
             # out with the old
             conn.execute(sa.delete(model.configuration))

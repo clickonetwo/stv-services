@@ -33,7 +33,7 @@ from .utils import (
     fetch_all_hashes,
     lookup_objects,
 )
-from ..data_store import model, Database
+from ..data_store import model, Postgres
 
 
 class ActionNetworkDonation(ActionNetworkPersistedDict):
@@ -112,7 +112,7 @@ def import_donations(
 
 
 def import_donations_from_hashes(hashes: [dict]):
-    with Database.get_global_engine().connect() as conn:  # type: Connection
+    with Postgres.get_global_engine().connect() as conn:  # type: Connection
         for data in hashes:
             try:
                 donation = ActionNetworkDonation.from_hash(data)

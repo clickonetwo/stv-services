@@ -42,7 +42,7 @@ from stv_services.action_network.donation import (
     import_donations,
     ActionNetworkDonation,
 )
-from stv_services.data_store import Database
+from stv_services.data_store import Postgres
 
 fake_an_id = "action_network:fake-donation-identifier"
 
@@ -85,7 +85,7 @@ def test_action_network_donation(clean_db):
     assert donation["uuid"] == fake_an_id
     assert donation["amount"] == "40.00"
     assert donation["recurrence_data"].get("recurring") is False
-    with Database.get_global_engine().connect() as conn:
+    with Postgres.get_global_engine().connect() as conn:
         donation.persist(conn)
         donation["amount"] = "100.00"
         del donation["recurrence_data"]
@@ -102,7 +102,7 @@ def test_action_network_donation(clean_db):
 
 
 def test_import_donation(clean_db):
-    with Database.get_global_engine().connect() as conn:
+    with Postgres.get_global_engine().connect() as conn:
         an_id = "action_network:c3b8160a-59d4-4f22-83c6-7ce09b873c4a"
         donation = ActionNetworkDonation.from_action_network(conn, an_id)
         assert donation["uuid"] == an_id

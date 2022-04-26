@@ -43,7 +43,7 @@ from stv_services.airtable.volunteer import (
     create_volunteer_record,
 )
 from stv_services.core import Configuration
-from stv_services.data_store import Database
+from stv_services.data_store import Postgres
 
 
 def verify_schemas(verbose: bool = True):
@@ -66,7 +66,7 @@ def verify_schemas(verbose: bool = True):
 
 
 def update_contacts(verbose: bool = True, force: bool = False):
-    with Database.get_global_engine().connect() as conn:  # type: Connection
+    with Postgres.get_global_engine().connect() as conn:  # type: Connection
         people = ActionNetworkPerson.from_query(
             conn, find_records_to_update("contact", force)
         )
@@ -75,7 +75,7 @@ def update_contacts(verbose: bool = True, force: bool = False):
 
 
 def update_volunteers(verbose: bool = True, force: bool = False):
-    with Database.get_global_engine().connect() as conn:  # type: Connection
+    with Postgres.get_global_engine().connect() as conn:  # type: Connection
         people = ActionNetworkPerson.from_query(
             conn, find_records_to_update("volunteer", force)
         )
@@ -84,7 +84,7 @@ def update_volunteers(verbose: bool = True, force: bool = False):
 
 
 def update_funders(verbose: bool = True, force: bool = False):
-    with Database.get_global_engine().connect() as conn:  # type: Connection
+    with Postgres.get_global_engine().connect() as conn:  # type: Connection
         people = ActionNetworkPerson.from_query(
             conn, find_records_to_update("funder", force)
         )
@@ -93,7 +93,7 @@ def update_funders(verbose: bool = True, force: bool = False):
 
 
 def update_donation_records(verbose: bool = True, force: bool = False):
-    with Database.get_global_engine().connect() as conn:  # type: Connection
+    with Postgres.get_global_engine().connect() as conn:  # type: Connection
         donations = ActionNetworkDonation.from_query(
             conn, find_records_to_update("donation", force)
         )
@@ -126,7 +126,7 @@ def bulk_upsert_records(
 
 
 def remove_contacts(verbose: bool = True):
-    with Database.get_global_engine().connect() as conn:  # type: Connection
+    with Postgres.get_global_engine().connect() as conn:  # type: Connection
         people = ActionNetworkPerson.from_query(
             conn, find_records_to_update("contact", True)
         )
@@ -135,7 +135,7 @@ def remove_contacts(verbose: bool = True):
 
 
 def remove_volunteers(verbose: bool = True):
-    with Database.get_global_engine().connect() as conn:  # type: Connection
+    with Postgres.get_global_engine().connect() as conn:  # type: Connection
         people = ActionNetworkPerson.from_query(
             conn, find_records_to_update("volunteer", True)
         )
@@ -144,7 +144,7 @@ def remove_volunteers(verbose: bool = True):
 
 
 def remove_funders(verbose: bool = True):
-    with Database.get_global_engine().connect() as conn:  # type: Connection
+    with Postgres.get_global_engine().connect() as conn:  # type: Connection
         people = ActionNetworkPerson.from_query(
             conn, find_records_to_update("funder", True)
         )
@@ -153,7 +153,7 @@ def remove_funders(verbose: bool = True):
 
 
 def remove_donation_records(verbose: bool = True):
-    with Database.get_global_engine().connect() as conn:  # type: Connection
+    with Postgres.get_global_engine().connect() as conn:  # type: Connection
         donations = ActionNetworkDonation.from_query(
             conn, find_records_to_update("donation", True)
         )

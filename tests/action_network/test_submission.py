@@ -41,7 +41,7 @@ from stv_services.action_network.submission import (
     import_submissions,
     ActionNetworkSubmission,
 )
-from stv_services.data_store import Database
+from stv_services.data_store import Postgres
 
 fake_an_id = "action_network:fake-submission-identifier"
 
@@ -64,7 +64,7 @@ def test_action_network_submission(clean_db):
     }
     """
     data = json.loads(body)
-    with Database.get_global_engine().connect() as conn:
+    with Postgres.get_global_engine().connect() as conn:
         submission = ActionNetworkSubmission.from_hash(data)
         assert submission["uuid"] == fake_an_id
         assert (

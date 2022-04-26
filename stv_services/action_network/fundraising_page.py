@@ -32,7 +32,7 @@ from .utils import (
     fetch_all_hashes,
     lookup_objects,
 )
-from ..data_store import model, Database
+from ..data_store import model, Postgres
 
 
 class ActionNetworkFundraisingPage(ActionNetworkPersistedDict):
@@ -103,7 +103,7 @@ def import_fundraising_pages(
 
 
 def insert_fundraising_pages_from_hashes(hashes: [dict]):
-    with Database.get_global_engine().connect() as conn:  # type: Connection
+    with Postgres.get_global_engine().connect() as conn:  # type: Connection
         for data in hashes:
             try:
                 fundraising_page = ActionNetworkFundraisingPage.from_hash(data)

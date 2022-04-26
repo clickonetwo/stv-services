@@ -34,7 +34,7 @@ from click_shell import shell
 from stv_services.action_network import bulk as an_bulk
 from stv_services.airtable import bulk as at_bulk
 from stv_services.core import Configuration
-from stv_services.data_store import Database
+from stv_services.data_store import Postgres
 from stv_services.external.spreadsheet import import_spreadsheet
 
 
@@ -224,7 +224,7 @@ def delete_action_network_data(ctx: click.Context, confirm: bool = False):
         return
     if verbose:
         print("Deleting all Action Network data...")
-    Database.clear_all_action_network_data()
+    Postgres.clear_all_action_network_data()
     if verbose:
         print("Deleting last-update timestamps...")
     config = Configuration.get_global_config()

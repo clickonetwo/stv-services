@@ -28,7 +28,7 @@ from stv_services.action_network.donation import ActionNetworkDonation
 from stv_services.action_network.person import ActionNetworkPerson
 from stv_services.airtable import donation
 from stv_services.core import Configuration
-from stv_services.data_store import Database
+from stv_services.data_store import Postgres
 
 
 def test_validate_donation_schema():
@@ -38,7 +38,7 @@ def test_validate_donation_schema():
 
 
 def test_create_donation_record(reload_db, ensure_schemas):
-    with Database.get_global_engine().connect() as conn:  # type: Connection
+    with Postgres.get_global_engine().connect() as conn:  # type: Connection
         donor = ActionNetworkPerson.from_lookup(
             conn, uuid=reload_db["historical_donor"]
         )
@@ -56,7 +56,7 @@ def test_create_donation_record(reload_db, ensure_schemas):
 
 
 def test_insert_then_update_then_delete_donation_record(reload_db, ensure_schemas):
-    with Database.get_global_engine().connect() as conn:  # type: Connection
+    with Postgres.get_global_engine().connect() as conn:  # type: Connection
         donor = ActionNetworkPerson.from_lookup(
             conn, uuid=reload_db["historical_donor"]
         )

@@ -24,7 +24,7 @@ import sqlalchemy as sa
 
 from stv_services.core import Session
 from stv_services.core.config import Configuration
-from stv_services.data_store import Database, model
+from stv_services.data_store import Postgres, model
 
 
 def test_load_config():
@@ -58,8 +58,8 @@ def test_get_action_network_session():
 
 
 def test_clear_database():
-    Database.clear_all_action_network_data()
-    with Database.get_global_engine().connect() as conn:
+    Postgres.clear_all_action_network_data()
+    with Postgres.get_global_engine().connect() as conn:
         for table in [
             model.person_info,
             model.donation_info,

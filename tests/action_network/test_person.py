@@ -31,7 +31,7 @@ from stv_services.action_network.person import (
     ActionNetworkPerson,
 )
 from stv_services.action_network.submission import ActionNetworkSubmission
-from stv_services.data_store import Database
+from stv_services.data_store import Postgres
 
 fake_an_id = "action_network:fake-person-identifier"
 
@@ -142,7 +142,7 @@ def test_action_network_person(clean_db):
     }
     """
     data = json.loads(body)
-    with Database.get_global_engine().connect() as conn:
+    with Postgres.get_global_engine().connect() as conn:
         person = ActionNetworkPerson.from_hash(data)
         assert person["uuid"] == fake_an_id
         assert person["email"] == "johnqrandom@example.com"
@@ -174,7 +174,7 @@ def test_action_network_person(clean_db):
 
 def test_import_person(clean_db):
     an_id = "action_network:dec233c3-bdee-457c-95ca-055b4647b907"
-    with Database.get_global_engine().connect() as conn:
+    with Postgres.get_global_engine().connect() as conn:
         person = ActionNetworkPerson.from_action_network(conn, an_id)
         assert person["uuid"] == an_id
         with pytest.raises(KeyError):
@@ -183,19 +183,19 @@ def test_import_person(clean_db):
 
 def test_import_person_related(reload_db):
     import_person_cluster(reload_db["historical_donor"], verbose=True)
-    with Database.get_global_engine().connect() as conn:
+    with Postgres.get_global_engine().connect() as conn:
         for donation_id in reload_db["historical_donor_donations"]:
             donation = ActionNetworkDonation.from_lookup(conn, donation_id)
             assert donation["donor_id"] == reload_db["historical_donor"]
     import_person_cluster(reload_db["current_signup_non_donor"], verbose=True)
-    with Database.get_global_engine().connect() as conn:
+    with Postgres.get_global_engine().connect() as conn:
         for submission_id in reload_db["current_signup_non_donor_submissions"]:
             submission = ActionNetworkSubmission.from_lookup(conn, submission_id)
             assert submission["person_id"] == reload_db["current_signup_non_donor"]
 
 
 def test_compute_donation_summaries(reload_db):
-    with Database.get_global_engine().connect() as conn:
+    with Postgres.get_global_engine().connect() as conn:
         person = ActionNetworkPerson.from_lookup(
             conn, uuid=reload_db["historical_donor"]
         )
@@ -205,7 +205,7 @@ def test_compute_donation_summaries(reload_db):
 
 
 def test_classify_for_airtable(reload_db):
-    with Database.get_global_engine().connect() as conn:
+    with Postgres.get_global_engine().connect() as conn:
         # historical donors are not contacts, but if
         # they are made contacts they are also funders
         person = ActionNetworkPerson.from_lookup(

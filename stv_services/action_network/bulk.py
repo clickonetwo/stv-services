@@ -32,7 +32,7 @@ from .person import import_people, ActionNetworkPerson
 from .submission import import_submissions, insert_submissions_from_hashes
 from .utils import fetch_related_hashes, fetch_hash
 from ..core import Configuration
-from ..data_store import model, Database
+from ..data_store import model, Postgres
 
 
 def import_person_cluster(person_id: str, verbose: bool = False):
@@ -40,7 +40,7 @@ def import_person_cluster(person_id: str, verbose: bool = False):
         print(f"Fetching person '{person_id}' and their donations and submissions...")
     data, links = fetch_hash("people", person_id)
     person = ActionNetworkPerson.from_hash(data)
-    with Database.get_global_engine().connect() as conn:  # type: Connection
+    with Postgres.get_global_engine().connect() as conn:  # type: Connection
         person.persist(conn)
         conn.commit()
     for curie, nav in links.items():
@@ -141,7 +141,7 @@ def update_donation_summaries(verbose: bool = True, force: bool = False):
         query = sa.select(table)
     else:
         query = sa.select(table).where(table.c.total_2020 == sentinel)
-    with Database.get_global_engine().connect() as conn:  # type: Connection
+    with Postgres.get_global_engine().connect() as conn:  # type: Connection
         people = ActionNetworkPerson.from_query(conn, query)
         for person in people:
             count += 1
@@ -169,7 +169,7 @@ def update_airtable_classifications(verbose: bool = True):
         progress_time = start_time
     table = model.person_info
     query = sa.select(table)
-    with Database.get_global_engine().connect() as conn:  # type: Connection
+    with Postgres.get_global_engine().connect() as conn:  # type: Connection
         people = ActionNetworkPerson.from_query(conn, query)
         for person in people:
             count += 1

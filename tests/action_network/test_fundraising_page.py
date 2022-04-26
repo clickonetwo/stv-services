@@ -41,7 +41,7 @@ from stv_services.action_network.fundraising_page import (
     import_fundraising_pages,
     ActionNetworkFundraisingPage,
 )
-from stv_services.data_store import Database
+from stv_services.data_store import Postgres
 
 fake_an_id = "action_network:fake-fundraising-page-identifier"
 
@@ -70,7 +70,7 @@ def test_action_network_fundraising_page(clean_db):
     assert fundraising_page["uuid"] == fake_an_id
     assert fundraising_page["origin_system"] == "ActBlue"
     assert fundraising_page["title"] == "act-blue_146845_stv-test-form-3"
-    with Database.get_global_engine().connect() as conn:
+    with Postgres.get_global_engine().connect() as conn:
         fundraising_page.persist(conn)
         fundraising_page["title"] = "wrong title"
         del fundraising_page["origin_system"]
@@ -89,7 +89,7 @@ def test_action_network_fundraising_page(clean_db):
 
 
 def test_import_fundraising_page(clean_db):
-    with Database.get_global_engine().connect() as conn:
+    with Postgres.get_global_engine().connect() as conn:
         an_id = "action_network:7f2decaf-4eee-4a1e-bf5c-9c7d0d4e6726"
         person = ActionNetworkFundraisingPage.from_action_network(conn, an_id)
         assert person["uuid"] == an_id

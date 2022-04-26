@@ -40,7 +40,7 @@ def get_engine_url(default_url: str = None) -> str:
     return url
 
 
-class Database:
+class Postgres:
     _singleton: ClassVar[Engine] = None
 
     @staticmethod

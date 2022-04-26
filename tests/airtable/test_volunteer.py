@@ -26,7 +26,7 @@ from sqlalchemy.future import Connection
 from stv_services.action_network.person import ActionNetworkPerson
 from stv_services.airtable import volunteer
 from stv_services.core import Configuration
-from stv_services.data_store import Database, model
+from stv_services.data_store import Postgres, model
 
 
 def test_validate_volunteer_schema():
@@ -36,7 +36,7 @@ def test_validate_volunteer_schema():
 
 
 def test_create_volunteer_record(reload_db, ensure_schemas):
-    with Database.get_global_engine().connect() as conn:  # type: Connection
+    with Postgres.get_global_engine().connect() as conn:  # type: Connection
         person = ActionNetworkPerson.from_lookup(
             conn, uuid=reload_db["historical_donor"]
         )
@@ -58,21 +58,21 @@ def test_create_volunteer_record(reload_db, ensure_schemas):
 
 
 def test_insert_then_update_then_delete_volunteer_records(reload_db, ensure_schemas):
-    with Database.get_global_engine().connect() as conn:  # type: Connection
+    with Postgres.get_global_engine().connect() as conn:  # type: Connection
         query = sa.select(model.person_info)
         people = ActionNetworkPerson.from_query(conn, query)
         inserts, updates = volunteer.upsert_volunteers(conn, people)
         assert inserts == len(people)
         assert updates == 0
         conn.commit()
-    with Database.get_global_engine().connect() as conn:  # type: Connection
+    with Postgres.get_global_engine().connect() as conn:  # type: Connection
         query = sa.select(model.person_info)
         people = ActionNetworkPerson.from_query(conn, query)
         inserts, updates = volunteer.upsert_volunteers(conn, people)
         assert inserts == 0
         assert updates == len(people)
         conn.commit()
-    with Database.get_global_engine().connect() as conn:  # type: Connection
+    with Postgres.get_global_engine().connect() as conn:  # type: Connection
         query = sa.select(model.person_info)
         people = ActionNetworkPerson.from_query(conn, query)
         deletes = volunteer.delete_volunteers(conn, people)

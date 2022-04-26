@@ -183,13 +183,13 @@ def _delete_records(schema: dict, record_ids: list[str]):
 # def process_airtable_records(
 #     schema: dict, processor: Callable[[list[dict]], None], fields: list[str] = None
 # ):
-#     api = Session.get_airtable_api()
+#     web = Session.get_airtable_api()
 #     base_id = schema["base_id"]
 #     table_id = schema["table_id"]
 #     if fields:
-#         iterator = api.iterate(base_id, table_id, fields=fields)
+#         iterator = web.iterate(base_id, table_id, fields=fields)
 #     else:
-#         iterator = api.iterate(base_id, table_id)
+#         iterator = web.iterate(base_id, table_id)
 #     for page in iterator:
 #         processor(page)
 #

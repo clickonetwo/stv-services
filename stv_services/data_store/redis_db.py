@@ -19,8 +19,50 @@
 #  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
-#
-from .item_list import ItemListAsync, ItemListSync
-from .model import metadata
-from .postgres_db import get_engine_url, Postgres
-from .redis_db import RedisAsync, RedisSync
+import os
+
+import redis
+
+
+class RedisAsync:
+    """
+    A singleton dispenser of async redis connections.
+    """
+
+    _pool = None
+
+    @classmethod
+    async def connect(cls) -> redis.Redis:
+        if cls._pool is None:
+            url = os.getenv("REDIS_URL") or "redis://localhost:6379/0"
+            cls._pool = redis.Redis.from_url(url, max_connections=5)
+        return cls._pool
+
+    @classmethod
+    async def close(cls):
+        if cls._pool is None:
+            return
+        await cls._pool.close()
+        cls._pool = None
+
+
+class RedisSync:
+    """
+    A singleton dispenser of sync redis connections
+    """
+
+    _pool = None
+
+    @classmethod
+    def connect(cls) -> redis.Redis:
+        if cls._pool is None:
+            url = os.getenv("REDIS_URL") or "redis://localhost:6379/0"
+            cls._pool = redis.Redis.from_url(url, max_connections=5)
+        return cls._pool
+
+    @classmethod
+    def close(cls):
+        if cls._pool is None:
+            return
+        cls._pool.close()
+        cls._pool = None
