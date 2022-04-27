@@ -130,7 +130,7 @@ def remove_empty_assignments(verbose: bool = True, remove_all: bool = False):
     def process_page(records: list[dict]):
         nonlocal processed, empty_ids
         if verbose and processed > 0:
-            print(f"(({processed})...", end="")
+            print(f"({processed})...", end="")
         for record in records:
             summary: str = next(iter(record["fields"].values()))
             if remove_all or summary == "NONE YET":
@@ -183,7 +183,11 @@ def delete_airtable_records(
     for start in range(0, total, 50):
         if verbose and deletes > 0:
             print(f"({deletes})...", end="")
-        deletes += len(web.batch_delete(base_id, table_id, record_ids))
+        deletes += len(
+            web.batch_delete(
+                base_id, table_id, record_ids[start : min(start + 50, total)]
+            )
+        )
     if verbose:
         print(f"({deletes})")
     return deletes
