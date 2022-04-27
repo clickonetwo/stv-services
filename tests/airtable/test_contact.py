@@ -25,6 +25,10 @@ from sqlalchemy.future import Connection
 
 from stv_services.action_network.person import ActionNetworkPerson
 from stv_services.airtable import contact
+from stv_services.airtable.sync import (
+    ensure_empty_assignments,
+    remove_empty_assignments,
+)
 from stv_services.core import Configuration
 from stv_services.data_store import Postgres, model
 
@@ -57,6 +61,10 @@ def test_insert_then_update_then_delete_contact_records(reload_db, ensure_schema
         assert inserts == len(people)
         assert updates == 0
         conn.commit()
+    assert ensure_empty_assignments(verbose=True) == 0
+    assert remove_empty_assignments(verbose=True) == inserts
+    assert ensure_empty_assignments(verbose=True) == inserts
+    assert ensure_empty_assignments(verbose=True) == 0
     with Postgres.get_global_engine().connect() as conn:  # type: Connection
         query = sa.select(model.person_info)
         people = ActionNetworkPerson.from_query(conn, query)
@@ -64,6 +72,8 @@ def test_insert_then_update_then_delete_contact_records(reload_db, ensure_schema
         assert inserts == 0
         assert updates == len(people)
         conn.commit()
+    assert ensure_empty_assignments(verbose=True) == 0
+    assert remove_empty_assignments(verbose=True) == updates
     with Postgres.get_global_engine().connect() as conn:  # type: Connection
         query = sa.select(model.person_info)
         people = ActionNetworkPerson.from_query(conn, query)

@@ -32,7 +32,7 @@ import click
 from click_shell import shell
 
 from stv_services.action_network import bulk as an_bulk
-from stv_services.airtable import bulk as at_bulk
+from stv_services.airtable import bulk as at_bulk, sync
 from stv_services.core import Configuration
 from stv_services.data_store import Postgres
 from stv_services.external.spreadsheet import import_spreadsheet
@@ -188,6 +188,13 @@ def update_donation_records(ctx: click.Context, force: bool = False):
 
 @stv.command()
 @click.pass_context
+def ensure_empty_assignments(ctx: click.Context):
+    verbose = ctx.obj["verbose"]
+    sync.ensure_empty_assignments(verbose)
+
+
+@stv.command()
+@click.pass_context
 def remove_contacts(ctx: click.Context):
     verbose = ctx.obj["verbose"]
     at_bulk.remove_contacts(verbose)
@@ -205,6 +212,16 @@ def remove_volunteers(ctx: click.Context):
 def remove_funders(ctx: click.Context):
     verbose = ctx.obj["verbose"]
     at_bulk.remove_funders(verbose)
+
+
+@stv.command()
+@click.option(
+    "--remove-all/--no-remove-all", default=False, help="Remove all not just empty"
+)
+@click.pass_context
+def remove_empty_assignments(ctx: click.Context, remove_all: bool = False):
+    verbose = ctx.obj["verbose"]
+    sync.remove_empty_assignments(verbose, remove_all)
 
 
 @stv.command()

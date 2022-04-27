@@ -129,10 +129,12 @@ def ensure_schemas() -> dict:
     from stv_services.airtable.volunteer import verify_volunteer_schema
     from stv_services.airtable.funder import verify_funder_schema
     from stv_services.airtable.donation import verify_donation_schema
+    from stv_services.airtable.assignment import verify_assignment_schema
 
     return dict(
         contact_schema=verify_contact_schema(),
         volunteer_schema=verify_volunteer_schema(),
         funder_schema=verify_funder_schema(),
         donation_schema=verify_donation_schema(),
+        assignment_schema=verify_assignment_schema(),
     )

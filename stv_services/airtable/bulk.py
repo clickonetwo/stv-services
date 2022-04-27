@@ -27,6 +27,7 @@ from sqlalchemy.future import Connection
 from stv_services.action_network.donation import ActionNetworkDonation
 from stv_services.action_network.person import ActionNetworkPerson
 from stv_services.action_network.utils import ActionNetworkPersistedDict
+from stv_services.airtable.assignment import verify_assignment_schema
 from stv_services.airtable.contact import verify_contact_schema, create_contact_record
 from stv_services.airtable.donation import (
     create_donation_record,
@@ -61,12 +62,17 @@ def verify_schemas(verbose: bool = True):
         print("Verifying donation schema...")
     verify_donation_schema()
     if verbose:
+        print("Verifying assignment schema...")
+    verify_assignment_schema()
+    if verbose:
         print("Saving verified schemas...")
     config.save_to_data_store()
 
 
 def update_contacts(verbose: bool = True, force: bool = False):
     with Postgres.get_global_engine().connect() as conn:  # type: Connection
+        if verbose:
+            print(f"Loading person data for contacts...")
         people = ActionNetworkPerson.from_query(
             conn, find_records_to_update("contact", force)
         )
@@ -76,6 +82,8 @@ def update_contacts(verbose: bool = True, force: bool = False):
 
 def update_volunteers(verbose: bool = True, force: bool = False):
     with Postgres.get_global_engine().connect() as conn:  # type: Connection
+        if verbose:
+            print(f"Loading person data for historical volunteers...")
         people = ActionNetworkPerson.from_query(
             conn, find_records_to_update("volunteer", force)
         )
@@ -85,6 +93,8 @@ def update_volunteers(verbose: bool = True, force: bool = False):
 
 def update_funders(verbose: bool = True, force: bool = False):
     with Postgres.get_global_engine().connect() as conn:  # type: Connection
+        if verbose:
+            print(f"Loading person data for funders...")
         people = ActionNetworkPerson.from_query(
             conn, find_records_to_update("funder", force)
         )
@@ -94,6 +104,8 @@ def update_funders(verbose: bool = True, force: bool = False):
 
 def update_donation_records(verbose: bool = True, force: bool = False):
     with Postgres.get_global_engine().connect() as conn:  # type: Connection
+        if verbose:
+            print(f"Loading donation data...")
         donations = ActionNetworkDonation.from_query(
             conn, find_records_to_update("donation", force)
         )

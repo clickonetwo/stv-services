@@ -24,6 +24,7 @@
 import sqlalchemy as sa
 from sqlalchemy.future import Connection
 
+from .assignment import insert_empty_assignments
 from ..action_network.utils import ActionNetworkPersistedDict
 from ..core import Configuration, Session
 from ..data_store import model
@@ -56,11 +57,18 @@ def insert_records(
         return 0
     _, schema_name, _, id_field, date_field = table_fields(dict_type)
     schema = Configuration.get_global_config()[schema_name]
-    record_ids = _insert_records(schema, [pair[1] for pair in pairs])
-    for record_id, p_dict in zip(record_ids, [pair[0] for pair in pairs]):
+    dicts, records = [pair[0] for pair in pairs], [pair[1] for pair in pairs]
+    record_ids = _insert_records(schema, records)
+    for record_id, p_dict in zip(record_ids, dicts):
         p_dict[id_field] = record_id
         p_dict[date_field] = p_dict["modified_date"]
         p_dict.persist(conn)
+    if dict_type == "contact":
+        # after contacts are inserted, we create empty assignments for them
+        contact_ids = [person[id_field] for person in dicts]
+        assignment_count = insert_empty_assignments(contact_ids)
+        if Configuration.get_env() == "DEV":
+            assert len(record_ids) == assignment_count
     return len(record_ids)
 
 
@@ -175,54 +183,3 @@ def _delete_records(schema: dict, record_ids: list[str]):
     except HTTPError as err:
         if err.response.status_code != 404:
             raise
-
-
-#
-# bulk processing of existing airtable records
-#
-# def process_airtable_records(
-#     schema: dict, processor: Callable[[list[dict]], None], fields: list[str] = None
-# ):
-#     web = Session.get_airtable_api()
-#     base_id = schema["base_id"]
-#     table_id = schema["table_id"]
-#     if fields:
-#         iterator = web.iterate(base_id, table_id, fields=fields)
-#     else:
-#         iterator = web.iterate(base_id, table_id)
-#     for page in iterator:
-#         processor(page)
-#
-#
-# def sync_airtable_records(
-#     hash_type: str,
-#     page_processor: Callable[[list[dict]], None],
-#     query: str = None,
-#     verbose: bool = True,
-#     skip_pages: int = 0,
-#     max_pages: int = 0,
-# ) -> int:
-#     config = Configuration.get_global_config()
-#     url = config["action_network_api_base_url"] + f"/{hash_type}"
-#     query_args = {}
-#     if query:
-#         query_args["filter"] = query
-#         if verbose:
-#             print(f"Fetching {hash_type} matching filter={query}...")
-#     else:
-#         if verbose:
-#             print(f"Fetching all {hash_type}...")
-#     if skip_pages:
-#         query_args["page"] = skip_pages + 1
-#         if verbose:
-#             print(f"(Starting import on page {skip_pages + 1})")
-#     if query_args:
-#         url += "?" + urlencode(query_args)
-#     return fetch_hash_pages(
-#         hash_type=hash_type,
-#         url=url,
-#         page_processor=page_processor,
-#         verbose=verbose,
-#         skip_pages=skip_pages,
-#         max_pages=max_pages,
-#     )

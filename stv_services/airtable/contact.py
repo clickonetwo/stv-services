@@ -25,8 +25,6 @@ from sqlalchemy.future import Connection
 
 from .schema import fetch_and_validate_table_schema, FieldInfo
 from .utils import (
-    insert_records,
-    update_records,
     upsert_records,
     delete_records,
 )
@@ -59,6 +57,7 @@ custom1_field_map = {
     "2022_recruit": "Recruit friends",
     "2022_podlead": "Start a Pod",
     "2022_branchlead": "Lead a Branch",
+    "branch_lead_interest_I want to help build a branch in my region!": "Lead a Branch",
 }
 
 
@@ -82,23 +81,13 @@ def create_contact_record(_: Connection, person: ActionNetworkPerson) -> dict:
             if value := person.get(field_name):
                 record[column_ids[field_name]] = value
     custom_fields = person["custom_fields"]
-    interests = []
+    interests = set()
     for field_name, selection_text in custom1_field_map.items():
         if custom_fields.get(field_name):
-            interests.append(selection_text)
-    record[column_ids["custom1"]] = interests
+            interests.add(selection_text)
+    record[column_ids["custom1"]] = list(interests)
     record[column_ids["custom2"]] = custom_fields.get("2022_notes", "")
     return record
-
-
-def insert_contacts(conn: Connection, people: list[ActionNetworkPerson]) -> int:
-    pairs = [(person, create_contact_record(conn, person)) for person in people]
-    return insert_records(conn, "contact", pairs)
-
-
-def update_contacts(conn: Connection, people: list[ActionNetworkPerson]) -> int:
-    pairs = [(person, create_contact_record(conn, person)) for person in people]
-    return update_records(conn, "contact", pairs)
 
 
 def upsert_contacts(conn: Connection, people: list[ActionNetworkPerson]) -> (int, int):
@@ -108,33 +97,3 @@ def upsert_contacts(conn: Connection, people: list[ActionNetworkPerson]) -> (int
 
 def delete_contacts(conn: Connection, people: list[ActionNetworkPerson]) -> int:
     return delete_records(conn, "contact", people)
-
-
-# def sync_contacts(conn: Connection, people: list[ActionNetworkPerson]) -> (dict, dict):
-#     emails = {person.get("email"): person for person in people}
-#     extras = {}
-#     unmatched = {}
-#     empties = []
-#
-#     def page_processor(page: list[dict]):
-#         for record in page:
-#             record_id = record["id"]
-#             record_email = record["fields"].get("email")
-#             if not record_email:
-#                 # records with no email shouldn't exist in Airtable
-#                 empties.append(record_id)
-#             elif match := emails.get(record_email):
-#                 # we have an existing person record for this email
-#                 contact_record_id = match.get("contact_record_id")
-#                 if contact_record_id is None:
-#                     # adopt this as the record for this email
-#                     match["contact_record_id"] = record_id
-#                     match["contact_last_updated"] = model.epoch
-#                 elif contact_record_id != record_id:
-#                     # remember this as an extra email
-#                     extras[record_email] = record_id
-#             else:
-#                 # this is an extra record because we don't have a person with it
-#                 unmatched[record_email] = record_id
-#
-#     process_airtable_records()
