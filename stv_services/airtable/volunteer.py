@@ -21,16 +21,14 @@
 #  SOFTWARE.
 #
 import sqlalchemy as sa
-
 from sqlalchemy.future import Connection
 
 from .schema import fetch_and_validate_table_schema, FieldInfo
 from .utils import (
-    insert_records,
-    update_records,
     upsert_records,
     delete_records,
 )
+from .webhook import register_hook
 from ..action_network.person import ActionNetworkPerson
 from ..core import Configuration
 from ..data_store import model
@@ -102,16 +100,6 @@ def create_volunteer_record(conn: Connection, person: ActionNetworkPerson) -> di
     return record
 
 
-def insert_volunteers(conn: Connection, people: list[ActionNetworkPerson]) -> int:
-    pairs = [(person, create_volunteer_record(conn, person)) for person in people]
-    return insert_records(conn, "volunteer", pairs)
-
-
-def update_volunteers(conn: Connection, people: list[ActionNetworkPerson]) -> int:
-    pairs = [(person, create_volunteer_record(conn, person)) for person in people]
-    return update_records(conn, "volunteer", pairs)
-
-
 def upsert_volunteers(
     conn: Connection, people: list[ActionNetworkPerson]
 ) -> (int, int):
@@ -121,3 +109,12 @@ def upsert_volunteers(
 
 def delete_volunteers(conn: Connection, people: list[ActionNetworkPerson]) -> int:
     return delete_records(conn, "volunteer", people)
+
+
+def register_volunteer_hook():
+    schema = verify_volunteer_schema()
+    base_id = schema["base_id"]
+    table_id = schema["table_id"]
+    column_ids = schema["column_ids"]
+    field_ids = [column_ids[name] for name in ["is_contact"]]
+    register_hook("volunteer", base_id, table_id, field_ids)

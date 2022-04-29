@@ -19,13 +19,11 @@
 #  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
-import asyncio
+import time
 from random import uniform
 from threading import Timer
 from time import time as now
 from typing import ClassVar, Optional, Any
-
-import redis
 
 from .redis_db import RedisAsync, RedisSync
 
@@ -76,7 +74,7 @@ class ItemListCore:
 
     set_key_template: ClassVar[str] = "{list_type} Store"
     """
-    Key template for a sorted set of typed item lists with their next-ready times.
+    Key template for a sorted set of typed item lists with next-ready times.
     """
 
     circle_key_template: ClassVar[str] = "{list_type} Deferrals"
@@ -166,7 +164,7 @@ class ItemListSync(ItemListCore):
     This class is a singleton.
     """
 
-    _db = None
+    _db: Optional[RedisSync.Redis] = None
 
     @classmethod
     def initialize(cls):
@@ -187,7 +185,7 @@ class ItemListSync(ItemListCore):
         Also arrange to notify the channel when it's ready.
         """
         set_key = cls._set_key(list_type)
-        result = cls._db.zadd(set_key, score=now() + cls.RETRY_DELAY, member=key)
+        result = cls._db.zadd(set_key, {key: now() + cls.RETRY_DELAY})
         channel_name = cls._channel_name(list_type)
         Timer(cls.RETRY_DELAY, lambda: cls._db.publish(channel_name, key)).start()
         return result
@@ -243,24 +241,30 @@ class ItemListSync(ItemListCore):
         return result
 
     @classmethod
-    async def select_from_channel(cls, list_type: str) -> Optional[str]:
+    def select_from_channels(
+        cls, list_types: list[str], timeout: float
+    ) -> Optional[str]:
         """
         Wait until there's an item sent to the channel, then return it.
         """
-        channel_name = cls._channel_name(list_type)
+        channel_names = list(map(cls._channel_name, list_types))
         try:
-            channels = cls._db.subscribe(channel_name)
-            key = channels[0].get(encoding="utf-8")
-            cls._db.unsubscribe(channel_name)
+            pubsub = cls._db.pubsub(ignore_subscribe_messages=True)
+            pubsub.subscribe(*channel_names)
+            message = pubsub.get_message(
+                ignore_subscribe_messages=True, timeout=timeout
+            )
+            key = message["data"].decode("utf-8")
+            pubsub.unsubscribe(*channel_names)
             return key
-        except redis.RedisError:
+        except RedisSync.Error:
             # typically this error means that the process is shutting down
             # by closing connections.  There's no way to recover from it,
             # so we exit silently rather than report the error.
             return None
 
     @classmethod
-    async def select_for_processing(cls, list_type: str) -> Optional[str]:
+    def select_for_processing(cls, list_type: str) -> Optional[str]:
         """
         Find the first item list of the given type that's ready for processing,
         mark it as in-process, and return it.  The select
@@ -272,17 +276,17 @@ class ItemListSync(ItemListCore):
         """
         set_key = cls._set_key(list_type)
 
-        async def mark_for_processing(key: str) -> bool:
+        def mark_for_processing(key: str) -> bool:
             """
             Mark an item list key as being in process.
             Returns whether setting the mark was successful.
             """
             new_score = now() + cls.IN_PROCESS
-            pipe = cls._db.multi_exec()
-            pipe.zadd(set_key, score=new_score, member=key)
-            # return the exceptions rather than raising them because of
-            # this issue: https://github.com/aio-libs/aioredis/issues/558
-            values = await pipe.execute(return_exceptions=True)
+            with cls._db.pipeline(transaction=True) as pipe:
+                pipe.zadd(set_key, {key: new_score})
+                # return the exceptions rather than raising them because of
+                # this issue: https://github.com/aio-libs/aioredis/issues/558
+                values = pipe.execute(raise_on_error=False)
             return values[0] == 0
 
         # because we are using optimistic locking, keep trying if we
@@ -291,38 +295,37 @@ class ItemListSync(ItemListCore):
             try:
                 start = now()
                 # optimistically lock the item set
-                await cls._db.watch(set_key)
+                cls._db.watch(set_key)
                 # first look for abandoned item lists from a prior run
-                item_lists = await cls._db.zrangebyscore(
-                    set_key,
+                item_lists = cls._db.zrangebyscore(
+                    name=set_key,
                     min=start + (cls.RETRY_DELAY + cls.CLOCK_DRIFT),
                     max=start + cls.IN_PROCESS - (cls.TIMEOUT + cls.CLOCK_DRIFT),
-                    offset=0,
-                    count=1,
-                    encoding="ascii",
+                    start=0,
+                    num=1,
                 )
                 if not item_lists:
                     # next look for the first item list that's ready now
-                    item_lists = await cls._db.zrangebyscore(
-                        set_key,
+                    item_lists = cls._db.zrangebyscore(
+                        name=set_key,
+                        min=start - cls.CLOCK_DRIFT,
                         max=start + cls.CLOCK_DRIFT,
-                        offset=0,
-                        count=1,
-                        encoding="ascii",
+                        start=0,
+                        num=1,
                     )
                 if not item_lists:
                     # no item lists ready for processing, give up
                     return None
                 # found one to process
                 item_list = item_lists[0]
-                if await mark_for_processing(item_list):
+                if mark_for_processing(item_list):
                     return item_list
                 # if marking fails, it's due to a conflict failure,
                 # so loop and try again after taking a beat
-                await asyncio.sleep(uniform(0.1, 0.8))
+                time.sleep(uniform(0.1, 0.8))
             finally:
                 # we may have been interrupted and already
                 # closed down the connection, so make sure
                 # it still exists before we unwatch
                 if cls._db:
-                    await cls._db.unwatch()
+                    cls._db.unwatch()

@@ -283,5 +283,22 @@ def dump_config(ctx: click.Context, path: str = None):
         print(f"Saved {len(config)} key/value pairs.")
 
 
+@stv.command()
+@click.pass_context
+def register_webhooks(ctx: click.Context):
+    verbose = ctx.obj["verbose"]
+    at_bulk.register_webhooks(verbose)
+
+
+@stv.command()
+@click.option(
+    "--force-remove/--no-force-remove", default=False, help="Delete all the hooks"
+)
+@click.pass_context
+def sync_webhooks(ctx: click.Context, force_remove: bool = False):
+    verbose = ctx.obj["verbose"]
+    at_bulk.sync_webhooks(verbose, force_remove)
+
+
 if __name__ == "__main__":
     stv()

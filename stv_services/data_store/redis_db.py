@@ -21,21 +21,22 @@
 #  SOFTWARE.
 import os
 
-import redis
-
 
 class RedisAsync:
     """
     A singleton dispenser of async redis connections.
     """
 
+    from aioredis import Redis, RedisError
+
     _pool = None
+    Error = RedisError
 
     @classmethod
-    async def connect(cls) -> redis.Redis:
+    async def connect(cls) -> Redis:
         if cls._pool is None:
             url = os.getenv("REDIS_URL") or "redis://localhost:6379/0"
-            cls._pool = redis.Redis.from_url(url, max_connections=5)
+            cls._pool = cls.Redis.from_url(url, max_connections=5)
         return cls._pool
 
     @classmethod
@@ -51,13 +52,16 @@ class RedisSync:
     A singleton dispenser of sync redis connections
     """
 
+    from redis import Redis, RedisError
+
     _pool = None
+    Error = RedisError
 
     @classmethod
-    def connect(cls) -> redis.Redis:
+    def connect(cls) -> Redis:
         if cls._pool is None:
             url = os.getenv("REDIS_URL") or "redis://localhost:6379/0"
-            cls._pool = redis.Redis.from_url(url, max_connections=5)
+            cls._pool = cls.Redis.from_url(url, max_connections=5)
         return cls._pool
 
     @classmethod

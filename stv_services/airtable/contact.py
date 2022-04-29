@@ -28,6 +28,7 @@ from .utils import (
     upsert_records,
     delete_records,
 )
+from .webhook import register_hook
 from ..action_network.person import ActionNetworkPerson
 from ..core import Configuration
 
@@ -97,3 +98,12 @@ def upsert_contacts(conn: Connection, people: list[ActionNetworkPerson]) -> (int
 
 def delete_contacts(conn: Connection, people: list[ActionNetworkPerson]) -> int:
     return delete_records(conn, "contact", people)
+
+
+def register_contact_hook():
+    schema = verify_contact_schema()
+    base_id = schema["base_id"]
+    table_id = schema["table_id"]
+    column_ids = schema["column_ids"]
+    field_ids = [column_ids[name] for name in ["is_funder"]]
+    register_hook("contact", base_id, table_id, field_ids)

@@ -269,11 +269,13 @@ def fetch_hash_pages(
                 print(
                     f"Processing {page_count} {hash_type} on page {page_number}/{last_page}...",
                     end="",
+                    flush=True,
                 )
             else:
                 print(
                     f"Processing {page_count} {hash_type} on page {page_number}...",
                     end="",
+                    flush=True,
                 )
         hash_list = []
         for navigator in navigators:

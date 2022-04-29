@@ -134,7 +134,7 @@ def update_donation_summaries(verbose: bool = True, force: bool = False):
     """
     count, start_time = 0, datetime.now()
     if verbose:
-        print(f"Updating donation summaries for people...", end="")
+        print(f"Updating donation summaries for people...", end="", flush=True)
         progress_time = start_time
     table, sentinel = model.person_info, model.not_computed
     if force:
@@ -147,7 +147,7 @@ def update_donation_summaries(verbose: bool = True, force: bool = False):
             count += 1
             person.update_donation_summaries(conn)
             if verbose and (datetime.now() - progress_time).seconds > 5:
-                print(f"({count})...", end="")
+                print(f"({count})...", end="", flush=True)
                 progress_time = datetime.now()
         conn.commit()
     if verbose:
@@ -165,7 +165,7 @@ def update_airtable_classifications(verbose: bool = True):
     """
     count, start_time = 0, datetime.now()
     if verbose:
-        print(f"Updating Airtable classifications for people...", end="")
+        print(f"Updating Airtable classifications for people...", end="", flush=True)
         progress_time = start_time
     table = model.person_info
     query = sa.select(table)
@@ -175,7 +175,7 @@ def update_airtable_classifications(verbose: bool = True):
             count += 1
             person.classify_for_airtable(conn)
             if verbose and (datetime.now() - progress_time).seconds > 5:
-                print(f"({count})...", end="")
+                print(f"({count})...", end="", flush=True)
                 progress_time = datetime.now()
         conn.commit()
     if verbose:

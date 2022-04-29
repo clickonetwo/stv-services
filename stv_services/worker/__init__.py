@@ -19,30 +19,4 @@
 #  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
-
-from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
-
-from .airtable import airtable
-from ..core import Configuration
-from ..data_store import ItemListAsync
-
-if Configuration.get_env() == "PRD":
-    app = FastAPI(openapi_url=None, docs_url=None, redoc_url=None)
-else:
-    app = FastAPI()
-
-# mounts an "independent" app on the /static path that handles static files
-app.mount("/docs", StaticFiles(directory="static"), name="docs")
-# add the sub-APIs
-app.include_router(airtable, prefix="/airtable", tags=["airtable"])
-
-
-@app.on_event("startup")
-async def startup():
-    await ItemListAsync.initialize()
-
-
-@app.on_event("shutdown")
-async def shutdown():
-    await ItemListAsync.finalize()
+#

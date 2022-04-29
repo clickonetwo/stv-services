@@ -67,7 +67,7 @@ def ensure_empty_assignments(verbose=True) -> int:
     schema = config["airtable_stv_assignment_schema"]
     column_ids = schema["column_ids"]
     if verbose:
-        print(f"Fetching contact record ids...", end="")
+        print(f"Fetching contact record ids...", end="", flush=True)
     with Postgres.get_global_engine().connect() as conn:
         query = sa.select(model.person_info.c.contact_record_id).where(
             model.person_info.c.contact_record_id != ""
@@ -82,7 +82,7 @@ def ensure_empty_assignments(verbose=True) -> int:
     def process_page(records: list[dict]):
         nonlocal processed, seen_record_ids
         if verbose and processed > 0:
-            print(f"(({processed})...", end="")
+            print(f"(({processed})...", end="", flush=True)
         for record in records:
             links = next(iter(record["fields"].values()))
             if not links or len(links) > 1:
@@ -94,7 +94,7 @@ def ensure_empty_assignments(verbose=True) -> int:
         processed += len(records)
 
     if verbose:
-        print(f"Looking for matching assignment records...", end="")
+        print(f"Looking for matching assignment records...", end="", flush=True)
     process_airtable_records(
         schema=schema, processor=process_page, fields=[column_ids["contact_record_id"]]
     )
@@ -110,10 +110,10 @@ def ensure_empty_assignments(verbose=True) -> int:
     if total == 0:
         return 0
     if verbose:
-        print(f"Inserting {total} empty assignment records...", end="")
+        print(f"Inserting {total} empty assignment records...", end="", flush=True)
     for start in range(0, total, 50):
         if verbose and inserts > 0:
-            print(f"({inserts})...", end="")
+            print(f"({inserts})...", end="", flush=True)
         inserts += insert_empty_assignments(needed[start : min(start + 50, total)])
     if verbose:
         print(f"({inserts})")
@@ -130,7 +130,7 @@ def remove_empty_assignments(verbose: bool = True, remove_all: bool = False):
     def process_page(records: list[dict]):
         nonlocal processed, empty_ids
         if verbose and processed > 0:
-            print(f"({processed})...", end="")
+            print(f"({processed})...", end="", flush=True)
         for record in records:
             summary: str = next(iter(record["fields"].values()))
             if remove_all or summary == "NONE YET":
@@ -139,7 +139,7 @@ def remove_empty_assignments(verbose: bool = True, remove_all: bool = False):
 
     if verbose:
         modifier = "any" if remove_all else "empty"
-        print(f"Looking for {modifier} assignment records...", end="")
+        print(f"Looking for {modifier} assignment records...", end="", flush=True)
     process_airtable_records(
         schema=schema, processor=process_page, fields=[column_ids["summary"]]
     )
@@ -179,10 +179,10 @@ def delete_airtable_records(
     table_id = schema["table_id"]
     total, deletes = len(record_ids), 0
     if verbose:
-        print(f"Deleting {total} records...", end="")
+        print(f"Deleting {total} records...", end="", flush=True)
     for start in range(0, total, 50):
         if verbose and deletes > 0:
-            print(f"({deletes})...", end="")
+            print(f"({deletes})...", end="", flush=True)
         deletes += len(
             web.batch_delete(
                 base_id, table_id, record_ids[start : min(start + 50, total)]

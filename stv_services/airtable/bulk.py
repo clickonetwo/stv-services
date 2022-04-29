@@ -27,8 +27,13 @@ from sqlalchemy.future import Connection
 from stv_services.action_network.donation import ActionNetworkDonation
 from stv_services.action_network.person import ActionNetworkPerson
 from stv_services.action_network.utils import ActionNetworkPersistedDict
+from stv_services.airtable import webhook
 from stv_services.airtable.assignment import verify_assignment_schema
-from stv_services.airtable.contact import verify_contact_schema, create_contact_record
+from stv_services.airtable.contact import (
+    verify_contact_schema,
+    create_contact_record,
+    register_contact_hook,
+)
 from stv_services.airtable.donation import (
     create_donation_record,
     verify_donation_schema,
@@ -42,6 +47,7 @@ from stv_services.airtable.utils import (
 from stv_services.airtable.volunteer import (
     verify_volunteer_schema,
     create_volunteer_record,
+    register_volunteer_hook,
 )
 from stv_services.core import Configuration
 from stv_services.data_store import Postgres
@@ -124,10 +130,10 @@ def bulk_upsert_records(
 ):
     total, inserts, updates = len(dicts), 0, 0
     if verbose:
-        print(f"Updating {total} {record_type} records...", end="")
+        print(f"Updating {total} {record_type} records...", end="", flush=True)
     for start in range(0, total, 50):
         if verbose and inserts + updates > 0:
-            print(f"({inserts+updates})...", end="")
+            print(f"({inserts+updates})...", end="", flush=True)
         pairs = [(p_dict, record_maker(conn, p_dict)) for p_dict in dicts]
         i, u = upsert_records(conn, record_type, pairs[start : min(start + 50, total)])
         inserts += i
@@ -181,13 +187,32 @@ def bulk_remove_records(
 ):
     total, deletes = len(dicts), 0
     if verbose:
-        print(f"Deleting {total} {record_type} records...", end="")
+        print(f"Deleting {total} {record_type} records...", end="", flush=True)
     for start in range(0, total, 50):
         if verbose and deletes > 0:
-            print(f"({deletes})...", end="")
+            print(f"({deletes})...", end="", flush=True)
         deletes += delete_records(
             conn, record_type, dicts[start : min(start + 50, total)]
         )
     if verbose:
         print(f"({deletes})")
         print(f"Deleted {deletes} records.")
+
+
+def register_webhooks(verbose: bool = True):
+    if verbose:
+        print(f"Registering contact webhook...")
+    register_contact_hook()
+    if verbose:
+        print(f"Registering volunteer webhook...")
+    register_volunteer_hook()
+    if verbose:
+        print(f"Done.")
+
+
+def sync_webhooks(verbose: bool = True, force_remove: bool = False):
+    if verbose:
+        print(f"Syncing webhooks against Airtable...")
+    webhook.sync_hooks(verbose, force_remove)
+    if verbose:
+        print(f"Done.")
