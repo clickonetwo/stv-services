@@ -97,10 +97,10 @@ class ActionNetworkPerson(ActionNetworkPersistedDict):
     def _update_donation_summary(self, conn: sa.future.Connection, year: int):
         total_field, summary_field = f"total_{year}", f"summary_{year}"
         cutoff_hi = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
-        if year == 2021:
-            cutoff_lo = datetime(year, 1, 1, tzinfo=timezone.utc)
-        else:
+        if year == 2020:
             cutoff_lo = model.epoch
+        else:
+            cutoff_lo = datetime(year, 1, 1, tzinfo=timezone.utc)
         table = model.donation_info
         query = (
             sa.select(table)
