@@ -38,14 +38,16 @@ assert config.get("airtable_stv_base_name"), "No configuration is loaded"
 
 # make sure our endpoint matches our configuration
 url: str = config.get("stv_api_base_url", "")
+env = Configuration.get_env()
+print(f"Environment is '{env}'")
 if not url or url.find("stv-services") < 0:
-    assert Configuration.get_env() == "DEV", "DEV webserver but not in DEV"
+    assert env == "DEV", "DEV webserver but not in DEV"
     assert not os.getenv("DATABASE_URL"), "DEV builds must use the local database"
 elif url.find("-stage") >= 0:
-    assert Configuration.get_env() == "STG", "STG webserver but not in STG"
+    assert env == "STG", "STG webserver but not in STG"
     assert os.getenv("DATABASE_URL"), "STG builds require a DATABASE_URL"
 else:
-    assert Configuration.get_env() == "PRD", "PRD webserver but not in PRD"
+    assert env == "PRD", "PRD webserver but not in PRD"
     assert os.getenv("DATABASE_URL"), "PRD builds require a DATABASE_URL"
 
 # make sure the Airtable schema validates

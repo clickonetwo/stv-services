@@ -46,7 +46,7 @@ class Configuration(dict):
     def set_env(cls, new: str):
         if new.upper() not in ["DEV", "STG", "PRD"]:
             raise ValueError(f"Environment ('{new.upper()}') must be DEV, STG, or PRD")
-        _env = new.upper()
+        cls._env = new.upper()
 
     @classmethod
     def get_global_config(cls, reload: bool = False) -> "Configuration":
