@@ -99,5 +99,5 @@ class Configuration(dict):
                 print("", file=f)  # add trailing newline
 
 
-if env := getenv("ENV"):
+if env := getenv("STV_ENV"):
     Configuration.set_env(env)
