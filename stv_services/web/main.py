@@ -37,7 +37,7 @@ else:
     app = FastAPI()
 
 # mounts an "independent" app on the /static path that handles static files
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# app.mount("/static", StaticFiles(directory="static"), name="static")
 # add the sub-APIs
 app.include_router(airtable, prefix="/airtable", tags=["airtable"])
 
