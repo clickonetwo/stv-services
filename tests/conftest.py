@@ -138,3 +138,27 @@ def ensure_schemas() -> dict:
         donation_schema=verify_donation_schema(),
         assignment_schema=verify_assignment_schema(),
     )
+
+
+@pytest.fixture(scope="session")
+def ensure_webhooks(ensure_schemas):
+    from stv_services.airtable import bulk
+    from stv_services.core import Configuration
+
+    bulk.register_webhooks(verbose=False)
+    webhooks = Configuration.get_global_config()["airtable_webhooks"]
+    ensure_schemas.update(hook_info=webhooks)
+    return ensure_schemas
+
+
+@pytest.fixture(scope="session")
+def ensure_web_process():
+    import requests, subprocess, signal
+
+    response = requests.get("http://localhost:8080/status", timeout=0.1)
+    process = None
+    if response.status_code != 200:
+        process = subprocess.Popen("uvicorn stv_services.web.main:app --port 8080")
+    yield "http://localhost:8080"
+    if process:
+        process.send_signal(signal.SIGINT)

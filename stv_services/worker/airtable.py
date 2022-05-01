@@ -34,11 +34,15 @@ from ..data_store import Postgres, model
 logger = logging.get_logger(__name__)
 
 
-def process_promotion_webhooks():
-    payloads = fetch_hook_payloads("volunteer")
-    process_promotion_webhook_payloads("volunteer", payloads)
-    payloads = fetch_hook_payloads("contact")
-    process_promotion_webhook_payloads("contact", payloads)
+def process_webhook_notification(name: str, _body: bytes = None):
+    if name == "volunteer":
+        payloads = fetch_hook_payloads("volunteer")
+        process_promotion_webhook_payloads("volunteer", payloads)
+    elif name == "contact":
+        payloads = fetch_hook_payloads("contact")
+        process_promotion_webhook_payloads("contact", payloads)
+    else:
+        raise ValueError(f"Unknown webhook type: '{name}'")
 
 
 def process_promotion_webhook_payloads(name: str, payloads: list[dict]):

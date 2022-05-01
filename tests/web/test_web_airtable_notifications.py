@@ -19,44 +19,31 @@
 #  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
+#
+import base64
+import hmac
+import json
 
-from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import RedirectResponse
+import pytest
 
-from .airtable import airtable
-from ..core import Configuration
-from ..core.logging import get_logger
-from ..data_store import ItemListAsync
-
-logger = get_logger(__name__)
-
-if Configuration.get_env() == "PRD":
-    app = FastAPI(openapi_url=None, docs_url=None, redoc_url=None)
-else:
-    app = FastAPI()
-
-# mounts an "independent" app on the /static path that handles static files
-app.mount("/static", StaticFiles(directory="static"), name="static")
-# add the sub-APIs
-app.include_router(airtable, prefix="/airtable", tags=["airtable"])
+from stv_services.airtable.webhook import validate_notification
+from stv_services.core.utilities import airtable_timestamp
 
 
-@app.get("/", response_class=RedirectResponse, status_code=303)
-async def redirect_to_status():
-    return "/status"
-
-
-@app.get("/status")
-async def status():
-    return {"message": "stv-services are running"}
-
-
-@app.on_event("startup")
-async def startup():
-    await ItemListAsync.initialize()
-
-
-@app.on_event("shutdown")
-async def shutdown():
-    await ItemListAsync.finalize()
+def test_airtable_notification_validation(ensure_webhooks):
+    hook_info = ensure_webhooks["hook_info"]
+    vol_info = hook_info["volunteer"]
+    notification = {
+        "base": {"id": vol_info["base_id"]},
+        "webhook": {"id": vol_info["hook_id"]},
+        "timestamp": airtable_timestamp(),
+    }
+    body = json.dumps(notification)
+    message = body.encode("ascii")
+    secret = base64.b64decode(vol_info["secret"])
+    digest = hmac.digest(secret, message, "sha256")
+    digest64 = base64.b64encode(digest)
+    name = validate_notification(body, digest64)
+    assert name == "volunteer"
+    with pytest.raises(ValueError):
+        validate_notification(body, "crapcrapcrapcrapcrapcrap")

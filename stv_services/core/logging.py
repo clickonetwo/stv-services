@@ -25,10 +25,14 @@ import os
 import sys
 
 
-def configure_logging():
-    logging.basicConfig(
-        format=f"%(severity)s:%(name)s:{os.getpid()}: %(message)s", level=logging.DEBUG
-    )
+# configur logging
+from stv_services.core import Configuration
+
+logging.basicConfig(
+    format=f"%(levelname)s:%(module)s:%(process)d: %(message)s",
+    level=logging.DEBUG if Configuration.get_env() == "DEV" else logging.INFO,
+    stream=sys.stdout,
+)
 
 
 def get_logger(name):

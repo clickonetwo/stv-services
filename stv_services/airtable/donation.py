@@ -33,6 +33,7 @@ from .utils import (
 )
 from ..action_network.donation import ActionNetworkDonation
 from ..core import Configuration
+from ..core.utilities import airtable_timestamp
 from ..data_store import model
 
 donation_table_name = "Donations"
@@ -81,8 +82,7 @@ def create_donation_record(conn: Connection, donation: ActionNetworkDonation) ->
             if value := donation.get(field_name):
                 record[column_ids[field_name]] = value
         elif field_name == "created_date":
-            # Airtable requires a special format: "2014-09-05T12:34:56.000Z"
-            value = donation[field_name].strftime("%Y-%m-%dT%H:%M:%SZ")
+            value = airtable_timestamp(donation[field_name])
             record[column_ids[field_name]] = value
         elif field_name == "recurrence_data":
             # this is a boolean from parsing the recurrence data

@@ -67,6 +67,7 @@ def register_hook(name: str, base_id: str, table_id: str, field_ids: list[str]):
     results = response.json()
     reg_data = {
         "spec": spec,
+        "hook_name": name,
         "hook_id": results["id"],
         "base_id": base_id,
         "table_id": table_id,
@@ -77,7 +78,7 @@ def register_hook(name: str, base_id: str, table_id: str, field_ids: list[str]):
     config.save_to_data_store()
 
 
-def sync_hooks(verbose: bool = True, force_remove=False):
+def sync_hooks(verbose: bool = True, force_remove: bool = False):
     """
     Remove any Airtable webhooks we aren't aware of. Also remove any webhooks
     on our side that Airtable is not aware of, and return the names of those
@@ -132,10 +133,13 @@ def sync_hooks(verbose: bool = True, force_remove=False):
                 del hook_info[name]
         else:
             if verbose:
-                print(f"All hooks are registered.")
+                if hook_info:
+                    print(f"All hooks are registered.")
+                else:
+                    print(f"There are no registered hooks.")
     else:
         if verbose:
-            print(f"All hooks are deleted")
+            print(f"There are no registered hooks.")
     config.save_to_data_store()
 
 
@@ -163,28 +167,43 @@ def fetch_hook_payloads(name: str) -> list[dict]:
     return payloads
 
 
-def validate_notification(body: str, hex_digest: str) -> str:
-    data = json.loads(body)
-    base_id = data.get("base") and data.get("base").get("id")
-    hook_id = data.get("webhook") and data.get("webhook").get("id")
-    timestamp = data.get("timestamp") and parse(data.get("timestamp"))
+def validate_notification(payload: dict, body: bytes, digest: str) -> str:
+    base_id = payload.get("base") and payload.get("base").get("id")
+    hook_id = payload.get("webhook") and payload.get("webhook").get("id")
+    timestamp = payload.get("timestamp") and parse(payload.get("timestamp"))
     if not base_id or not hook_id or not timestamp:
-        ValueError(f"Notification is missing required elements: {data}")
+        ValueError(f"Notification is missing required elements: {payload}")
     hook_info: dict = Configuration.get_global_config()["airtable_webhooks"]
     for name, info in hook_info.items():
         if hook_id == info["hook_id"] and base_id == info["base_id"]:
-            validate_notification_signature(info, body, hex_digest)
+            validate_notification_signature(info, body, digest)
             return name
     else:
-        ValueError(f"Unknown base or hook ID: {data}")
+        ValueError(f"Unknown base or hook ID: {payload}")
 
 
-def validate_notification_signature(info: dict, body: str, hex_digest: str):
+def validate_notification_signature(info: dict, body: bytes, digest: str):
+    if digest.startswith("hmac-sha256="):
+        digest = digest[len("hmac-sha256=") :]
+        digest_bytes = bytes.fromhex(digest)
+    else:
+        raise ValueError(f"Digest header in incorrect format: '{digest}'")
     secret64 = info["secret"]
     secret = base64.b64decode(secret64)
-    digest = base64.b16decode(hex_digest, casefold=True)
-    correct_digest = hmac.digest(secret, body, "sha256")
-    valid = hmac.compare_digest(digest, correct_digest)
+    try:
+        body_str = body.decode("ascii")
+        trimmed_body = body_str.strip().encode("ascii")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        raise ValueError(f"Notification body not ascii: {body}")
+    correct_bytes = hmac.digest(secret, body, "sha256")
+    valid = hmac.compare_digest(digest_bytes, correct_bytes)
     if not valid:
-        print("invalid:", digest, correct_digest)
-    return
+        # should fail with ValueError, but we don't care
+        correct = correct_bytes.hex()
+        raise ValueError(
+            f"HMAC validation fails:\n"
+            f"\thook name: {info['hook_name']}"
+            f"\tbody: {body_str}\n"
+            f"\tour digest: {correct}\n"
+            f"\ttheir digest: {digest}"
+        )

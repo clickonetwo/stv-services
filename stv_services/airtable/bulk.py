@@ -51,6 +51,7 @@ from stv_services.airtable.volunteer import (
 )
 from stv_services.core import Configuration
 from stv_services.data_store import Postgres
+from stv_services.worker.airtable import process_webhook_notification
 
 
 def verify_schemas(verbose: bool = True):
@@ -199,7 +200,9 @@ def bulk_remove_records(
         print(f"Deleted {deletes} records.")
 
 
-def register_webhooks(verbose: bool = True):
+def register_webhooks(verbose: bool = True, sync_first: bool = False):
+    if sync_first:
+        sync_webhooks(verbose)
     if verbose:
         print(f"Registering contact webhook...")
     register_contact_hook()
@@ -214,5 +217,16 @@ def sync_webhooks(verbose: bool = True, force_remove: bool = False):
     if verbose:
         print(f"Syncing webhooks against Airtable...")
     webhook.sync_hooks(verbose, force_remove)
+    if verbose:
+        print(f"Done.")
+
+
+def fetch_and_process_all_webhooks(verbose: bool = True):
+    if verbose:
+        print(f"Fetching and processing 'volunteer' Airtable payloads...")
+    process_webhook_notification("volunteer")
+    if verbose:
+        print(f"Fetching and processing 'contact' Airtable payloads...")
+    process_webhook_notification("contact")
     if verbose:
         print(f"Done.")

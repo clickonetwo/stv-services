@@ -20,8 +20,18 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 #
-from datetime import datetime
+from datetime import datetime, timezone
 
 
-def timestamp() -> str:
-    return datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S.%f %Z")
+def local_timestamp(dt: datetime = datetime.now()) -> str:
+    return dt.astimezone().strftime("%Y-%m-%d %H:%M:%S.%f %Z")
+
+
+def airtable_timestamp(dt: datetime = datetime.now()) -> str:
+    naive_utc = dt.astimezone(tz=timezone.utc).replace(tzinfo=None)
+    return naive_utc.isoformat(timespec="milliseconds") + "Z"
+
+
+def action_network_timestamp(dt: datetime = datetime.now()) -> str:
+    naive_utc = dt.astimezone(tz=timezone.utc).replace(tzinfo=None)
+    return naive_utc.isoformat(timespec="seconds") + "Z"

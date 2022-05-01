@@ -32,6 +32,7 @@ from .person import import_people, ActionNetworkPerson
 from .submission import import_submissions, insert_submissions_from_hashes
 from .utils import fetch_related_hashes, fetch_hash
 from ..core import Configuration
+from ..core.utilities import action_network_timestamp
 from ..data_store import model, Postgres
 
 
@@ -187,5 +188,5 @@ def update_airtable_classifications(verbose: bool = True):
 def get_update_filter(timestamp: Optional[float], force: bool = False) -> Optional[str]:
     if timestamp and not force:
         last_update_time = datetime.fromtimestamp(timestamp, tz=timezone.utc)
-        last_update_string = last_update_time.strftime("%Y-%m-%dT%H:%M:%SZ")
+        last_update_string = action_network_timestamp(last_update_time)
         return f"modified_date gt '{last_update_string}'"

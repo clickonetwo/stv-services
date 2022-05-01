@@ -284,10 +284,13 @@ def dump_config(ctx: click.Context, path: str = None):
 
 
 @stv.command()
+@click.option(
+    "--sync-first/--no-sync-first", default=False, help="Sync before registering"
+)
 @click.pass_context
-def register_webhooks(ctx: click.Context):
+def register_webhooks(ctx: click.Context, sync_first: bool = False):
     verbose = ctx.obj["verbose"]
-    at_bulk.register_webhooks(verbose)
+    at_bulk.register_webhooks(verbose, sync_first)
 
 
 @stv.command()
@@ -298,6 +301,13 @@ def register_webhooks(ctx: click.Context):
 def sync_webhooks(ctx: click.Context, force_remove: bool = False):
     verbose = ctx.obj["verbose"]
     at_bulk.sync_webhooks(verbose, force_remove)
+
+
+@stv.command()
+@click.pass_context
+def fetch_and_process_webhooks(ctx: click.Context):
+    verbose = ctx.obj["verbose"]
+    at_bulk.fetch_and_process_all_webhooks(verbose)
 
 
 if __name__ == "__main__":
