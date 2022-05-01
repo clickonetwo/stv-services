@@ -20,7 +20,7 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 #
-
+import sqlalchemy as sa
 from sqlalchemy.future import Connection
 
 from .schema import fetch_and_validate_table_schema, FieldInfo
@@ -31,6 +31,7 @@ from .utils import (
 from .webhook import register_hook
 from ..action_network.person import ActionNetworkPerson
 from ..core import Configuration
+from ..data_store import model
 
 contact_table_name = "Contacts"
 contact_table_schema = {
@@ -50,6 +51,7 @@ contact_table_schema = {
     "is_funder": FieldInfo("In Fundraising Table?", "checkbox", "person"),
     "custom1": FieldInfo("2022 Signup Interests*", "multipleSelects", "compute"),
     "custom2": FieldInfo("2022 Signup Notes*", "multilineText", "compute"),
+    "team": FieldInfo("Pod Members*", "multipleRecordLinks", "compute"),
 }
 custom1_field_map = {
     "2022_calls": "Phone Bank",
@@ -72,7 +74,7 @@ def verify_contact_schema() -> dict:
     return access_info
 
 
-def create_contact_record(_: Connection, person: ActionNetworkPerson) -> dict:
+def create_contact_record(conn: Connection, person: ActionNetworkPerson) -> dict:
     config = Configuration.get_global_config()
     column_ids = config["airtable_stv_contact_schema"]["column_ids"]
     record = dict()
@@ -88,6 +90,17 @@ def create_contact_record(_: Connection, person: ActionNetworkPerson) -> dict:
             interests.add(selection_text)
     record[column_ids["custom1"]] = list(interests)
     record[column_ids["custom2"]] = custom_fields.get("2022_notes", "")
+    query = sa.select(model.person_info.c.contact_record_id).where(
+        sa.and_(
+            model.person_info.c.team_lead == person["uuid"],
+            model.person_info.c.contact_record_id != "",
+        )
+    )
+    rows: list[dict] = conn.execute(query).mappings().all()
+    if rows:
+        record[column_ids["team"]] = [r["contact_record_id"] for r in rows]
+    else:
+        record[column_ids["team"]] = []
     return record
 
 

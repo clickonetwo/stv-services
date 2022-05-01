@@ -24,7 +24,7 @@ def upgrade():
         sa.Column("uuid", sa.Text, primary_key=True, nullable=False),
         sa.Column("created_date", Timestamp, nullable=False),
         sa.Column("modified_date", Timestamp, index=True, nullable=False),
-        sa.Column("origin_system", sa.Text, index=True, nullable=True),
+        sa.Column("origin_system", sa.Text, index=True, default=""),
         sa.Column("title", sa.Text, index=True, nullable=False),
     )
 

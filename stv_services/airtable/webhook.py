@@ -44,10 +44,10 @@ def register_hook(name: str, base_id: str, table_id: str, field_ids: list[str]):
                 "recordChangeScope": table_id,
                 "watchDataInFieldIds": field_ids,
             },
+            "includes": {
+                "includePreviousCellValues": True,
+            },
         },
-        # "includes": {
-        #     "includePreviousCellValues": True,
-        # },
     }
     url = None
     if server_url := config.get("stv_api_base_url"):
