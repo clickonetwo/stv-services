@@ -27,10 +27,11 @@ import sqlalchemy as sa
 from sqlalchemy.future import Connection
 
 from .donation import import_donations, import_donations_from_hashes
-from .fundraising_page import import_fundraising_pages
+from .fundraising_page import import_fundraising_pages, ActionNetworkFundraisingPage
 from .person import import_people, ActionNetworkPerson
 from .submission import import_submissions, insert_submissions_from_hashes
 from .utils import fetch_related_hashes, fetch_hash
+from ..act_blue.attribution import calculate_attribution
 from ..core import Configuration
 from ..core.utilities import action_network_timestamp
 from ..data_store import model, Postgres
@@ -113,6 +114,39 @@ def update_fundraising_pages(
     if not max_pages:
         config["fundraising_pages_last_update_timestamp"] = start_timestamp.timestamp()
         config.save_to_data_store()
+
+
+def update_fundraising_page_attributions(verbose: bool = True, force: bool = False):
+    """
+    Update fundraising page attributions.  Also updates any
+    discovered supporters and any existing donations for
+    pages with discovered supporters.
+    """
+    if force:
+        query = sa.select(model.fundraising_page_info)
+    else:
+        query = sa.select(model.fundraising_page_info).where(
+            model.fundraising_page_info.c.attribution_status == ""
+        )
+    if verbose:
+        kind = "all" if force else "unattributed"
+        print(f"Doing attribution of {kind} fundraising pages...")
+    with Postgres.get_global_engine().connect() as conn:  # type: Connection
+        pages = ActionNetworkFundraisingPage.from_query(conn, query)
+        total, count = len(pages), 0
+        for page in pages:
+            if verbose and count > 0 and count % 50 == 0:
+                print(f"Processed {count} of {total}...")
+            count += 1
+            if page["attribution_status"] == "manual":
+                pass
+            elif page["origin_system"] == "ActBlue":
+                calculate_attribution(conn, page, verbose)
+            else:
+                page["attribution_status"] = "general"
+                page.persist(conn)
+        if verbose:
+            print(f"Processed {count} pages.")
 
 
 def update_submissions(verbose: bool = True, force: bool = False):

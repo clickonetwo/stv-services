@@ -125,6 +125,9 @@ fundraising_page_info = sa.Table(
     sa.Column("modified_date", Timestamp, index=True, nullable=False),
     sa.Column("origin_system", sa.Text, index=True, default=""),
     sa.Column("title", sa.Text, index=True, nullable=False),
+    sa.Column("attribution_status", index=True, default=""),
+    sa.Column("attribution_email", sa.Text, index=True, default=""),
+    sa.Column("attribution_uuid", sa.Text, index=True, default=""),
 )
 
 # Form submission info from Action Network
