@@ -61,10 +61,13 @@ def update_all(ctx: click.Context):
     an_bulk.update_people(verbose)
     an_bulk.update_donation_summaries(verbose)
     an_bulk.update_airtable_classifications(verbose)
+    at_bulk.verify_schemas(verbose)
+    at_bulk.sync_webhooks(verbose, force_remove=True)
     at_bulk.update_volunteers(verbose)
     at_bulk.update_contacts(verbose)
     at_bulk.update_funders(verbose)
     at_bulk.update_donation_records(verbose)
+    at_bulk.register_webhooks(verbose)
 
 
 @stv.command()
@@ -257,7 +260,7 @@ def delete_action_network_data(ctx: click.Context, confirm: bool = False):
 
 
 @stv.command()
-@click.option("--path", help="Import from this path")
+@click.option("--path", help="Import from this path (default stdin)")
 @click.pass_context
 def load_config(ctx: click.Context, path: str = None):
     verbose = ctx.obj["verbose"]
@@ -271,7 +274,7 @@ def load_config(ctx: click.Context, path: str = None):
 
 
 @stv.command()
-@click.option("--path", help="Dump to this path")
+@click.option("--path", help="Dump to this path (default stdout)")
 @click.pass_context
 def dump_config(ctx: click.Context, path: str = None):
     verbose = ctx.obj["verbose"]
