@@ -173,9 +173,10 @@ def validate_notification(payload: dict, body: bytes, digest: str) -> str:
     timestamp = payload.get("timestamp") and parse(payload.get("timestamp"))
     if not base_id or not hook_id or not timestamp:
         ValueError(f"Notification is missing required elements: {payload}")
-    hook_info: dict = Configuration.get_global_config()["airtable_webhooks"]
+    config = Configuration.get_global_config()
+    hook_info = config.get("airtable_webhooks", {})
     for name, info in hook_info.items():
-        if hook_id == info["hook_id"] and base_id == info["base_id"]:
+        if hook_id == info.get("hook_id") and base_id == info.get("base_id"):
             validate_notification_signature(info, body, digest)
             return name
     else:

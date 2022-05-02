@@ -51,6 +51,7 @@ contact_table_schema = {
     "is_funder": FieldInfo("In Fundraising Table?", "checkbox", "person"),
     "custom1": FieldInfo("2022 Signup Interests*", "multipleSelects", "compute"),
     "custom2": FieldInfo("2022 Signup Notes*", "multilineText", "compute"),
+    "team_lead": FieldInfo("Pod Leader", "multipleRecordLinks", "observe"),
     "team": FieldInfo("Pod Members*", "multipleRecordLinks", "compute"),
 }
 custom1_field_map = {
@@ -118,5 +119,5 @@ def register_contact_hook():
     base_id = schema["base_id"]
     table_id = schema["table_id"]
     column_ids = schema["column_ids"]
-    field_ids = [column_ids[name] for name in ["is_funder"]]
+    field_ids = [column_ids[name] for name in ["is_funder", "team_lead"]]
     register_hook("contact", base_id, table_id, field_ids)

@@ -120,12 +120,18 @@ def process_team_webhook_payloads(name: str, payloads: list[dict]):
                 if field_id in new_vals:
                     changed_ids.add(record_id)
                     if new_leads := new_vals.get(field_id, []):
-                        changed_ids.add(new_leads[0])
-                        new_lead_map[record_id] = new_leads[0]
+                        if len(new_leads) > 1:
+                            logger.error(f"Two team leads for {record_id}: {new_leads}")
+                        new_lead = new_leads[0].get("id")
+                        changed_ids.add(new_lead)
+                        new_lead_map[record_id] = new_lead
                     else:
                         new_lead_map[record_id] = ""
                     if old_leads := old_vals.get(field_id, []):
-                        changed_ids.add(old_leads[0])
+                        if len(old_leads) > 1:
+                            logger.error(f"Two team leads for {record_id}: {old_leads}")
+                        old_lead = old_leads[0].get("id")
+                        changed_ids.add(old_lead)
     change_team_leads(list(changed_ids), new_lead_map)
 
 
@@ -135,9 +141,10 @@ def change_team_leads(changed_ids: list[str], new_lead_map: dict):
     )
     with Postgres.get_global_engine().connect() as conn:  # type: Connection
         people = ActionNetworkPerson.from_query(conn, query)
+        back_map = {person["contact_record_id"]: person["uuid"] for person in people}
         for person in people:
             if new_lead := new_lead_map.get(person["contact_record_id"]):
-                person["team_lead"] = new_lead
+                person["team_lead"] = back_map[new_lead]
             else:
                 person["team_lead"] = ""
             person.persist(conn)

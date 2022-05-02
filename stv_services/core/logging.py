@@ -24,8 +24,6 @@ import logging
 import os
 import sys
 
-
-# configur logging
 from stv_services.core import Configuration
 
 logging.basicConfig(
@@ -33,6 +31,13 @@ logging.basicConfig(
     level=logging.DEBUG if Configuration.get_env() == "DEV" else logging.INFO,
     stream=sys.stdout,
 )
+
+
+def init_logging(verbose: bool = False):
+    env = Configuration.get_env()
+    if verbose:
+        logger = logging.getLogger(__name__)
+        logger.info(f"Running in {env} environment")
 
 
 def get_logger(name):
@@ -46,3 +51,6 @@ def log_exception(logger: logging.Logger, context: str) -> str:
     message = f"{context}: {f_name}, {exc_tb.tb_lineno}: {repr(exc_obj)}"
     logger.critical(message)
     return message
+
+
+init_logging(verbose=True)
