@@ -62,11 +62,12 @@ def update_all(ctx: click.Context):
     an_bulk.update_donation_summaries(verbose)
     an_bulk.update_airtable_classifications(verbose)
     at_bulk.verify_schemas(verbose)
-    at_bulk.sync_webhooks(verbose, force_remove=True)
     at_bulk.update_volunteers(verbose)
     at_bulk.update_contacts(verbose)
     at_bulk.update_funders(verbose)
     at_bulk.update_donation_records(verbose)
+    at_bulk.sync_webhooks()
+    at_bulk.fetch_and_process_all_webhooks()
     at_bulk.register_webhooks(verbose)
 
 

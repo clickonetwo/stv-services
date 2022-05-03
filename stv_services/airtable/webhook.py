@@ -22,7 +22,6 @@
 #
 import base64
 import hmac
-import json
 
 from dateutil.parser import parse
 
@@ -81,8 +80,12 @@ def register_hook(name: str, base_id: str, table_id: str, field_ids: list[str]):
 def sync_hooks(verbose: bool = True, force_remove: bool = False):
     """
     Remove any Airtable webhooks we aren't aware of. Also remove any webhooks
-    on our side that Airtable is not aware of, and return the names of those
-    hooks that need to be re-registered.
+    on our side that Airtable is not aware of.
+
+    When we do the sync, we insist that the spec found match the one we
+    have registered on our side.  Otherwise, we remove the old one.  So
+    the canonical action to take after changing a webhook is to sync and
+    then re-register all hooks.
 
     This code assumes that all of our hooks are against the single Airtable
     base that we are configured to use.  Even though we keep the Base ID with
@@ -91,9 +94,7 @@ def sync_hooks(verbose: bool = True, force_remove: bool = False):
     """
     config = Configuration.get_global_config()
     api_url = config["airtable_api_base_url"]
-    # organize our hooks by ID for quick access
     hook_info: dict = config.get("airtable_webhooks", {})
-    hooks_by_id = {info["hook_id"]: name for name, info in hook_info.items()}
     # fetch the existing hooks from Airtable
     base_name = config["airtable_stv_base_name"]
     if verbose:
@@ -105,28 +106,27 @@ def sync_hooks(verbose: bool = True, force_remove: bool = False):
     response.raise_for_status()
     base_hooks: list[dict] = response.json()["webhooks"]
     # walk the existing hooks and remove non-matches on either side
+    matched = set()
     for hook in base_hooks:
-        hook_id = hook["id"]
-        name = hooks_by_id.get(hook_id)
+        name = find_spec(hook, hook_info)
         if name and not force_remove:
             if verbose:
                 print(f"Hook '{name}' is registered.")
-            del hooks_by_id[hook_id]
+            matched.add(name)
         if force_remove or not name:
+            hook_id = hook["id"]
             if name:
                 if verbose:
                     print(f"Deleting hook '{name}'...")
                 del hook_info[name]
             else:
                 if verbose:
-                    print(
-                        f"Deleting unknown hook '{hook_id}' "
-                        f"with spec: {hook['specification']}..."
-                    )
+                    spec = hook["specification"]
+                    print(f"Deleting unknown hook with spec: {spec}...")
             url = api_url + f"/bases/{base_id}/webhooks/{hook_id}"
             session.delete(url).raise_for_status()
     if not force_remove:
-        if missing := list(hooks_by_id.values()):
+        if missing := [name for name in hook_info if name not in matched]:
             if verbose:
                 print(f"Deleting unregistered hooks: {missing}")
             for name in missing:
@@ -193,7 +193,6 @@ def validate_notification_signature(info: dict, body: bytes, digest: str):
     secret = base64.b64decode(secret64)
     try:
         body_str = body.decode("ascii")
-        trimmed_body = body_str.strip().encode("ascii")
     except (UnicodeEncodeError, UnicodeDecodeError):
         raise ValueError(f"Notification body not ascii: {body}")
     correct_bytes = hmac.digest(secret, body, "sha256")
@@ -208,3 +207,27 @@ def validate_notification_signature(info: dict, body: bytes, digest: str):
             f"\tour digest: {correct}\n"
             f"\ttheir digest: {digest}"
         )
+
+
+def find_spec(hook: dict, hook_info: dict) -> str:
+    """
+    Look for a hook in hooks whose spec matches that of hook.
+    Args:
+        hook: a retrieved webhook body from Airtable
+        hook_info: the dictionary of STV registered hooks
+
+    Returns:
+        The matching STV hook name, or the empty string
+    """
+    hook_id = hook["id"]
+    for name, info in hook_info.items():
+        if info["hook_id"] != hook_id:
+            continue
+        s1 = hook["specification"]
+        s2 = info["spec"]
+        field_ids1: list = s1["options"]["filters"]["watchDataInFieldIds"]
+        field_ids2: list = s2["options"]["filters"]["watchDataInFieldIds"]
+        if field_ids1.sort() == field_ids2.sort():
+            return name
+    else:
+        return ""
