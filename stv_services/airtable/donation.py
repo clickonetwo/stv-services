@@ -50,6 +50,12 @@ donation_table_schema = {
     "donor_id": FieldInfo(
         "Donor Name (from Contacts)*", "multipleRecordLinks", "compute"
     ),
+    "attribution_id": FieldInfo(
+        "Initial Fundraiser Attribution", "multipleRecordLinks", "compute"
+    ),
+    "override_attribution_id": FieldInfo(
+        "Fundraiser Attribution", "multipleRecordLinks", "compute"
+    ),
 }
 
 
@@ -69,11 +75,22 @@ def create_donation_record(conn: Connection, donation: ActionNetworkDonation) ->
     query = sa.select(model.person_info).where(
         model.person_info.c.uuid == donation["donor_id"]
     )
-    match = conn.execute(query).mappings().first()
-    if not match:
+    donor: dict = conn.execute(query).mappings().first()
+    if not donor:
         raise KeyError("Donation '{donation['uuid']}' has no donor")
-    if not match["contact_record_id"]:
-        raise KeyError("Donor '{person['uuid']}' is not a contact")
+    if not donor["contact_record_id"]:
+        raise KeyError(f"Donor '{donor['uuid']}' is not a contact")
+    # find the matching fundraising page record, if there is one
+    query = sa.select(model.person_info).where(
+        sa.and_(
+            model.fundraising_page_info.c.uuid == donation["fundraising_page_id"],
+            model.person_info.c.uuid == model.fundraising_page_info.c.attribution_uuid,
+        )
+    )
+    attribution: dict = conn.execute(query).mappings().first()
+    if attribution is not None:
+        if not attribution["funder_record_id"]:
+            raise KeyError(f"Attributor {attribution['uuid']} is not a funder")
     column_ids = config["airtable_stv_donation_schema"]["column_ids"]
     record = dict()
     for field_name, info in donation_table_schema.items():
@@ -81,18 +98,18 @@ def create_donation_record(conn: Connection, donation: ActionNetworkDonation) ->
             # all fields should have values, but we are cautious
             if value := donation.get(field_name):
                 record[column_ids[field_name]] = value
-        elif field_name == "created_date":
-            value = airtable_timestamp(donation[field_name])
-            record[column_ids[field_name]] = value
-        elif field_name == "recurrence_data":
-            # this is a boolean from parsing the recurrence data
-            value = donation[field_name].get("recurring", False)
-            record[column_ids[field_name]] = value
-        elif field_name == "donor_id":
-            # this is a link to the Donor's record ID in the Contacts table
-            record[column_ids[field_name]] = [match["contact_record_id"]]
-        else:
-            raise KeyError(f"Unknown donation field: {field_name}")
+    # created date must be an airtable date
+    value = airtable_timestamp(donation["created_date"])
+    record[column_ids["created_date"]] = value
+    # recurrence data requires parsing the recurrence object
+    value = donation["recurrence_data"].get("recurring", False)
+    record[column_ids["recurrence_data"]] = value
+    # this is a link to the Donor's record ID in the Contacts table
+    record[column_ids["donor_id"]] = [donor["contact_record_id"]]
+    # set the attribution, if any
+    if attribution is not None:
+        record[column_ids["attribution_id"]] = attribution["funder_record_id"]
+        record[column_ids["override_attribution_id"]] = attribution["funder_record_id"]
     return record
 
 
