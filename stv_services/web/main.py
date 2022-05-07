@@ -24,6 +24,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 
+from .act_blue import act_blue
 from .airtable import airtable
 from ..core import Configuration
 from ..core.logging import get_logger
@@ -40,6 +41,7 @@ else:
 # app.mount("/static", StaticFiles(directory="static"), name="static")
 # add the sub-APIs
 app.include_router(airtable, prefix="/airtable", tags=["airtable"])
+app.include_router(act_blue, prefix="/actblue", tags=["actblue"])
 
 
 @app.get("/", response_class=RedirectResponse, status_code=303)
@@ -54,6 +56,7 @@ async def status():
 
 @app.on_event("startup")
 async def startup():
+    Configuration.get_global_config()
     await ItemListAsync.initialize()
 
 

@@ -26,7 +26,7 @@ from sqlalchemy.future import Connection
 
 from stv_services.action_network.donation import ActionNetworkDonation
 from stv_services.action_network.person import ActionNetworkPerson
-from stv_services.action_network.utils import ActionNetworkPersistedDict
+from stv_services.data_store.persisted_dict import PersistedDict
 from stv_services.airtable import webhook
 from stv_services.airtable.assignment import verify_assignment_schema
 from stv_services.airtable.contact import (
@@ -126,7 +126,7 @@ def bulk_upsert_records(
     conn: Connection,
     record_type: str,
     record_maker: Callable,
-    dicts: list[ActionNetworkPersistedDict],
+    dicts: list[PersistedDict],
     verbose: bool = True,
 ):
     total, inserts, updates = len(dicts), 0, 0
@@ -183,7 +183,7 @@ def remove_donation_records(verbose: bool = True):
 def bulk_remove_records(
     conn: Connection,
     record_type: str,
-    dicts: list[ActionNetworkPersistedDict],
+    dicts: list[PersistedDict],
     verbose: bool = True,
 ):
     total, deletes = len(dicts), 0

@@ -27,14 +27,14 @@ from sqlalchemy.future import Connection
 
 from .utils import (
     validate_hash,
-    ActionNetworkPersistedDict,
     lookup_objects,
     fetch_all_child_hashes,
 )
+from ..data_store.persisted_dict import PersistedDict
 from ..data_store import model, Postgres
 
 
-class ActionNetworkSubmission(ActionNetworkPersistedDict):
+class ActionNetworkSubmission(PersistedDict):
     def __init__(self, **fields):
         for key in ["form_id", "person_id"]:
             if not fields.get(key):

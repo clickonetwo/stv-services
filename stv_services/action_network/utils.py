@@ -26,10 +26,8 @@ from typing import Callable, Any
 from urllib.parse import urlencode
 
 import requests
-import sqlalchemy as sa
 from dateutil.parser import parse
 from restnavigator import Navigator
-from sqlalchemy.dialects import postgresql as psql
 from sqlalchemy.future import Connection
 
 from ..core import Configuration, Session
@@ -49,75 +47,6 @@ def validate_hash(data: dict) -> (str, datetime, datetime):
     if not hash_id or not created_date or not modified_date:
         raise ValueError(f"Action Network hash is missing required items: {data}")
     return hash_id, created_date, modified_date
-
-
-class ActionNetworkPersistedDict(dict):
-    """
-    A `PersistedDict` is a standard dictionary with an associated table
-    that knows how to save and read its field values from the database.
-    """
-
-    def __init__(self, table: sa.Table, **fields):
-        """
-        Since this object is only used for Action Network object data,
-        it is smart about requiring the id and created/modified date fields.
-
-        Args:
-            table: the associated table in the database
-            **fields: standard dict key/value pairs for the fields
-        """
-        self.table = table
-        if (
-            not fields.get("uuid")
-            or not fields.get("created_date")
-            or not fields.get("modified_date")
-        ):
-            raise ValueError(
-                f"uuid, created_date, and modified_date must be present: {fields}"
-            )
-        fields = {key: value for key, value in fields.items() if value is not None}
-        super().__init__(**fields)
-
-    def persist(self, conn: Connection):
-        """
-        Persist the current object to the datastore using the given connection.
-
-        Caller is responsible for the commit.
-        """
-        insert_fields = {key: value for key, value in self.items() if value is not None}
-        update_fields = {
-            key: value for key, value in insert_fields.items() if key != "uuid"
-        }
-        insert_query = psql.insert(self.table).values(insert_fields)
-        upsert_query = insert_query.on_conflict_do_update(
-            index_elements=["uuid"], set_=update_fields
-        )
-        conn.execute(upsert_query)
-
-    def reload(self, conn: Connection):
-        """
-        Reload the object from the database on the given connection.
-        """
-        query = sa.select(self.table).where(self.table.c.uuid == self["uuid"])
-        result = conn.execute(query).first()
-        if result is None:
-            raise KeyError(f"Can't reload person identified by '{self['uuid']}'")
-        fields = {
-            key: value for key, value in result._asdict().items() if value is not None
-        }
-        self.clear()
-        self.update(fields)
-        pass
-
-    def remove(self, conn: Connection):
-        """
-        Remove the object from the database on the given connection.
-
-        Caller is responsible for the commit.
-        """
-        query = sa.delete(self.table).where(self.table.c.uuid == self["uuid"])
-        conn.execute(query)
-        conn.commit()
 
 
 def lookup_objects(

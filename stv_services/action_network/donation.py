@@ -28,15 +28,15 @@ from sqlalchemy.future import Connection
 
 from .utils import (
     validate_hash,
-    ActionNetworkPersistedDict,
     fetch_hash,
     fetch_all_hashes,
     lookup_objects,
 )
+from ..data_store.persisted_dict import PersistedDict
 from ..data_store import model, Postgres
 
 
-class ActionNetworkDonation(ActionNetworkPersistedDict):
+class ActionNetworkDonation(PersistedDict):
     def __init__(self, **fields):
         for key in ["amount", "recurrence_data", "donor_id", "fundraising_page_id"]:
             if not fields.get(key):

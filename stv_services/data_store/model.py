@@ -71,12 +71,14 @@ person_info = sa.Table(
     sa.Column("is_contact", sa.Boolean, index=True, default=False),
     sa.Column("contact_record_id", sa.Text, index=True, default=""),
     sa.Column("contact_last_updated", Timestamp, index=True, default=epoch),
+    sa.Column("contact_assignments", psql.JSONB, default={}),
     sa.Column("is_volunteer", sa.Boolean, index=True, default=False),
     sa.Column("volunteer_record_id", sa.Text, index=True, default=""),
     sa.Column("volunteer_last_updated", Timestamp, index=True, default=epoch),
     sa.Column("is_funder", sa.Boolean, index=True, default=False),
     sa.Column("funder_record_id", sa.Text, index=True, default=""),
     sa.Column("funder_last_updated", Timestamp, index=True, default=epoch),
+    sa.Column("funder_refcode", sa.Text, index=True, default=""),
 )
 
 # Externally-sourced Person info
@@ -114,6 +116,8 @@ donation_info = sa.Table(
     sa.Column("is_donation", sa.Boolean, index=True, default=False),
     sa.Column("donation_record_id", sa.Text, index=True, default=""),
     sa.Column("donation_last_updated", Timestamp, index=True, default=epoch),
+    # if the source is ActBlue, then the external_uuid is the ActBlue ID
+    sa.Column("external_uuid", sa.Text, index=True, default=""),
 )
 
 # Fundraising page info from Action Network
@@ -139,4 +143,22 @@ submission_info = sa.Table(
     sa.Column("modified_date", Timestamp, index=True, nullable=False),
     sa.Column("person_id", sa.Text, index=True, nullable=False),
     sa.Column("form_id", sa.Text, index=True, nullable=False),
+)
+
+# Donation attribution and recurrence info from Act Blue
+donation_metadata = sa.Table(
+    "donation_metadata",
+    metadata,
+    # the line item is the UUID for Act Blue
+    sa.Column("uuid", sa.Text, primary_key=True, nullable=False),
+    sa.Column("created_date", Timestamp, index=True, nullable=False),
+    sa.Column("modified_date", Timestamp, index=True, nullable=False),
+    sa.Column("donor_email", sa.Text, index=True, nullable=False),
+    sa.Column("item_type", sa.Text, index=True, nullable=False),
+    # the ActBlue UUID sent to Action Network is the external_uuid
+    sa.Column("external_uuid", sa.Text, index=True, default=""),
+    sa.Column("recurrence_data", psql.JSONB, default=""),
+    sa.Column("form_name", sa.Text, index=True, default=""),
+    sa.Column("form_owner_email", sa.Text, index=True, default=""),
+    sa.Column("ref_codes", psql.JSONB, default={}),
 )

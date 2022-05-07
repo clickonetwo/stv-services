@@ -20,37 +20,5 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 #
-from logging import getLogger, Logger, basicConfig, DEBUG, INFO
-import os
-import sys
-
-from stv_services.core import Configuration
-
-basicConfig(
-    format=f"%(levelname)s:%(module)s:%(process)d: %(message)s",
-    level=DEBUG if Configuration.get_env() == "DEV" else INFO,
-    stream=sys.stdout,
-)
-
-
-def init_logging(verbose: bool = False):
-    env = Configuration.get_env()
-    if verbose:
-        logger = getLogger(__name__)
-        logger.info(f"Running in {env} environment")
-
-
-def get_logger(name):
-    return getLogger(name)
-
-
-def log_exception(logger: Logger, context: str) -> str:
-    """Log a message about an exception, and return the message"""
-    exc_type, exc_obj, exc_tb = sys.exc_info()
-    f_name = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-    message = f"{context}: {f_name}, {exc_tb.tb_lineno}: {repr(exc_obj)}"
-    logger.critical(message)
-    return message
-
-
-init_logging(verbose=True)
+def process_webhook_notification(body: dict):
+    pass

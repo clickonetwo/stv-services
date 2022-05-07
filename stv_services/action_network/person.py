@@ -28,15 +28,31 @@ from sqlalchemy.future import Connection
 
 from .utils import (
     validate_hash,
-    ActionNetworkPersistedDict,
     fetch_all_hashes,
     fetch_hash,
     lookup_objects,
 )
+from ..data_store.persisted_dict import PersistedDict
 from ..data_store import model, Postgres
 
+interest_table_map = {
+    "2022_calls": "contact",
+    "2022_doors": "contact",
+    "2022_fundraise": "funder",
+    "2022_recruit": "contact",
+    "2022_podlead": "contact",
+    "2022_branchlead": "contact",
+    "branch_lead_interest_I want to help build a branch in my region!": "contact",
+    "2022_notes": "contact",
+    "2022_happyhour": "funder",
+    "2022_fundraisepage": "funder",
+    "2022_donate": "funder",
+    "2022_fundraiseidea": "funder",
+    "2022_fundraisingnotes": "funder",
+}
 
-class ActionNetworkPerson(ActionNetworkPersistedDict):
+
+class ActionNetworkPerson(PersistedDict):
     def __init__(self, **fields):
         if not fields.get("email") and not fields.get("phone"):
             raise ValueError(f"Person record must have either email or phone: {fields}")
@@ -52,8 +68,19 @@ class ActionNetworkPerson(ActionNetworkPersistedDict):
             self["is_volunteer"] = True
         else:
             self["is_contact"] = True
+        # if they have checked any of the 2022 form fields, they are contacts
+        # and possibly funders (if it's a form field on the fundraising form)
+        if custom_fields := self.get("custom_fields"):
+            for key in custom_fields:
+                if table := interest_table_map.get(key):
+                    self["has_submission"] = True
+                    self["is_contact"] = True
+                    if table == "funder":
+                        self["is_funder"] = True
+        # if they didn't check any of the 2022 form fields, they may still have
+        # signed up with no interests, so look for any submissions of either the
+        # 2022 signup form or any forms in 2022
         if not self.get("has_submission"):
-            # see if they have submitted the 2022 signup form or any forms in 2022
             signup_form_2022 = "action_network:b399bd2b-b9a9-4916-9550-5a8a47e045fb"
             table = model.submission_info
             query = sa.select(table).where(
@@ -70,6 +97,9 @@ class ActionNetworkPerson(ActionNetworkPersistedDict):
             if signup:
                 self["has_submission"] = True
                 self["is_contact"] = True
+        # anyone with a recurring donation is automatically a funder
+        # TODO: mark the recurring donors!
+        # check their donation history to see if it makes them a funder
         if not self.get("is_funder"):
             # find their most recent donation
             table = model.donation_info
@@ -167,7 +197,7 @@ class ActionNetworkPerson(ActionNetworkPersistedDict):
                 postal_code = entry.get("postal_code")
                 country = entry.get("country")
                 break
-        custom_fields: dict = data.get("custom_fields")
+        custom_fields: dict = data.get("custom_fields", {})
         return cls(
             uuid=uuid,
             created_date=created_date,

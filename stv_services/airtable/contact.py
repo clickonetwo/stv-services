@@ -49,12 +49,18 @@ contact_table_schema = {
     "total_2021": FieldInfo("2021 Total Donations*", "currency", "person"),
     "summary_2021": FieldInfo("2021 Donations Summary*", "multilineText", "person"),
     "is_funder": FieldInfo("In Fundraising Table?", "checkbox", "person"),
-    "custom1": FieldInfo("2022 Signup Interests*", "multipleSelects", "compute"),
-    "custom2": FieldInfo("2022 Signup Notes*", "multilineText", "compute"),
+    "signup_interests": FieldInfo(
+        "2022 Signup Interests*", "multipleSelects", "compute"
+    ),
+    "signup_notes": FieldInfo("2022 Signup Notes*", "multilineText", "compute"),
+    "fundraise_interests": FieldInfo(
+        "2022 Fundraise Interests*", "multipleSelects", "compute"
+    ),
+    "fundraise_notes": FieldInfo("2022 Fundraise Notes*", "multilineText", "compute"),
     "team_lead": FieldInfo("Pod Leader", "multipleRecordLinks", "observe"),
     "team": FieldInfo("Pod Members*", "multipleRecordLinks", "compute"),
 }
-custom1_field_map = {
+signup_interest_map = {
     "2022_calls": "Phone Bank",
     "2022_doors": "Door Knock",
     "2022_fundraise": "Fundraise",
@@ -62,6 +68,12 @@ custom1_field_map = {
     "2022_podlead": "Start a Pod",
     "2022_branchlead": "Lead a Branch",
     "branch_lead_interest_I want to help build a branch in my region!": "Lead a Branch",
+}
+fundraise_interest_map = {
+    "2022_happyhour": "Host a Happy Hour",
+    "2022_fundraisepage": "Create a fundraising page",
+    "2022_donate": "Donate",
+    "2022_fundraiseidea": "Other Idea",
 }
 
 
@@ -85,12 +97,16 @@ def create_contact_record(conn: Connection, person: ActionNetworkPerson) -> dict
             if value := person.get(field_name):
                 record[column_ids[field_name]] = value
     custom_fields = person["custom_fields"]
-    interests = set()
-    for field_name, selection_text in custom1_field_map.items():
-        if custom_fields.get(field_name):
-            interests.add(selection_text)
-    record[column_ids["custom1"]] = list(interests)
-    record[column_ids["custom2"]] = custom_fields.get("2022_notes", "")
+    signup_interests, fundraise_interests = set(), set()
+    for name in custom_fields:
+        if interest := signup_interest_map.get(name):
+            signup_interests.add(interest)
+        if interest := fundraise_interest_map[name]:
+            fundraise_interests.add(interest)
+    record[column_ids["signup_interests"]] = list(signup_interests)
+    record[column_ids["signup_notes"]] = custom_fields.get("2022_notes", "")
+    record[column_ids["fundraise_interests"]] = list(fundraise_interests)
+    record[column_ids["fundraise_notes"]] = custom_fields.get("2022_notes", "")
     query = sa.select(model.person_info.c.contact_record_id).where(
         sa.and_(
             model.person_info.c.team_lead == person["uuid"],
@@ -107,7 +123,10 @@ def create_contact_record(conn: Connection, person: ActionNetworkPerson) -> dict
 
 def upsert_contacts(conn: Connection, people: list[ActionNetworkPerson]) -> (int, int):
     pairs = [(person, create_contact_record(conn, person)) for person in people]
-    return upsert_records(conn, "contact", pairs)
+    (inserted, updated) = upsert_records(conn, "contact", pairs)
+    # now insert any needed assignments for these people
+
+    return inserted, updated
 
 
 def delete_contacts(conn: Connection, people: list[ActionNetworkPerson]) -> int:

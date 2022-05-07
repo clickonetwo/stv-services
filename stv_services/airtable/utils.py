@@ -24,10 +24,9 @@
 import sqlalchemy as sa
 from sqlalchemy.future import Connection
 
-from .assignment import insert_empty_assignments
-from ..action_network.utils import ActionNetworkPersistedDict
 from ..core import Configuration, Session
 from ..data_store import model
+from ..data_store.persisted_dict import PersistedDict
 
 
 def find_records_to_update(dict_type: str, force: bool = False):
@@ -51,7 +50,7 @@ def find_records_to_update(dict_type: str, force: bool = False):
 # generic calls for inserting Action Network records into Airtable
 #
 def insert_records(
-    conn: Connection, dict_type: str, pairs: list[(ActionNetworkPersistedDict, dict)]
+    conn: Connection, dict_type: str, pairs: list[(PersistedDict, dict)]
 ) -> int:
     if not pairs:
         return 0
@@ -63,17 +62,11 @@ def insert_records(
         p_dict[id_field] = record_id
         p_dict[date_field] = p_dict["modified_date"]
         p_dict.persist(conn)
-    if dict_type == "contact":
-        # after contacts are inserted, we create empty assignments for them
-        contact_ids = [person[id_field] for person in dicts]
-        assignment_count = insert_empty_assignments(contact_ids)
-        if Configuration.get_env() == "DEV":
-            assert len(record_ids) == assignment_count
     return len(record_ids)
 
 
 def update_records(
-    conn: Connection, person_type: str, pairs: list[(ActionNetworkPersistedDict, dict)]
+    conn: Connection, person_type: str, pairs: list[(PersistedDict, dict)]
 ) -> int:
     if not pairs:
         return 0
@@ -91,7 +84,7 @@ def update_records(
 
 
 def upsert_records(
-    conn: Connection, person_type: str, pairs: list[(ActionNetworkPersistedDict, dict)]
+    conn: Connection, person_type: str, pairs: list[(PersistedDict, dict)]
 ) -> (int, int):
     _, _, _, id_field, _ = table_fields(person_type)
     inserts, updates = [], []
@@ -106,7 +99,7 @@ def upsert_records(
 
 
 def delete_records(
-    conn: Connection, person_type: str, dicts: list[ActionNetworkPersistedDict]
+    conn: Connection, person_type: str, dicts: list[PersistedDict]
 ) -> int:
     if not dicts:
         return 0

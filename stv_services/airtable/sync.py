@@ -26,7 +26,7 @@ import sqlalchemy as sa
 from sqlalchemy.future import Connection
 
 from stv_services.action_network.person import ActionNetworkPerson
-from stv_services.airtable.assignment import insert_empty_assignments
+from stv_services.airtable.assignment import insert_assignments
 from stv_services.core import Session, Configuration
 from stv_services.data_store import model, Postgres
 
@@ -114,7 +114,7 @@ def ensure_empty_assignments(verbose=True) -> int:
     for start in range(0, total, 50):
         if verbose and inserts > 0:
             print(f"({inserts})...", end="", flush=True)
-        inserts += insert_empty_assignments(needed[start : min(start + 50, total)])
+        # inserts += insert_assignments(needed[start : min(start + 50, total)])
     if verbose:
         print(f"({inserts})")
         print(f"Inserted {inserts} records.")

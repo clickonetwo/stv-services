@@ -35,6 +35,7 @@ def upgrade():
         sa.Column("is_donation", sa.Boolean, index=True, default=False),
         sa.Column("donation_record_id", sa.Text, index=True, default=""),
         sa.Column("donation_last_updated", Timestamp, index=True, default=epoch),
+        sa.Column("external_uuid", sa.Text, index=True, default=""),
     )
 
 
