@@ -51,7 +51,7 @@ donation_table_schema = {
         "Donor Name (from Contacts)*", "multipleRecordLinks", "compute"
     ),
     "attribution_id": FieldInfo(
-        "Initial Fundraiser Attribution", "multipleRecordLinks", "compute"
+        "Initial Fundraiser Attribution*", "multipleRecordLinks", "compute"
     ),
     "override_attribution_id": FieldInfo(
         "Fundraiser Attribution", "multipleRecordLinks", "compute"
