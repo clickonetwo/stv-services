@@ -26,6 +26,7 @@ def upgrade():
         sa.Column("modified_date", Timestamp, index=True, nullable=False),
         sa.Column("person_id", sa.Text, index=True, nullable=False),
         sa.Column("form_id", sa.Text, index=True, nullable=False),
+        sa.Index("ix_submission_info_uuid_hash", "uuid", postgresql_using="hash"),
     )
 
 

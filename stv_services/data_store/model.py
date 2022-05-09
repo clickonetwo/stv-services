@@ -31,9 +31,6 @@ metadata = sa.MetaData()
 Timestamp = sa.TIMESTAMP(timezone=True)
 epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
-# sentinel value for not-yet-computed donation totals
-not_computed = -1
-
 # Persistence for the `core.Configuration` class
 configuration = sa.Table(
     "configuration",
@@ -49,6 +46,7 @@ person_info = sa.Table(
     sa.Column("uuid", sa.Text, primary_key=True, nullable=False),
     sa.Column("created_date", Timestamp, index=True, nullable=False),
     sa.Column("modified_date", Timestamp, index=True, nullable=False),
+    sa.Column("published_date", Timestamp, index=True, default=epoch),
     sa.Column("email", sa.Text, unique=True, index=True, nullable=False),
     sa.Column("email_status", sa.Text, default=""),
     sa.Column("phone", sa.Text, index=True, default=""),
@@ -63,22 +61,26 @@ person_info = sa.Table(
     sa.Column("country", sa.Text, default=""),
     sa.Column("custom_fields", psql.JSONB, default={}),
     sa.Column("has_submission", sa.Boolean, default=False),
-    sa.Column("total_2020", sa.Integer, index=True, default=not_computed),
+    sa.Column("recur_start", Timestamp, default=epoch),
+    sa.Column("recur_end", Timestamp, default=epoch),
+    sa.Column("total_2020", sa.Integer, index=True, default=0),
     sa.Column("summary_2020", sa.Text, default=""),
-    sa.Column("total_2021", sa.Integer, index=True, default=not_computed),
+    sa.Column("total_2021", sa.Integer, index=True, default=0),
     sa.Column("summary_2021", sa.Text, default=""),
     sa.Column("team_lead", sa.Text, index=True, default=""),
     sa.Column("is_contact", sa.Boolean, index=True, default=False),
     sa.Column("contact_record_id", sa.Text, index=True, default=""),
-    sa.Column("contact_last_updated", Timestamp, index=True, default=epoch),
+    sa.Column("contact_updated", Timestamp, index=True, default=epoch),
     sa.Column("contact_assignments", psql.JSONB, default={}),
     sa.Column("is_volunteer", sa.Boolean, index=True, default=False),
     sa.Column("volunteer_record_id", sa.Text, index=True, default=""),
-    sa.Column("volunteer_last_updated", Timestamp, index=True, default=epoch),
+    sa.Column("volunteer_updated", Timestamp, index=True, default=epoch),
     sa.Column("is_funder", sa.Boolean, index=True, default=False),
     sa.Column("funder_record_id", sa.Text, index=True, default=""),
-    sa.Column("funder_last_updated", Timestamp, index=True, default=epoch),
+    sa.Column("funder_updated", Timestamp, index=True, default=epoch),
     sa.Column("funder_refcode", sa.Text, index=True, default=""),
+    sa.Index("ix_person_info_uuid_hash", "uuid", postgresql_using="hash"),
+    sa.Index("ix_person_info_email_hash", "email", postgresql_using="hash"),
 )
 
 # Externally-sourced Person info
@@ -100,6 +102,7 @@ external_info = sa.Table(
     sa.Column("delegate_pa_2020", sa.Boolean, default=False),
     sa.Column("delegate_az_2020", sa.Boolean, default=False),
     sa.Column("delegate_fl_2020", sa.Boolean, default=False),
+    sa.Index("ix_external_info_email_hash", "email", postgresql_using="hash"),
 )
 
 # Donation info from Action Network
@@ -109,15 +112,17 @@ donation_info = sa.Table(
     sa.Column("uuid", sa.Text, primary_key=True, nullable=False),
     sa.Column("created_date", Timestamp, index=True, nullable=False),
     sa.Column("modified_date", Timestamp, index=True, nullable=False),
+    sa.Column("published_date", Timestamp, index=True, default=epoch),
     sa.Column("amount", sa.Text, nullable=False),
     sa.Column("recurrence_data", psql.JSONB, nullable=False),
     sa.Column("donor_id", sa.Text, index=True, nullable=False),
     sa.Column("fundraising_page_id", sa.Text, index=True, nullable=False),
+    sa.Column("metadata_id", sa.Text, index=True, default=""),
+    sa.Column("attribution_id", sa.Text, index=True, default=""),
     sa.Column("is_donation", sa.Boolean, index=True, default=False),
     sa.Column("donation_record_id", sa.Text, index=True, default=""),
-    sa.Column("donation_last_updated", Timestamp, index=True, default=epoch),
-    # if the source is ActBlue, then the external_uuid is the ActBlue ID
-    sa.Column("external_uuid", sa.Text, index=True, default=""),
+    sa.Column("donation_updated", Timestamp, index=True, default=epoch),
+    sa.Index("ix_donation_info_uuid_hash", "uuid", postgresql_using="hash"),
 )
 
 # Fundraising page info from Action Network
@@ -127,11 +132,11 @@ fundraising_page_info = sa.Table(
     sa.Column("uuid", sa.Text, primary_key=True, nullable=False),
     sa.Column("created_date", Timestamp, nullable=False),
     sa.Column("modified_date", Timestamp, index=True, nullable=False),
+    sa.Column("published_date", Timestamp, index=True, default=epoch),
     sa.Column("origin_system", sa.Text, index=True, default=""),
     sa.Column("title", sa.Text, index=True, nullable=False),
-    sa.Column("attribution_status", sa.Text, index=True, default=""),
-    sa.Column("attribution_email", sa.Text, index=True, default=""),
-    sa.Column("attribution_uuid", sa.Text, index=True, default=""),
+    sa.Column("attribution_id", sa.Text, index=True, default=""),
+    sa.Index("ix_fundraising_page_info_uuid_hash", "uuid", postgresql_using="hash"),
 )
 
 # Form submission info from Action Network
@@ -143,22 +148,25 @@ submission_info = sa.Table(
     sa.Column("modified_date", Timestamp, index=True, nullable=False),
     sa.Column("person_id", sa.Text, index=True, nullable=False),
     sa.Column("form_id", sa.Text, index=True, nullable=False),
+    sa.Index("ix_submission_info_uuid_hash", "uuid", postgresql_using="hash"),
 )
 
 # Donation attribution and recurrence info from Act Blue
 donation_metadata = sa.Table(
     "donation_metadata",
     metadata,
-    # the line item is the UUID for Act Blue
     sa.Column("uuid", sa.Text, primary_key=True, nullable=False),
     sa.Column("created_date", Timestamp, index=True, nullable=False),
     sa.Column("modified_date", Timestamp, index=True, nullable=False),
-    sa.Column("donor_email", sa.Text, index=True, nullable=False),
+    sa.Column("published_date", Timestamp, index=True, default=epoch),
     sa.Column("item_type", sa.Text, index=True, nullable=False),
-    # the ActBlue UUID sent to Action Network is the external_uuid
-    sa.Column("external_uuid", sa.Text, index=True, default=""),
-    sa.Column("recurrence_data", psql.JSONB, default=""),
+    sa.Column("donor_email", sa.Text, index=True, nullable=False),
+    sa.Column("order_id", sa.Text, index=True, default=""),
+    sa.Column("order_date", Timestamp, index=True, default=epoch),
+    sa.Column("line_item_ids", sa.Text, index=True, default=""),
     sa.Column("form_name", sa.Text, index=True, default=""),
     sa.Column("form_owner_email", sa.Text, index=True, default=""),
-    sa.Column("ref_codes", psql.JSONB, default={}),
+    sa.Column("ref_code", sa.Text, index=True, default=""),
+    sa.Column("attribution_id", sa.Text, index=True, default=""),
+    sa.Index("ix_donation_metadata_uuid_hash", "uuid", postgresql_using="hash"),
 )

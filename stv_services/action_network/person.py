@@ -24,16 +24,18 @@ from datetime import datetime, timezone
 from typing import Optional, Any
 
 import sqlalchemy as sa
+from dateutil.parser import parse
 from sqlalchemy.future import Connection
 
 from .utils import (
     validate_hash,
     fetch_all_hashes,
     fetch_hash,
-    lookup_objects,
 )
-from ..data_store.persisted_dict import PersistedDict
+from ..act_blue.metadata import ActBlueDonationMetadata
+from ..core.utilities import action_network_timestamp
 from ..data_store import model, Postgres
+from ..data_store.persisted_dict import PersistedDict, lookup_objects
 
 interest_table_map = {
     "2022_calls": "contact",
@@ -58,16 +60,31 @@ class ActionNetworkPerson(PersistedDict):
             raise ValueError(f"Person record must have either email or phone: {fields}")
         super().__init__(model.person_info, **fields)
 
-    def classify_for_airtable(self, conn: sa.future.Connection):
+    def publish(self, conn: Connection, force: bool = False):
         """
-        Reclassify an existing person based on current data.
-        We are careful never to remove a person from a table.
+        Classify an existing person based on current data. The classification
+        determines what tables they belong in, what their donor status is,
+        and so on.
+
+        We are careful never to remove a person from a table. We don't
+        republish people unless there is new data about them since their
+        last annotation or unless the `force` flag is specified.
         """
+        if not force and self["classification_date"] > self["modified_date"]:
+            return
         # if they existed before 2022, they are a historical volunteer, else a contact
         if self["created_date"] < datetime(2022, 1, 1, tzinfo=timezone.utc):
             self["is_volunteer"] = True
         else:
             self["is_contact"] = True
+        # update with the latest submission status
+        self.compute_submission_status(conn, force)
+        # update with the latest donor status
+        self.compute_donor_status(conn, force)
+        self["published_date"] = datetime.now(timezone.utc)
+        self.persist(conn)
+
+    def compute_submission_status(self, conn: Connection, force: bool = False):
         # if they have checked any of the 2022 form fields, they are contacts
         # and possibly funders (if it's a form field on the fundraising form)
         if custom_fields := self.get("custom_fields"):
@@ -80,7 +97,7 @@ class ActionNetworkPerson(PersistedDict):
         # if they didn't check any of the 2022 form fields, they may still have
         # signed up with no interests, so look for any submissions of either the
         # 2022 signup form or any forms in 2022
-        if not self.get("has_submission"):
+        if force or not self["has_submission"]:
             signup_form_2022 = "action_network:b399bd2b-b9a9-4916-9550-5a8a47e045fb"
             table = model.submission_info
             query = sa.select(table).where(
@@ -97,61 +114,79 @@ class ActionNetworkPerson(PersistedDict):
             if signup:
                 self["has_submission"] = True
                 self["is_contact"] = True
-        # anyone with a recurring donation is automatically a funder
-        # TODO: mark the recurring donors!
-        # check their donation history to see if it makes them a funder
-        if not self.get("is_funder"):
-            # find their most recent donation
-            table = model.donation_info
-            query = (
-                sa.select(table)
-                .where(table.c.donor_id == self["uuid"])
-                .order_by(table.c.created_date.desc())
-            )
-            newest = conn.execute(query).mappings().first()
-            if newest is not None:
-                # if they have donated since 11/1/2021, they are a contact and a funder
-                if newest["created_date"] > datetime(2021, 11, 1, tzinfo=timezone.utc):
-                    self["is_contact"] = True
-                    self["is_funder"] = True
-                # if they are a contact and have any donations, they are a funder
-                elif self.get("is_contact"):
-                    self["is_funder"] = True
-        self.persist(conn)
 
-    def update_donation_summaries(self, conn: sa.future.Connection):
-        self._update_donation_summary(conn, 2020)
-        self._update_donation_summary(conn, 2021)
-        self.persist(conn)
-
-    def _update_donation_summary(self, conn: sa.future.Connection, year: int):
-        total_field, summary_field = f"total_{year}", f"summary_{year}"
-        cutoff_hi = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
-        if year == 2020:
-            cutoff_lo = model.epoch
-        else:
-            cutoff_lo = datetime(year, 1, 1, tzinfo=timezone.utc)
+    def compute_donor_status(self, conn: Connection, force: bool = False):
+        compute_historic = force or self["published_date"] == model.epoch
         table = model.donation_info
+        # first compute status based on new orders
+        cutoff_lo = model.epoch if compute_historic else self["published_date"]
         query = (
             sa.select(table)
             .where(
                 sa.and_(
-                    table.c.donor_id == self["uuid"],
-                    table.c.created_date < cutoff_hi,
-                    table.c.created_date >= cutoff_lo,
+                    table.c.donor_id == self["uuid"], table.c.created_date >= cutoff_lo
                 )
             )
-            .order_by(table.c.created_date)
+            .order_by(table.c.created_date.desc())
         )
-        entries, total = [], 0.0
-        rows = conn.execute(query).mappings().all()
-        for row in rows:
-            amount = float(row["amount"])
-            day = row["created_date"].strftime("%m/%d/%y")
-            total += amount
-            entries.append(f"${int(round(amount, 0))} ({day})")
-        self[total_field] = int(round(total, 0))
-        self[summary_field] = ", ".join(entries)
+        donations: list[dict] = conn.execute(query).mappings().all()
+        if not donations:
+            if compute_historic:
+                self["total_2020"], self["total_2021"] = 0, 0
+            return
+        if donations[0]["created_date"] > datetime(2021, 11, 1, tzinfo=timezone.utc):
+            # if they have donated since 11/1/2021, they are a contact and a funder
+            self["is_contact"] = True
+            self["is_funder"] = True
+        elif self.get("is_contact"):
+            # if they are a contact and have any donations, they are a funder
+            self["is_funder"] = True
+        # if their most recent donation is recurring, they have a recurring start
+        if donations[0].get("recurrence_data", {}).get("recurring"):
+            self["recur_start"] = donations[0]["created_date"]
+        # if they have a cancellation, they have a recurring end
+        query = (
+            sa.select(model.donation_metadata)
+            .where(
+                sa.and_(
+                    model.donation_metadata.c.item_type == "cancellation",
+                    model.donation_metadata.c.donor_email == self["email"],
+                )
+            )
+            .order_by(model.donation_metadata.c.created_date.desc())
+        )
+        cancels = ActBlueDonationMetadata.from_query(conn, query)
+        if cancels:
+            self["recur_end"] = cancels[0]["created_date"]
+        if compute_historic:
+            max_2021 = datetime(2022, 1, 1)
+            max_2020 = datetime(2021, 1, 1)
+            total_2021, entries_2021 = 0, []
+            total_2020, entries_2020 = 0, []
+            is_recurring = self["recur_start"] > model.epoch
+            was_recurring = self["recur_end"] > model.epoch
+            for donation in donations[1:]:
+                donation_date = donation["created_date"]
+                if not is_recurring and not was_recurring:
+                    # if we aren't recurring, but we were, mark us that way
+                    if donation.get("recurrence_data", {}).get("recurring"):
+                        was_recurring = True
+                        self["recur_end"] = donation["created_date"]
+                if donation_date >= max_2021:
+                    continue
+                amount = float(donation["amount"])
+                day = donation_date.strftime("%m/%d/%y")
+                entry = f"${int(round(amount, 0))} ({day})"
+                if donation_date >= max_2020:
+                    total_2021 += amount
+                    entries_2021.append(entry)
+                else:
+                    total_2020 += amount
+                    entries_2020.append(entry)
+            self["total_2021"] = total_2021
+            self["summary_2021"] = ", ".join(entries_2021)
+            self["total_2020"] = total_2020
+            self["summary_2020"] = ", ".join(entries_2020)
 
     @classmethod
     def from_hash(cls, data: dict) -> "ActionNetworkPerson":
@@ -159,11 +194,8 @@ class ActionNetworkPerson(PersistedDict):
         is_contact, is_volunteer = None, None
         if created_date.year >= 2022:
             is_contact = True
-            # no need to create donation summaries
-            total_2020, total_2021 = 0, 0
         else:
             is_volunteer = True
-            total_2020, total_2021 = None, None
         given_name: str = data.get("given_name")
         family_name: str = data.get("family_name", "")
         email: Optional[str] = None
@@ -215,8 +247,6 @@ class ActionNetworkPerson(PersistedDict):
             postal_code=postal_code,
             country=country,
             custom_fields=custom_fields,
-            total_2020=total_2020,
-            total_2021=total_2021,
             is_contact=is_contact,
             is_volunteer=is_volunteer,
         )

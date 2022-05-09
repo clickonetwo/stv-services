@@ -29,9 +29,8 @@ from .utils import (
     validate_hash,
     fetch_hash,
     fetch_all_hashes,
-    lookup_objects,
 )
-from ..data_store.persisted_dict import PersistedDict
+from ..data_store.persisted_dict import PersistedDict, lookup_objects
 from ..data_store import model, Postgres
 
 

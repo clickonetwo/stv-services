@@ -21,12 +21,16 @@
 #  SOFTWARE.
 #
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, Any
 
 import sqlalchemy as sa
 from sqlalchemy.future import Connection
 
-from .donation import import_donations, import_donations_from_hashes
+from .donation import (
+    import_donations,
+    import_donations_from_hashes,
+    ActionNetworkDonation,
+)
 from .fundraising_page import import_fundraising_pages, ActionNetworkFundraisingPage
 from .person import import_people, ActionNetworkPerson
 from .submission import import_submissions, insert_submissions_from_hashes
@@ -35,6 +39,7 @@ from ..act_blue.attribution import calculate_attribution
 from ..core import Configuration
 from ..core.utilities import action_network_timestamp
 from ..data_store import model, Postgres
+from ..data_store.persisted_dict import PersistedDict
 
 
 def import_person_cluster(person_id: str, verbose: bool = False):
@@ -116,39 +121,6 @@ def update_fundraising_pages(
         config.save_to_data_store()
 
 
-def update_fundraising_page_attributions(verbose: bool = True, force: bool = False):
-    """
-    Update fundraising page attributions.  Also updates any
-    discovered supporters and any existing donations for
-    pages with discovered supporters.
-    """
-    if force:
-        query = sa.select(model.fundraising_page_info)
-    else:
-        query = sa.select(model.fundraising_page_info).where(
-            model.fundraising_page_info.c.attribution_status == ""
-        )
-    if verbose:
-        kind = "all" if force else "unattributed"
-        print(f"Doing attribution of {kind} fundraising pages...")
-    with Postgres.get_global_engine().connect() as conn:  # type: Connection
-        pages = ActionNetworkFundraisingPage.from_query(conn, query)
-        total, count = len(pages), 0
-        for page in pages:
-            if verbose and count > 0 and count % 50 == 0:
-                print(f"Processed {count} of {total}...")
-            count += 1
-            if page["attribution_status"] == "manual":
-                pass
-            elif page["origin_system"] == "ActBlue":
-                calculate_attribution(conn, page, verbose)
-            else:
-                page["attribution_status"] = "general"
-                page.persist(conn)
-        if verbose:
-            print(f"Processed {count} pages.")
-
-
 def update_submissions(verbose: bool = True, force: bool = False):
     """Import Action Network submissions created or updated since the last report"""
     config = Configuration.get_global_config()
@@ -161,66 +133,64 @@ def update_submissions(verbose: bool = True, force: bool = False):
     config.save_to_data_store()
 
 
-def update_donation_summaries(verbose: bool = True, force: bool = False):
-    """
-    Compute and save fundraising summaries for all people who don't have them.
-
-    If `force` is `True`, then summaries are updated for all people.
-    """
-    count, start_time = 0, datetime.now()
-    if verbose:
-        print(f"Updating donation summaries for people...", end="", flush=True)
-        progress_time = start_time
-    table, sentinel = model.person_info, model.not_computed
-    if force:
-        query = sa.select(table)
-    else:
-        query = sa.select(table).where(table.c.total_2020 == sentinel)
-    with Postgres.get_global_engine().connect() as conn:  # type: Connection
-        people = ActionNetworkPerson.from_query(conn, query)
-        for person in people:
-            count += 1
-            person.update_donation_summaries(conn)
-            if verbose and (datetime.now() - progress_time).seconds > 5:
-                print(f"({count})...", end="", flush=True)
-                progress_time = datetime.now()
-        conn.commit()
-    if verbose:
-        print(
-            f"({count}) done (in {(datetime.now() - start_time).total_seconds()} secs)."
-        )
-
-
-def update_airtable_classifications(verbose: bool = True):
-    """
-    Make sure every person is marked with the correct table(s) for Airtable injection.
-
-    Args:
-        verbose: print progress reports
-    """
-    count, start_time = 0, datetime.now()
-    if verbose:
-        print(f"Updating Airtable classifications for people...", end="", flush=True)
-        progress_time = start_time
-    table = model.person_info
-    query = sa.select(table)
-    with Postgres.get_global_engine().connect() as conn:  # type: Connection
-        people = ActionNetworkPerson.from_query(conn, query)
-        for person in people:
-            count += 1
-            person.classify_for_airtable(conn)
-            if verbose and (datetime.now() - progress_time).seconds > 5:
-                print(f"({count})...", end="", flush=True)
-                progress_time = datetime.now()
-        conn.commit()
-    if verbose:
-        print(
-            f"({count}) done (in {(datetime.now() - start_time).total_seconds()} secs)."
-        )
-
-
 def get_update_filter(timestamp: Optional[float], force: bool = False) -> Optional[str]:
     if timestamp and not force:
         last_update_time = datetime.fromtimestamp(timestamp, tz=timezone.utc)
         last_update_string = action_network_timestamp(last_update_time)
         return f"modified_date gt '{last_update_string}'"
+
+
+def update_all_classifications(verbose: bool = True, force: bool = False):
+    """
+    Update the classifications for Action Network objects that have been
+    updated since they were last classified.  This has to be done in a
+    particular order.
+
+    Args:
+        verbose: print progress reports
+        force: recompute status for all objects whether updated or not
+    """
+    update_classifications("fundraising_pages", verbose, force)
+    update_classifications("donations", verbose, force)
+    update_classifications("people", verbose, force)
+
+
+def update_classifications(plural: str, verbose: bool = True, force: bool = False):
+    """
+    Update the classifications for a specific type of object
+    """
+    table, cls = get_classification_parameters(plural)
+    if force:
+        query = sa.select(table)
+    else:
+        query = sa.select(table).where(table.c.modified_date >= table.c.published_date)
+    with Postgres.get_global_engine().connect() as conn:  # type: Connection
+        objects = cls.from_query(conn, query)
+        total, count, start_time = len(objects), 0, datetime.now()
+        if verbose:
+            print(
+                f"Updating classifications for {total} {plural}...", end="", flush=True
+            )
+            progress_time = start_time
+        for person in objects:
+            count += 1
+            person.publish(conn)
+            if verbose and (datetime.now() - progress_time).seconds > 5:
+                print(f"({count})...", end="", flush=True)
+                progress_time = datetime.now()
+        conn.commit()
+    if verbose:
+        print(
+            f"({count}) done (in {(datetime.now() - start_time).total_seconds()} secs)."
+        )
+
+
+def get_classification_parameters(plural: str):
+    if str == "people":
+        return model.person_info, ActionNetworkPerson
+    elif str == "donations":
+        return model.donation_info, ActionNetworkDonation
+    elif str == "fundraising_pages":
+        return model.fundraising_page_info, ActionNetworkFundraisingPage
+    else:
+        raise ValueError(f"Don't know how to publish {plural}")

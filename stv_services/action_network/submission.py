@@ -27,10 +27,9 @@ from sqlalchemy.future import Connection
 
 from .utils import (
     validate_hash,
-    lookup_objects,
     fetch_all_child_hashes,
 )
-from ..data_store.persisted_dict import PersistedDict
+from ..data_store.persisted_dict import PersistedDict, lookup_objects
 from ..data_store import model, Postgres
 
 

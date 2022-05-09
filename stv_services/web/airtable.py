@@ -56,18 +56,18 @@ async def receive_notification(
     NOTE: We handle this request specially so that we can
     do HMAC verification on the body of the request.
     """
-    logger.info(f"Received Airtable webhook notification")
+    logger.info(f"Received Airtable webhook")
     body: bytes = await request.body()
     signature: str = request.headers.get("x-airtable-content-mac")
     try:
         payload = json.loads(body)
     except json.JSONDecodeError:
-        raise request_error(logger, f"while decoding notification")
+        raise request_error(logger, f"while decoding webhook")
     try:
         hook_name = validate_notification(payload, body, signature)
     except ValueError:
-        raise request_error(logger, f"while validating notification")
-    logger.info(f"Processing '{hook_name}' notification in background")
-    # TODO: replace background task with notification of worker process
-    worker.add_task(process_webhook_notification, hook_name, body)
+        raise request_error(logger, f"while validating webhook")
+    db = await RedisAsync.connect()
+    len = await db.lpush("airtable", hook_name)
+    logger.info(f"Saved webhook '{hook_name}' as #{len} in 'airtable' queue")
     return

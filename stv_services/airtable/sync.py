@@ -50,7 +50,7 @@ def sync_contacts(_conn: Connection, people: list[ActionNetworkPerson]) -> (dict
                 if contact_record_id is None:
                     # adopt this as the record for this email
                     match["contact_record_id"] = record_id
-                    match["contact_last_updated"] = model.epoch
+                    match["contact_updated"] = model.epoch
                 elif contact_record_id != record_id:
                     # remember this as an extra email
                     extras[record_email] = record_id

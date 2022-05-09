@@ -199,31 +199,31 @@ def test_compute_donation_summaries(reload_db):
         person = ActionNetworkPerson.from_lookup(
             conn, uuid=reload_db["historical_donor"]
         )
-        person.update_donation_summaries(conn)
+        person.compute_donor_status(conn)
         assert person["total_2020"] == 2750
         assert person["total_2021"] == 250
 
 
-def test_classify_for_airtable(reload_db):
+def test_publish_for_airtable(reload_db):
     with Postgres.get_global_engine().connect() as conn:
         # historical donors are not contacts, but if
         # they are made contacts they are also funders
         person = ActionNetworkPerson.from_lookup(
             conn, uuid=reload_db["historical_donor"]
         )
-        person.classify_for_airtable(conn)
+        person.publish(conn)
         assert person["is_volunteer"] is True
         assert person["is_contact"] is False
         assert person["is_funder"] is False
         person["is_contact"] = True
-        person.classify_for_airtable(conn)
+        person.publish(conn)
         assert person["is_funder"] is True
         # new sign-ups are not volunteers or funders,
         # but they are contacts.
         person = ActionNetworkPerson.from_lookup(
             conn, uuid=reload_db["current_signup_non_donor"]
         )
-        person.classify_for_airtable(conn)
+        person.publish(conn)
         assert person["is_volunteer"] is False
         assert person["is_contact"] is True
         assert person["is_funder"] is False
@@ -232,7 +232,7 @@ def test_classify_for_airtable(reload_db):
         person = ActionNetworkPerson.from_lookup(
             conn, uuid=reload_db["current_donor_non_signup"]
         )
-        person.classify_for_airtable(conn)
+        person.publish(conn)
         assert person["is_volunteer"] is False
         assert person["is_contact"] is True
         assert person["is_funder"] is True
@@ -241,12 +241,12 @@ def test_classify_for_airtable(reload_db):
         person = ActionNetworkPerson.from_lookup(
             conn, uuid=reload_db["historical_signup_non_donor"]
         )
-        person.classify_for_airtable(conn)
+        person.publish(conn)
         assert person["is_volunteer"] is True
         assert person["is_contact"] is False
         assert person["is_funder"] is False
         person["is_contact"] = True
-        person.classify_for_airtable(conn)
+        person.publish(conn)
         assert person["is_funder"] is False
 
 

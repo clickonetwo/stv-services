@@ -24,6 +24,7 @@ import base64
 import hmac
 
 from dateutil.parser import parse
+from sqlalchemy.future import Connection
 
 from stv_services.airtable.schema import fetch_airtable_base_id
 from stv_services.core import Configuration, Session
@@ -143,8 +144,8 @@ def sync_hooks(verbose: bool = True, force_remove: bool = False):
     config.save_to_data_store()
 
 
-def fetch_hook_payloads(name: str) -> list[dict]:
-    config = Configuration.get_global_config()
+def fetch_hook_payloads(conn: Connection, name: str) -> list[dict]:
+    config = Configuration.get_session_config(conn)
     info = config["airtable_webhooks"][name]
     base_id = info["base_id"]
     hook_id = info["hook_id"]
@@ -163,7 +164,7 @@ def fetch_hook_payloads(name: str) -> list[dict]:
         cursor = data.get("cursor", cursor)
         might_have_more = data.get("mightHaveMore", False)
     info["cursor"] = cursor
-    config.save_to_data_store()
+    config.save_to_connection(conn)
     return payloads
 
 

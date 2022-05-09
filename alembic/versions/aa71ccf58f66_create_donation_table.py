@@ -28,14 +28,17 @@ def upgrade():
         sa.Column("uuid", sa.Text, primary_key=True, nullable=False),
         sa.Column("created_date", Timestamp, index=True, nullable=False),
         sa.Column("modified_date", Timestamp, index=True, nullable=False),
+        sa.Column("published_date", Timestamp, index=True, default=epoch),
         sa.Column("amount", sa.Text, nullable=False),
         sa.Column("recurrence_data", psql.JSONB, nullable=False),
         sa.Column("donor_id", sa.Text, index=True, nullable=False),
         sa.Column("fundraising_page_id", sa.Text, index=True, nullable=False),
+        sa.Column("metadata_id", sa.Text, index=True, default=""),
+        sa.Column("attribution_id", sa.Text, index=True, default=""),
         sa.Column("is_donation", sa.Boolean, index=True, default=False),
         sa.Column("donation_record_id", sa.Text, index=True, default=""),
-        sa.Column("donation_last_updated", Timestamp, index=True, default=epoch),
-        sa.Column("external_uuid", sa.Text, index=True, default=""),
+        sa.Column("donation_updated", Timestamp, index=True, default=epoch),
+        sa.Index("ix_donation_info_uuid_hash", "uuid", postgresql_using="hash"),
     )
 
 

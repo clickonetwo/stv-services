@@ -30,9 +30,9 @@ from .utils import (
     validate_hash,
     fetch_hash,
     fetch_all_hashes,
-    lookup_objects,
 )
-from ..data_store.persisted_dict import PersistedDict
+from ..act_blue.metadata import ActBlueDonationMetadata
+from ..data_store.persisted_dict import PersistedDict, lookup_objects
 from ..data_store import model, Postgres
 
 
@@ -42,6 +42,16 @@ class ActionNetworkDonation(PersistedDict):
             if not fields.get(key):
                 raise ValueError(f"Donation must have field '{key}': {fields}")
         super().__init__(model.donation_info, **fields)
+
+    def publish(self, conn: Connection, force: bool = False):
+        """Try to attribute this donation based on latest data."""
+        if not force and self["classification_date"] > self["modified_date"]:
+            return
+        # first find a matching refcode, if there is one
+        if metadata_id := self.get("metadata_id"):
+            metadata = ActBlueDonationMetadata.from_lookup(conn, metadata_id)
+            if codes := metadata.get("ref_codes"):
+                query = sa.select()
 
     @classmethod
     def from_hash(cls, data: dict) -> "ActionNetworkDonation":

@@ -22,13 +22,12 @@
 #
 from datetime import datetime
 from time import process_time
-from typing import Callable, Any
+from typing import Callable
 from urllib.parse import urlencode
 
 import requests
 from dateutil.parser import parse
 from restnavigator import Navigator
-from sqlalchemy.future import Connection
 
 from ..core import Configuration, Session
 
@@ -47,29 +46,6 @@ def validate_hash(data: dict) -> (str, datetime, datetime):
     if not hash_id or not created_date or not modified_date:
         raise ValueError(f"Action Network hash is missing required items: {data}")
     return hash_id, created_date, modified_date
-
-
-def lookup_objects(
-    conn: Connection,
-    query: Any,
-    constructor: Callable[[dict], Any],
-) -> list[Any]:
-    """
-    Return a list of constructed objects from rows that match the query.
-
-    Args:
-        conn: connection to use
-        query: a select query of all fields in the info table matching the constructor.
-        constructor: the constructor for the type matching the info table in the query.
-
-    Returns:
-        a list of one object per query row in the order specified by the query.
-    """
-    results = []
-    for row in conn.execute(query).mappings().all():
-        fields = {key: value for key, value in row.items() if value is not None}
-        results.append(constructor(fields))
-    return results
 
 
 def fetch_hash(hash_type: str, hash_id: str) -> (dict, dict):

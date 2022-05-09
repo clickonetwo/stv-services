@@ -51,30 +51,42 @@ class Configuration(dict):
     @classmethod
     def get_global_config(cls, reload: bool = False) -> "Configuration":
         if cls._singleton is None:
-            cls._singleton = Configuration()
+            cls._singleton = cls()
             cls._singleton.load_from_data_store()
         elif reload:
             cls._singleton.load_from_data_store()
         return cls._singleton
 
-    def load_from_data_store(self):
-        db = Postgres.get_global_engine()
+    @classmethod
+    def get_session_config(cls, conn: Connection) -> "Configuration":
+        config = cls()
+        config.load_from_connection(conn)
+        return config
+
+    def load_from_connection(self, conn: Connection):
         # out with the old
         self.clear()
         # in with the new
+        for key, val in conn.execute(sa.select(model.configuration)):
+            self[key] = val
+
+    def save_to_connection(self, conn: Connection):
+        # out with the old
+        conn.execute(sa.delete(model.configuration))
+        # in with the new
+        if self:
+            new = [dict(key=key, value=val) for key, val in self.items()]
+            conn.execute(sa.insert(model.configuration), new)
+
+    def load_from_data_store(self):
+        db = Postgres.get_global_engine()
         with db.connect() as conn:  # type: Connection
-            for key, val in conn.execute(sa.select(model.configuration)):
-                self[key] = val
+            self.load_from_connection(conn)
 
     def save_to_data_store(self):
         db = Postgres.get_global_engine()
         with db.connect() as conn:  # type: Connection
-            # out with the old
-            conn.execute(sa.delete(model.configuration))
-            # in with the new
-            if self:
-                new = [dict(key=key, value=val) for key, val in self.items()]
-                conn.execute(sa.insert(model.configuration), new)
+            self.save_to_connection(conn)
             conn.commit()
 
     def load_from_file(self, path: str = None):

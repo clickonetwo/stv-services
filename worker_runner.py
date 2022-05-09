@@ -20,12 +20,8 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 #
-import json
-import os
 
+from stv_services.worker.main import main
 
-def process_webhook_notification(body: str) -> str:
-    filename = os.getenv("STV_ACTBLUE_CONTENT") or "local/act_blue_webhooks.json"
-    with open(filename, mode="a", encoding="utf-8") as f:
-        print(f"{body}", file=f, flush=True)
-    return f"Saved webhook content to {filename}"
+if __name__ == "__main__":
+    main()

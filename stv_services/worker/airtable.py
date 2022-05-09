@@ -34,20 +34,22 @@ from ..data_store import Postgres, model
 logger = logging.get_logger(__name__)
 
 
-def process_webhook_notification(name: str, _body: bytes = None):
+def process_webhook_notification(conn: Connection, name: str):
     if name == "volunteer":
-        payloads = fetch_hook_payloads("volunteer")
-        process_promotion_webhook_payloads("volunteer", payloads)
+        payloads = fetch_hook_payloads(conn, "volunteer")
+        process_promotion_webhook_payloads(conn, "volunteer", payloads)
     elif name == "contact":
-        payloads = fetch_hook_payloads("contact")
-        process_promotion_webhook_payloads("contact", payloads)
-        process_team_webhook_payloads("contact", payloads)
+        payloads = fetch_hook_payloads(conn, "contact")
+        process_promotion_webhook_payloads(conn, "contact", payloads)
+        process_team_webhook_payloads(conn, "contact", payloads)
     else:
         raise ValueError(f"Unknown webhook type: '{name}'")
 
 
-def process_promotion_webhook_payloads(name: str, payloads: list[dict]):
-    config = Configuration.get_global_config()
+def process_promotion_webhook_payloads(
+    conn: Connection, name: str, payloads: list[dict]
+):
+    config = Configuration.get_session_config(conn)
     schema = config[f"airtable_stv_{name}_schema"]
     table_id = schema["table_id"]
     column_ids = schema["column_ids"]
@@ -60,10 +62,10 @@ def process_promotion_webhook_payloads(name: str, payloads: list[dict]):
                 current = change.get("current", {}).get("cellValuesByFieldId", {})
                 if field_id in current:
                     record_ids.add(record_id)
-    promote_volunteers_or_contacts(name, list(record_ids))
+    promote_volunteers_or_contacts(conn, name, list(record_ids))
 
 
-def promote_volunteers_or_contacts(name: str, record_ids: list[str]):
+def promote_volunteers_or_contacts(conn: Connection, name: str, record_ids: list[str]):
     if name == "volunteer":
         query = sa.select(model.person_info).where(
             model.person_info.c.volunteer_record_id.in_(record_ids)
@@ -74,38 +76,36 @@ def promote_volunteers_or_contacts(name: str, record_ids: list[str]):
         )
     else:
         raise ValueError(f"Hook name ({name}) is not volunteer or contact")
-    with Postgres.get_global_engine().connect() as conn:  # type: Connection
-        people = ActionNetworkPerson.from_query(conn, query)
-        volunteers = []
-        contacts = []
-        funders = []
-        for person in people:
-            if name == "volunteer":
-                # have to refresh the volunteer record to fix the checkmark
-                volunteers.append(person)
-                if not person["is_contact"]:
-                    person["is_contact"] = True
-                    contacts.append(person)
-                    # new contact may also become a funder
-                    person.classify_for_airtable(conn)
-                    if person["is_funder"]:
-                        funders.append(person)
-            else:
-                # have to refresh the contact record to fix the checkmark
+    people = ActionNetworkPerson.from_query(conn, query)
+    volunteers = []
+    contacts = []
+    funders = []
+    for person in people:
+        if name == "volunteer":
+            # have to refresh the volunteer record to fix the checkmark
+            volunteers.append(person)
+            if not person["is_contact"]:
+                person["is_contact"] = True
                 contacts.append(person)
-                if not person["is_funder"]:
-                    person["is_funder"] = True
+                # new contact may also become a funder
+                person.publish(conn)
+                if person["is_funder"]:
                     funders.append(person)
-            person.persist(conn)
-        # now refresh all three tables, as needed
-        upsert_volunteers(conn, people)
-        upsert_contacts(conn, contacts)
-        upsert_funders(conn, funders)
-        conn.commit()
+        else:
+            # have to refresh the contact record to fix the checkmark
+            contacts.append(person)
+            if not person["is_funder"]:
+                person["is_funder"] = True
+                funders.append(person)
+        person.persist(conn)
+    # now refresh all three tables, as needed
+    upsert_volunteers(conn, people)
+    upsert_contacts(conn, contacts)
+    upsert_funders(conn, funders)
 
 
-def process_team_webhook_payloads(name: str, payloads: list[dict]):
-    config = Configuration.get_global_config()
+def process_team_webhook_payloads(conn: Connection, name: str, payloads: list[dict]):
+    config = Configuration.get_session_config(conn)
     schema = config[f"airtable_stv_{name}_schema"]
     table_id = schema["table_id"]
     column_ids = schema["column_ids"]
@@ -132,21 +132,19 @@ def process_team_webhook_payloads(name: str, payloads: list[dict]):
                             logger.error(f"Two team leads for {record_id}: {old_leads}")
                         old_lead = old_leads[0].get("id")
                         changed_ids.add(old_lead)
-    change_team_leads(list(changed_ids), new_lead_map)
+    change_team_leads(conn, list(changed_ids), new_lead_map)
 
 
-def change_team_leads(changed_ids: list[str], new_lead_map: dict):
+def change_team_leads(conn: Connection, changed_ids: list[str], new_lead_map: dict):
     query = sa.select(model.person_info).where(
         model.person_info.c.contact_record_id.in_(changed_ids)
     )
-    with Postgres.get_global_engine().connect() as conn:  # type: Connection
-        people = ActionNetworkPerson.from_query(conn, query)
-        back_map = {person["contact_record_id"]: person["uuid"] for person in people}
-        for person in people:
-            if new_lead := new_lead_map.get(person["contact_record_id"]):
-                person["team_lead"] = back_map[new_lead]
-            else:
-                person["team_lead"] = ""
-            person.persist(conn)
-        upsert_contacts(conn, people)
-        conn.commit()
+    people = ActionNetworkPerson.from_query(conn, query)
+    back_map = {person["contact_record_id"]: person["uuid"] for person in people}
+    for person in people:
+        if new_lead := new_lead_map.get(person["contact_record_id"]):
+            person["team_lead"] = back_map[new_lead]
+        else:
+            person["team_lead"] = ""
+        person.persist(conn)
+    upsert_contacts(conn, people)

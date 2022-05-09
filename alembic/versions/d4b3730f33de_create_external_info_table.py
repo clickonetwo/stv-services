@@ -34,6 +34,7 @@ def upgrade():
         sa.Column("delegate_pa_2020", sa.Boolean, default=False),
         sa.Column("delegate_az_2020", sa.Boolean, default=False),
         sa.Column("delegate_fl_2020", sa.Boolean, default=False),
+        sa.Index("ix_external_info_email_hash", "email", postgresql_using="hash"),
     )
 
 

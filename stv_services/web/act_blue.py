@@ -29,6 +29,7 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
 from ..core import Configuration
 from ..core.logging import get_logger
+from ..data_store import RedisAsync
 
 logger = get_logger(__name__)
 act_blue = APIRouter()
@@ -57,9 +58,9 @@ async def receive_notifications(
     body: dict, worker: BackgroundTasks, _=Depends(is_authenticated)
 ):
     logger.info("Received ActBlue webhook")
-    pretty = json.dumps(body, indent=2)
-    filename = os.getenv("STV_ACTBLUE_CONTENT") or "local/act_blue_content.json"
-    with open(filename, mode="a") as f:
-        print(f"{pretty}", file=f, flush=True)
-    logger.info(f"Saved webhook content to {filename}")
+    db = await RedisAsync.connect()
+    compact = json.dumps(body, separators=(",", ":"))
+    len: int = await db.lpush("act_blue", compact)
+    logger.info(f"Saved webhook content as #{len} in 'act_blue' queue")
+    await db.publish("webhooks", "act_blue")
     return

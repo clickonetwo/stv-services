@@ -39,7 +39,7 @@ def find_records_to_update(dict_type: str, force: bool = False):
                 table.c[is_field],
                 sa.or_(
                     table.c[id_field] == "",
-                    table.c.modified_date > table.c[date_field],
+                    table.c.published_date > table.c[date_field],
                 ),
             )
         )

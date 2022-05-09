@@ -21,11 +21,24 @@
 #  SOFTWARE.
 #
 import json
-import os
+
+from .metadata import import_metadata_from_webhooks
 
 
-def process_webhook_notification(body: str) -> str:
-    filename = os.getenv("STV_ACTBLUE_CONTENT") or "local/act_blue_webhooks.json"
-    with open(filename, mode="a", encoding="utf-8") as f:
-        print(f"{body}", file=f, flush=True)
-    return f"Saved webhook content to {filename}"
+def import_donation_metadata(filepath: str, verbose: bool = True):
+    if verbose:
+        print(f"Importing ActBlue webhooks from '{filepath}'...")
+    total, imported, batch = 0, 0, []
+    with open(filepath) as file:
+        while line := file.readline():
+            total += 1
+            batch.append(json.loads(line.strip()))
+            if total % 100 == 0:
+                imported += import_metadata_from_webhooks(batch)
+                if verbose:
+                    print(f"Processed {total}, kept {imported}...")
+        else:
+            if batch:
+                imported += import_metadata_from_webhooks(batch)
+    if verbose:
+        print(f"Imported {imported} metadata records from {total} webhooks.")

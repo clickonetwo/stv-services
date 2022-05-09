@@ -59,8 +59,7 @@ def update_all(ctx: click.Context):
     an_bulk.update_fundraising_pages(verbose)
     an_bulk.update_donations(verbose)
     an_bulk.update_people(verbose)
-    an_bulk.update_donation_summaries(verbose)
-    an_bulk.update_airtable_classifications(verbose)
+    an_bulk.update_all_classifications(verbose)
     at_bulk.verify_schemas(verbose)
     at_bulk.update_volunteers(verbose)
     at_bulk.update_contacts(verbose)
@@ -133,18 +132,10 @@ def update_external_data(ctx: click.Context, path: str = None):
 
 
 @stv.command()
-@click.option("--force/--no-force", default=False, help="Force re-computation")
-@click.pass_context
-def update_donation_summaries(ctx: click.Context, force: bool = False):
-    verbose = ctx.obj["verbose"]
-    an_bulk.update_donation_summaries(verbose, force)
-
-
-@stv.command()
 @click.pass_context
 def update_airtable_classifications(ctx: click.Context):
     verbose = ctx.obj["verbose"]
-    an_bulk.update_airtable_classifications(verbose)
+    an_bulk.update_all_classifications(verbose)
 
 
 @stv.command()

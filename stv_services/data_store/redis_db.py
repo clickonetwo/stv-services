@@ -20,6 +20,7 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 import os
+import uuid
 
 
 class RedisAsync:
@@ -70,3 +71,74 @@ class RedisSync:
             return
         cls._pool.close()
         cls._pool = None
+
+
+class LockingQueue:
+    lock_release_script = """
+        if redis.call("get",KEYS[1]) == ARGV[1]
+        then
+            return redis.call("del",KEYS[1])
+        else
+            return 0
+        end
+    """
+
+    class LockedByOther(PermissionError):
+        pass
+
+    class AlreadyLocked(PermissionError):
+        pass
+
+    class AlreadyUnlocked(PermissionError):
+        pass
+
+    class NotLocked(PermissionError):
+        pass
+
+    def __init__(self, queue_name: str, secs_to_lock: int = 600):
+        if not queue_name:
+            raise ValueError("You must supply a non-empty queue name to lock")
+        self.queue_name = queue_name
+        self.key_name = f"LockingQueue<{queue_name}>"
+        self.lock_value = str(uuid.uuid4())
+        self.state = "unlocked"
+        self.duration = secs_to_lock
+        self.db = RedisSync.connect()
+        self.script = self.db.script_load(self.lock_release_script)
+
+    def __del__(self):
+        self.db.close()
+        self.db = None
+
+    def __repr__(self):
+        f"<LockingQueue '{self.key_name}' ({self.state})>"
+
+    def state(self):
+        return self.state
+
+    def lock(self):
+        """Lock the queue"""
+        if self.state == "locked":
+            raise self.AlreadyLocked("The queue is already locked")
+        result = self.db.set(self.key_name, self.lock_value, nx=True, ex=self.duration)
+        if not result:
+            raise self.LockedByOther("The queue is locked by another client")
+        self.state = "locked"
+
+    def unlock(self):
+        """Unlock the queue"""
+        if self.state == "unlocked":
+            raise self.AlreadyUnlocked("The queue is already unlocked")
+        result = self.db.evalsha(self.script, 1, self.key_name, self.lock_value)
+        self.state = "unlocked"
+        if not result:
+            raise self.NotLocked("The queue's lock had already expired")
+
+    def renew_lock(self):
+        """Renew an existing queue lock"""
+        if self.state == "unlocked":
+            raise self.AlreadyUnlocked("You must lock before you renew")
+        result = self.db.set(self.key_name, self.lock_value, xx=True, ex=self.duration)
+        if not result:
+            self.state = "locked"
+            raise self.NotLocked("The lock has been lost")

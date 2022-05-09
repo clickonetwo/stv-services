@@ -84,7 +84,8 @@ def create_donation_record(conn: Connection, donation: ActionNetworkDonation) ->
     query = sa.select(model.person_info).where(
         sa.and_(
             model.fundraising_page_info.c.uuid == donation["fundraising_page_id"],
-            model.person_info.c.uuid == model.fundraising_page_info.c.attribution_uuid,
+            model.person_info.c.email
+            == model.fundraising_page_info.c.attribution_email,
         )
     )
     attribution: dict = conn.execute(query).mappings().first()

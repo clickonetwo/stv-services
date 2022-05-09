@@ -20,10 +20,17 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 #
-from dateutil.parser import parse
+from typing import Any
 
-from ..data_store import model
-from ..data_store.persisted_dict import PersistedDict
+import sqlalchemy as sa
+from dateutil.parser import parse
+from sqlalchemy.future import Connection
+
+from ..core.logging import get_logger
+from ..data_store import model, Postgres
+from ..data_store.persisted_dict import PersistedDict, lookup_objects
+
+logger = get_logger(__name__)
 
 
 class ActBlueDonationMetadata(PersistedDict):
@@ -34,60 +41,97 @@ class ActBlueDonationMetadata(PersistedDict):
         super().__init__(model.donation_metadata, **fields)
 
     @classmethod
-    def from_webhook_body(cls, body: dict) -> "ActBlueDonationMetadata":
-        donor: dict = body.get("donor", {})
-        contribution: dict = body.get("contribution", {})
-        line_items: list[dict] = body.get("lineitems", [])
-        form: dict = body.get("form", {})
-        if not (donor and contribution and line_items):
-            raise ValueError(f"Missing required elements in body: {body}")
-        uuid = "+".join([item["lineitemId"] for item in line_items])
-        if not uuid:
-            raise ValueError(f"Missing line items in body: {body}")
-        if not (created_at := contribution.get("createdAt")):
-            raise ValueError(f"No 'createdAt' in contribution: {body}")
-        created_date = parse(created_at)
-        modified_date = created_date
-        if not (donor_email := donor.get("email")):
-            raise ValueError(f"Missing donor in body: {body}")
-        donor_email = donor_email.lower()
-        external_uuid = contribution.get("uniqueIdentifier")
-        recurrence_data = None
-        ref_codes = None
+    def from_webhook(cls, body: dict) -> "ActBlueDonationMetadata":
+        donor_email = body["donor"]["email"].lower()
+        if not donor_email:
+            raise ValueError(f"Missing donor email in ActBlue webhook: {body}")
+        contribution: dict = body["contribution"]
+        if not contribution:
+            raise ValueError(f"Missing contribution in ActBlue webhook: {body}")
+        uuid = contribution["uniqueIdentifier"]
+        if uuid:
+            uuid = "act_blue:" + uuid
+        else:
+            raise ValueError(f"Missing unique ID in ActBlue webhook: {body}")
+        order_date = contribution["createdAt"]
+        order_id = contribution["orderNumber"]
+        ref_code = contribution["refcode"] or ""
+        lineitems = body["lineitems"]
+        if not lineitems:
+            raise ValueError(f"No lineitems in ActBlue webhook: {body}")
+        if len(lineitems) > 1:
+            logger.warning(f"ActBlue webhook has multiple line items: {body}")
+        line_item_ids = "+".join([str(item["lineitemId"]) for item in lineitems])
+        form = body["form"]
+        form_name = form["name"]
+        form_owner_email = form["ownerEmail"] or ""
         if cancelled_at := contribution.get("cancelledAt"):
             item_type = "cancellation"
-            recurrence_data = {"cancelledAt": cancelled_at}
-            for key in ["recurringType", "recurCompleted", "recurPledged"]:
-                if val := contribution.get(key):
-                    recurrence_data[key] = val
-        elif contribution.get("refundedAt"):
-            item_type = "refund"
-            # we don't keep info on refunds
+            created_date = parse(cancelled_at)
         else:
-            item_type = "contribution"
-            ref_codes = contribution.get("refcodes", {})
-            recurrence_data = {}
-            for key in [
-                "recurringPeriod",
-                "recurringDuration",
-                "weeklyRecurringSunset",
-            ]:
-                if val := contribution.get(key):
-                    recurrence_data[key] = val
-        form_name = None
-        form_owner_email = None
-        if form:
-            form_name = form.get("name")
-            form_owner_email = form.get("ownerEmail")
+            if paid_at := lineitems[0].get("paidAt"):
+                item_type = "contribution"
+                created_date = parse(paid_at)
+            elif refunded_at := lineitems[0].get("refundedAt"):
+                item_type = "refund"
+                created_date = parse(refunded_at)
+            else:
+                raise ValueError(f"Can't recognize ActBlue webhook type: {body}")
         return cls(
             uuid=uuid,
             created_date=created_date,
-            modified_date=modified_date,
-            donor_email=donor_email,
+            modified_date=created_date,
             item_type=item_type,
-            external_uuid=external_uuid,
-            recurrence_data=recurrence_data,
+            donor_email=donor_email,
+            order_id=order_id,
+            order_date=order_date,
+            line_item_ids=line_item_ids,
             form_name=form_name,
             form_owner_email=form_owner_email,
-            ref_codes=ref_codes,
+            ref_code=ref_code,
         )
+
+    @classmethod
+    def from_lookup(cls, conn: Connection, uuid: str) -> "ActBlueDonationMetadata":
+        query = sa.select(model.person_info).where(model.person_info.c.uuid == uuid)
+        result = lookup_objects(conn, query, lambda d: cls(**d))
+        if not result:
+            raise KeyError(f"No donation metadata identified by '{uuid}'")
+        return result[0]
+
+    @classmethod
+    def from_query(
+        cls, conn: Connection, query: Any
+    ) -> list["ActBlueDonationMetadata"]:
+        """
+        See `.utils.lookup_hashes` for details.
+        """
+        return lookup_objects(conn, query, lambda d: cls(**d))
+
+
+def import_metadata_from_webhooks(webhooks: list[dict]) -> int:
+    with Postgres.get_global_engine().connect() as conn:  # type: Connection
+        # find existing contribution pages that are attributed
+        query = sa.select(model.donation_metadata.c.form_name).where(
+            model.donation_metadata.c.form_name != ""
+        )
+        existing = {row.form_name for row in conn.execute(query).all()}
+        imported = 0
+        for data in webhooks:
+            try:
+                metadata = ActBlueDonationMetadata.from_webhook(data)
+                if metadata["item_type"] == "cancellation":
+                    imported += 1
+                    metadata.persist(conn)
+                elif metadata["ref_code"]:
+                    imported += 1
+                    metadata.persist(conn)
+                elif metadata["form_owner_email"]:
+                    if (form := metadata["form_name"]) not in existing:
+                        imported += 1
+                        existing.add(form)
+                        metadata.persist(conn)
+            except (ValueError, KeyError) as err:
+                logger.warning(f"Skipping webhook: {err}")
+        conn.commit()
+    return imported

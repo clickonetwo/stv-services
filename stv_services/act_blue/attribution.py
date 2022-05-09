@@ -40,9 +40,9 @@ def calculate_attribution(
             person = ActionNetworkPerson.from_lookup(
                 conn, email=page["attribution_email"]
             )
-            page["attribution_uuid"] = person["uuid"]
+            page["attribution_id"] = person["uuid"]
             ensure_page_action(conn, person, verbose)
-            reclassify_donations(conn, page, person, verbose)
+            republish_donations(conn, page, person, verbose)
             page["attribution_status"] = "uuid"
             page.persist(conn)
             return True
@@ -66,7 +66,7 @@ def ensure_page_action(
     # make one if not, and make sure it's active in any case.
 
 
-def reclassify_donations(
+def republish_donations(
     conn: Connection,
     page: ActionNetworkFundraisingPage,
     person: ActionNetworkPerson,

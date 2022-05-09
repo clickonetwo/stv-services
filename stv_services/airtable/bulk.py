@@ -201,6 +201,7 @@ def bulk_remove_records(
 
 
 def register_webhooks(verbose: bool = True, sync_first: bool = False):
+    Configuration.get_global_config(reload=True)
     if sync_first:
         sync_webhooks(verbose)
     if verbose:
@@ -222,11 +223,13 @@ def sync_webhooks(verbose: bool = True, force_remove: bool = False):
 
 
 def fetch_and_process_all_webhooks(verbose: bool = True):
-    if verbose:
-        print(f"Fetching and processing 'volunteer' Airtable payloads...")
-    process_webhook_notification("volunteer")
-    if verbose:
-        print(f"Fetching and processing 'contact' Airtable payloads...")
-    process_webhook_notification("contact")
-    if verbose:
-        print(f"Done.")
+    with Postgres.get_global_engine().connect() as conn:  # type: Connection
+        if verbose:
+            print(f"Fetching and processing 'volunteer' Airtable payloads...")
+        process_webhook_notification(conn, "volunteer")
+        if verbose:
+            print(f"Fetching and processing 'contact' Airtable payloads...")
+        process_webhook_notification(conn, "contact")
+        if verbose:
+            print(f"Done.")
+        conn.commit()

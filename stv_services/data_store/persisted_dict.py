@@ -20,6 +20,8 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 #
+from typing import Any, Callable
+
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql as psql
 from sqlalchemy.future import Connection
@@ -92,3 +94,26 @@ class PersistedDict(dict):
         query = sa.delete(self.table).where(self.table.c.uuid == self["uuid"])
         conn.execute(query)
         conn.commit()
+
+
+def lookup_objects(
+    conn: Connection,
+    query: Any,
+    constructor: Callable[[dict], Any],
+) -> list[Any]:
+    """
+    Return a list of constructed objects from rows that match the query.
+
+    Args:
+        conn: connection to use
+        query: a select query of all fields in the info table matching the constructor.
+        constructor: the constructor for the type matching the info table in the query.
+
+    Returns:
+        a list of one object per query row in the order specified by the query.
+    """
+    results = []
+    for row in conn.execute(query).mappings().all():
+        fields = {key: value for key, value in row.items() if value is not None}
+        results.append(constructor(fields))
+    return results
