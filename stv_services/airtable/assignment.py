@@ -67,7 +67,7 @@ def insert_assignments(mapping: dict[str, list[str]]) -> int:
     schema = config["airtable_stv_assignment_schema"]
     column_ids = schema["column_ids"]
     records = []
-    for record_id, assignment_names in mapping:
+    for record_id, assignment_names in mapping.items():
         for name in assignment_names:
             records.append(create_assignment_record(column_ids, record_id, name))
     base_id = schema["base_id"]
