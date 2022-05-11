@@ -83,8 +83,7 @@ def update_contacts(verbose: bool = True, force: bool = False):
         people = ActionNetworkPerson.from_query(
             conn, find_records_to_update("contact", force)
         )
-        bulk_upsert_records(conn, "contact", create_contact_record, people, verbose)
-        conn.commit()
+    bulk_upsert_records("contact", create_contact_record, people, verbose)
 
 
 def update_volunteers(verbose: bool = True, force: bool = False):
@@ -94,8 +93,7 @@ def update_volunteers(verbose: bool = True, force: bool = False):
         people = ActionNetworkPerson.from_query(
             conn, find_records_to_update("volunteer", force)
         )
-        bulk_upsert_records(conn, "volunteer", create_volunteer_record, people, verbose)
-        conn.commit()
+    bulk_upsert_records("volunteer", create_volunteer_record, people, verbose)
 
 
 def update_funders(verbose: bool = True, force: bool = False):
@@ -105,8 +103,7 @@ def update_funders(verbose: bool = True, force: bool = False):
         people = ActionNetworkPerson.from_query(
             conn, find_records_to_update("funder", force)
         )
-        bulk_upsert_records(conn, "funder", create_funder_record, people, verbose)
-        conn.commit()
+    bulk_upsert_records("funder", create_funder_record, people, verbose)
 
 
 def update_donation_records(verbose: bool = True, force: bool = False):
@@ -116,14 +113,10 @@ def update_donation_records(verbose: bool = True, force: bool = False):
         donations = ActionNetworkDonation.from_query(
             conn, find_records_to_update("donation", force)
         )
-        bulk_upsert_records(
-            conn, "donation", create_donation_record, donations, verbose
-        )
-        conn.commit()
+    bulk_upsert_records("donation", create_donation_record, donations, verbose)
 
 
 def bulk_upsert_records(
-    conn: Connection,
     record_type: str,
     record_maker: Callable,
     dicts: list[PersistedDict],
@@ -132,11 +125,13 @@ def bulk_upsert_records(
     total, inserts, updates = len(dicts), 0, 0
     if verbose:
         print(f"Updating {total} {record_type} records...", end="", flush=True)
-    for start in range(0, total, 50):
+    for start in range(0, total, 100):
         if verbose and inserts + updates > 0:
             print(f"({inserts+updates})...", end="", flush=True)
-        pairs = [(p_dict, record_maker(conn, p_dict)) for p_dict in dicts]
-        i, u = upsert_records(conn, record_type, pairs[start : min(start + 50, total)])
+        with Postgres.get_global_engine().connect() as conn:  # type: Connection
+            pairs = [(p_dict, record_maker(conn, p_dict)) for p_dict in dicts]
+            i, u = upsert_records(conn, record_type, pairs[start : start + 100])
+            conn.commit()
         inserts += i
         updates += u
     if verbose:
@@ -149,8 +144,7 @@ def remove_contacts(verbose: bool = True):
         people = ActionNetworkPerson.from_query(
             conn, find_records_to_update("contact", True)
         )
-        bulk_remove_records(conn, "person", people, verbose)
-        conn.commit()
+    bulk_remove_records("person", people, verbose)
 
 
 def remove_volunteers(verbose: bool = True):
@@ -158,8 +152,7 @@ def remove_volunteers(verbose: bool = True):
         people = ActionNetworkPerson.from_query(
             conn, find_records_to_update("volunteer", True)
         )
-        bulk_remove_records(conn, "volunteer", people, verbose)
-        conn.commit()
+    bulk_remove_records("volunteer", people, verbose)
 
 
 def remove_funders(verbose: bool = True):
@@ -167,8 +160,7 @@ def remove_funders(verbose: bool = True):
         people = ActionNetworkPerson.from_query(
             conn, find_records_to_update("funder", True)
         )
-        bulk_remove_records(conn, "funder", people, verbose)
-        conn.commit()
+    bulk_remove_records("funder", people, verbose)
 
 
 def remove_donation_records(verbose: bool = True):
@@ -176,12 +168,10 @@ def remove_donation_records(verbose: bool = True):
         donations = ActionNetworkDonation.from_query(
             conn, find_records_to_update("donation", True)
         )
-        bulk_remove_records(conn, "donation", donations, verbose)
-        conn.commit()
+    bulk_remove_records("donation", donations, verbose)
 
 
 def bulk_remove_records(
-    conn: Connection,
     record_type: str,
     dicts: list[PersistedDict],
     verbose: bool = True,
@@ -189,12 +179,12 @@ def bulk_remove_records(
     total, deletes = len(dicts), 0
     if verbose:
         print(f"Deleting {total} {record_type} records...", end="", flush=True)
-    for start in range(0, total, 50):
+    for start in range(0, total, 100):
         if verbose and deletes > 0:
             print(f"({deletes})...", end="", flush=True)
-        deletes += delete_records(
-            conn, record_type, dicts[start : min(start + 50, total)]
-        )
+        with Postgres.get_global_engine().connect() as conn:  # type: Connection
+            deletes += delete_records(conn, record_type, dicts[start : start + 100])
+            conn.commit()
     if verbose:
         print(f"({deletes})")
         print(f"Deleted {deletes} records.")
