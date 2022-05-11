@@ -21,13 +21,16 @@
 #  SOFTWARE.
 #
 import os
+import sqlalchemy as sa
 
 import alembic.config
+from sqlalchemy.future import Connection
 
 import stv_services.airtable.bulk as at_bulk
 
 from stv_services.core import Configuration
 from stv_services.core.logging import init_logging, get_logger
+from stv_services.data_store import Postgres, model
 
 logger = get_logger("release")
 
@@ -67,7 +70,12 @@ def run_release_process():
     # make sure the Airtable schema validates
     at_bulk.verify_schemas(verbose=True)
 
-    logger.critical("Don't forget to load local data before starting services")
+    # final check on configuration
+    with Postgres.get_global_engine().connect() as conn:  # type: Connection
+        rows = conn.execute(sa.select(model.external_info)).first()
+        if not rows:
+            logger.critical("There is no external spreadsheet data loaded!!")
+            logger.critical("heroku local:run ./stv.py import-from-local")
 
 
 if __name__ == "__main__":
