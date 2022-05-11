@@ -49,7 +49,7 @@ def main():
             timeout = 50.0 + 20.0 * random()
             logger.info(f"Waiting {timeout} seconds for new publish...")
             message: dict = pubsub.get_message(timeout=timeout)
-            if not dict:
+            if not message:
                 continue
             if message.get("type") != "message":
                 logger.warning(f"Ignoring non-message: {message}")
