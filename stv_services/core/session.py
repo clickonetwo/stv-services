@@ -31,10 +31,16 @@ from .config import Configuration
 class Session:
     sessions: ClassVar[Dict[str, requests.Session]] = {}
     api: ClassVar[Api] = None
-    config: ClassVar[Configuration] = Configuration.get_global_config()
+    config: ClassVar[Configuration] = None
+
+    @classmethod
+    def init_config(cls):
+        if not cls.config:
+            cls.config = Configuration.get_global_config()
 
     @classmethod
     def get_global_session(cls, service: str) -> requests.Session:
+        cls.init_config()
         service = service.lower()
         session = cls.sessions.get(service)
         if session is None:
@@ -56,6 +62,7 @@ class Session:
 
     @classmethod
     def get_airtable_api(cls) -> Api:
+        cls.init_config()
         if cls.api is None:
             api_key = cls.config["airtable_api_key"]
             cls.api = Api(api_key, timeout=(3.5, 27))
