@@ -26,6 +26,7 @@ from typing import Any
 from sqlalchemy.future import Connection
 
 from . import airtable, act_blue
+from ..act_blue.metadata import ActBlueDonationMetadata
 from ..core.logging import get_logger, log_exception
 from ..core.utilities import local_timestamp
 from ..data_store import Postgres
@@ -38,6 +39,7 @@ queues = ("airtable", "internal", "act_blue", "action_network")
 def main():
     logger.info(f"Starting worker at {local_timestamp()}...")
     locking_queues = {queue: LockingQueue(queue) for queue in queues}
+    ActBlueDonationMetadata.initialize_forms()
     db = RedisSync.connect()
     pubsub = db.pubsub(ignore_subscribe_messages=True)
     pubsub.subscribe("webhooks")
