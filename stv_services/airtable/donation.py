@@ -82,7 +82,7 @@ def create_donation_record(conn: Connection, donation: ActionNetworkDonation) ->
     attribution_record_id = None
     if attribution_id := donation["attribution_id"]:
         # find the matching fundraising page record, if there is one
-        query = sa.select(table).where(table.uuid == attribution_id)
+        query = sa.select(table).where(table.c.uuid == attribution_id)
         if attribution := conn.execute(query).mappings().first():
             attribution_record_id = attribution["funder_record_id"]
             if not attribution_record_id:
