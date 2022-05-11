@@ -76,6 +76,8 @@ def run_release_process():
         if not rows:
             logger.critical("There is no external spreadsheet data loaded!!")
             logger.critical("heroku local:run ./stv.py import-from-local")
+        else:
+            logger.info("Local data has been loaded: ready to run services")
 
 
 if __name__ == "__main__":
