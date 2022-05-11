@@ -59,5 +59,5 @@ async def receive_notifications(body: dict):
     compact = json.dumps(body, separators=(",", ":"))
     length: int = await db.lpush("act_blue", compact)
     logger.info(f"Saved webhook content as #{length} in 'act_blue' queue")
-    await db.compute_status_for_type("webhooks", "act_blue")
+    await db.publish("webhooks", "act_blue")
     return
