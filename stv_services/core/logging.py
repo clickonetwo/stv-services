@@ -27,16 +27,6 @@ import sys
 from stv_services.core import Configuration
 
 
-def _init_level(level: str = os.getenv("STV_LOG_LEVEL")):
-    if level:
-        name = logging.getLevelName(level)
-        if name.startswith("Level"):
-            level = None
-    env = Configuration.get_env()
-    config_level = logging.DEBUG if env == "DEV" else logging.INFO
-    return level or config_level
-
-
 def get_logger(name):
     return logging.getLogger(name)
 
@@ -51,15 +41,23 @@ def log_exception(local: logging.Logger, context: str) -> str:
 
 
 def init_logging():
-    # a no-op just to get this module loaded
-    pass
+    level = os.getenv("STV_LOG_LEVEL")
+    if level:
+        level = logging.getLevelName(level)
+        if not isinstance(level, int):
+            level = None
+    if not level:
+        env = Configuration.get_env()
+        level = logging.DEBUG if env == "DEV" else logging.INFO
+    logging.basicConfig(
+        format=f"%(levelname)s:%(module)s:%(process)d: %(message)s",
+        level=level,
+        stream=sys.stdout,
+        force=True,
+    )
 
 
-logging.basicConfig(
-    format=f"%(levelname)s:%(module)s:%(process)d: %(message)s",
-    level=_init_level(),
-    stream=sys.stdout,
-)
+init_logging()
 logger = get_logger(__name__)
 logger.info(
     f"Running in {Configuration.get_env()} environment "

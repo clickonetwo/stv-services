@@ -34,12 +34,12 @@ from stv_services.data_store import Postgres, model
 
 
 def run_release_process():
-    # log the environment and log parameters
-    init_logging()
-
     # initialize the database
     alembic_args = ["--raiseerr", "upgrade", "head"]
     alembic.config.main(argv=alembic_args)
+
+    # reset logging now that alembic is done
+    init_logging()
 
     # exit if no configuration data is loaded
     config = Configuration.get_global_config()
