@@ -20,7 +20,7 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 #
-from typing import Any
+from typing import Any, ClassVar
 
 import sqlalchemy as sa
 from dateutil.parser import parse
@@ -31,9 +31,30 @@ from ..data_store import model, Postgres
 from ..data_store.persisted_dict import PersistedDict, lookup_objects
 
 logger = get_logger(__name__)
+internal_domains = {
+    "clickonetwo.io",
+    "seedthevote.org",
+    "everydaypeoplepac.org",
+}
+internal_emails = set()
+
+
+def supporter_email(email: str) -> str:
+    email = email.strip().lower()
+    if not email:
+        return ""
+    if len(parts := email.split("@")) != 2:
+        return ""
+    if parts[1] in internal_domains:
+        return ""
+    if email in internal_emails:
+        return ""
+    return email
 
 
 class ActBlueDonationMetadata(PersistedDict):
+    existing_forms: ClassVar[set] = set()
+
     def __init__(self, **fields):
         for key in ["item_type", "donor_email"]:
             if not fields.get(key):
@@ -67,6 +88,31 @@ class ActBlueDonationMetadata(PersistedDict):
             self["attribution_id"] = person["uuid"]
         elif (refcode := self["refcode"]) and refcode == person["funder_refcode"]:
             self["attribution_id"] = person["uuid"]
+
+    def contributes_to_status(self):
+        if self["item_type"] == "cancellation":
+            return True
+        elif self["item_type"] == "return":
+            return False
+        elif self["item_type"] == "contribution":
+            if self["refcode"]:
+                return True
+            if name := self["form_name"]:
+                if email := supporter_email(self["form_owner_email"]):
+                    if name not in self.existing_forms:
+                        self.existing_forms.add(name)
+                        self["form_owner_email"] = email
+                        return True
+        return False
+
+    @classmethod
+    def initialize_forms(cls):
+        query = sa.select(model.donation_metadata.c.form_name).where(
+            model.donation_metadata.c.form_name != ""
+        )
+        with Postgres.get_global_engine().connect() as conn:  # type: Connection
+            cls.existing_forms = {row.form_name for row in conn.execute(query)}
+        pass
 
     @classmethod
     def from_webhook(cls, body: dict) -> "ActBlueDonationMetadata":
@@ -141,27 +187,14 @@ class ActBlueDonationMetadata(PersistedDict):
 
 def import_metadata_from_webhooks(webhooks: list[dict]) -> int:
     with Postgres.get_global_engine().connect() as conn:  # type: Connection
-        # find existing contribution pages that are attributed
-        query = sa.select(model.donation_metadata.c.form_name).where(
-            model.donation_metadata.c.form_name != ""
-        )
-        existing = {row.form_name for row in conn.execute(query).all()}
         imported = 0
         for data in webhooks:
             try:
                 metadata = ActBlueDonationMetadata.from_webhook(data)
-                if metadata["item_type"] == "cancellation":
-                    imported += 1
+                if metadata.contributes_to_status():
                     metadata.persist(conn)
-                elif metadata["refcode"]:
                     imported += 1
-                    metadata.persist(conn)
-                elif metadata["form_owner_email"]:
-                    if (form := metadata["form_name"]) not in existing:
-                        imported += 1
-                        existing.add(form)
-                        metadata.persist(conn)
             except (ValueError, KeyError) as err:
-                logger.warning(f"Skipping webhook: {err}")
+                logger.warning(f"Skipping webhook: {err}: {data}")
         conn.commit()
     return imported

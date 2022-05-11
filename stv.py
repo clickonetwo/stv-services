@@ -54,6 +54,14 @@ def stv(ctx: click.Context, verbose: bool):
 
 @stv.command()
 @click.pass_context
+def import_from_local(ctx: click.Context):
+    verbose = ctx.obj["verbose"]
+    ctx.invoke(import_external_data)
+    ctx.invoke(import_donation_metadata)
+
+
+@stv.command()
+@click.pass_context
 def import_and_update_all(ctx: click.Context):
     ctx.invoke(import_all)
     ctx.invoke(compute_status_all)
@@ -64,12 +72,10 @@ def import_and_update_all(ctx: click.Context):
 @click.pass_context
 def import_all(ctx: click.Context):
     verbose = ctx.obj["verbose"]
-    ctx.invoke(import_external_data)
     an_bulk.import_submissions(verbose)
     an_bulk.import_fundraising_pages(verbose)
     an_bulk.import_donations(verbose)
     an_bulk.import_people(verbose)
-    ab_bulk.import_donation_metadata(verbose)
 
 
 @stv.command()

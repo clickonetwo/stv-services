@@ -29,53 +29,15 @@ from sqlalchemy.future import Connection
 from ..act_blue.metadata import ActBlueDonationMetadata
 from ..data_store import Postgres, model
 
-internal_domains = {
-    "clickonetwo.io",
-    "seedthevote.org",
-    "everydaypeoplepac.org",
-}
-internal_emails = set()
-
 
 def process_webhook_notification(body: str) -> bool:
     body = json.loads(body)
     with Postgres.get_global_engine().connect() as conn:  # type: Connection
         metadata = ActBlueDonationMetadata.from_webhook(body)
-        if metadata["item_type"] == "cancellation":
-            save_metadata = True
-        elif metadata["item_type"] == "return":
-            save_metadata = False
-        elif metadata["item_type"] == "contribution":
-            save_metadata = False
-            if metadata["refcode"]:
-                save_metadata = True
-            elif (name := metadata["form_name"]) and (
-                email := metadata["form_owner_email"]
-            ):
-                if email := supporter_email(email):
-                    metadata["form_owner_email"] = email
-                    # it's a supporter form, save it if we don't have it already
-                    query = sa.select(model.donation_metadata).where(
-                        model.donation_metadata.c.form_name == name
-                    )
-                    if not conn.execute(query).first():
-                        save_metadata = True
-        else:
-            # unknown metadata type
-            save_metadata = False
-        if save_metadata:
+        if metadata.contributes_to_status():
             metadata.compute_status(conn)
             metadata["updated_date"] = datetime.now(tz=timezone.utc)
             metadata.persist(conn)
             conn.commit()
-        return save_metadata
-
-
-def supporter_email(email: str) -> str:
-    email = email.strip().lower()
-    _, domain_part = email.split("@")
-    if domain_part in internal_domains:
-        return ""
-    if email in internal_emails:
-        return ""
-    return email
+            return True
+    return False

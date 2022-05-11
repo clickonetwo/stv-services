@@ -21,34 +21,31 @@
 #  SOFTWARE.
 #
 import json
-import os
-import sqlalchemy as sa
 
+import sqlalchemy as sa
 from sqlalchemy.future import Connection
 
-from .metadata import import_metadata_from_webhooks
-from ..core.utilities import action_network_timestamp
+from .metadata import import_metadata_from_webhooks, ActBlueDonationMetadata
 from ..data_store import Postgres, model
-from ..worker.act_blue import process_webhook_notification
 
 
 def import_donation_metadata(filepath: str, verbose: bool = True):
     if verbose:
         print(f"Importing ActBlue webhooks from '{filepath}'...")
-    batch: list[str] = []
+    batch: list[dict] = []
     with open(filepath) as file:
         while line := file.readline():
-            batch.append(line.strip())
+            batch.append(json.loads(line.strip()))
     with Postgres.get_global_engine().connect() as conn:  # type: Connection
         # out with the old
-        conn.execute(sa.delete(model.external_info))
+        conn.execute(sa.delete(model.donation_metadata))
         conn.commit()
     # in with the new
-    total, imported = 0, 0
-    for line in batch:
-        total += 1
-        imported += 1 if process_webhook_notification(line) else 0
-        if verbose and total % 100 == 0:
-            print(f"Processed {total}, kept {imported}...")
+    ActBlueDonationMetadata.initialize_forms()
+    total, imported = len(batch), 0
+    for i in range(0, total, 100):
+        if verbose and i > 0:
+            print(f"Processed {i}, kept {imported}...")
+        imported += import_metadata_from_webhooks(batch[i : i + 100])
     if verbose:
         print(f"Imported {imported} metadata records from {total} webhooks.")
