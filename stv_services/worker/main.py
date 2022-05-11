@@ -28,6 +28,7 @@ from sqlalchemy.future import Connection
 
 from . import airtable, act_blue
 from ..act_blue.metadata import ActBlueDonationMetadata
+from ..core import Configuration
 from ..core.logging import get_logger, log_exception
 from ..core.utilities import local_timestamp
 from ..data_store import Postgres
@@ -75,6 +76,8 @@ def main():
             except (KeyError, ValueError, UnicodeDecodeError):
                 msg = log_exception(logger, "While processing queue item")
                 db.lpush(results_name, msg)
+                if Configuration.get_env() == "DEV":
+                    raise
             except LockingQueue.LockedByOther:
                 # some other worker got it, move on
                 logger.info(f"Failed to lock '{queue_name}'")
@@ -83,6 +86,8 @@ def main():
                 locking_queue.unlock()
     except (UnicodeDecodeError, KeyError) as err:
         logger.info(f"Terminating on message decode error: '{err}'...")
+        if Configuration.get_env() == "DEV":
+            raise
     except KeyboardInterrupt:
         logger.info("Terminating on interrupt...")
     finally:
