@@ -22,20 +22,20 @@
 #
 from fastapi import HTTPException, status
 
-from ..core.logging import log_exception, Logger
+from ..core.logging import log_exception, logging
 
 
-def request_error(logger: Logger, context: str):
+def request_error(logger: logging.Logger, context: str):
     message = log_exception(logger, f"Request error: {context}")
     return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
 
-def database_error(logger: Logger, context: str):
+def database_error(logger: logging.Logger, context: str):
     message = log_exception(logger, f"Database error: {context}")
     return HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=message)
 
 
-def runtime_error(logger: Logger, context: str):
+def runtime_error(logger: logging.Logger, context: str):
     message = log_exception(logger, f"Unexpected error: {context}")
     return HTTPException(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=message
