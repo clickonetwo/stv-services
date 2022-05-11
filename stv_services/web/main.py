@@ -26,8 +26,10 @@ from fastapi.responses import RedirectResponse
 
 from .act_blue import act_blue
 from .airtable import airtable
+from ..airtable.bulk import register_webhooks, verify_schemas
 from ..core import Configuration
 from ..core.logging import get_logger
+from ..core.utilities import local_timestamp
 from ..data_store import ItemListAsync
 
 logger = get_logger(__name__)
@@ -56,10 +58,13 @@ async def status():
 
 @app.on_event("startup")
 async def startup():
-    Configuration.get_global_config()
-    await ItemListAsync.initialize()
+    logger.info(f"Web server startup at {local_timestamp()}")
+    # make sure the Airtable schema is as expected
+    verify_schemas(verbose=True)
+    # make sure the Airtable webhooks are registered
+    register_webhooks(verbose=True, sync_first=True)
 
 
 @app.on_event("shutdown")
 async def shutdown():
-    await ItemListAsync.finalize()
+    logger.info(f"Web server shutdown at {local_timestamp()}")

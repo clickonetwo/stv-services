@@ -59,9 +59,6 @@ def run_release_process():
     # make sure the Airtable schema validates
     at_bulk.verify_schemas(verbose=True)
 
-    # make sure the Airtable webhooks are registered
-    at_bulk.register_webhooks(verbose=True, sync_first=True)
-
 
 if __name__ == "__main__":
     run_release_process()
