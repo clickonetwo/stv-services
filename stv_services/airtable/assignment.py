@@ -23,8 +23,8 @@
 from sqlalchemy.future import Connection
 
 from .schema import fetch_and_validate_table_schema, FieldInfo
-from ..action_network.person import ActionNetworkPerson
 from ..core import Configuration, Session
+from ..data_store.persisted_dict import PersistedDict
 
 assignment_table_name = "Assignments"
 assignment_table_schema = {
@@ -79,9 +79,7 @@ def insert_assignments(mapping: dict[str, list[str]]) -> int:
     return len(response)
 
 
-def insert_needed_assignments(
-    conn: Connection, people: list[ActionNetworkPerson]
-) -> int:
+def insert_needed_assignments(conn: Connection, people: list[PersistedDict]) -> int:
     """Insert assignments needed for contacts"""
     assignment_map = {}
     for person in people:

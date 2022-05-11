@@ -28,6 +28,9 @@ from sqlalchemy.future import Connection
 
 from stv_services.airtable.schema import fetch_airtable_base_id
 from stv_services.core import Configuration, Session
+from stv_services.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 def register_hook(name: str, base_id: str, table_id: str, field_ids: list[str]):
@@ -145,6 +148,7 @@ def sync_hooks(verbose: bool = True, force_remove: bool = False):
 
 
 def fetch_hook_payloads(conn: Connection, name: str) -> list[dict]:
+    logger.info(f"Fetching airtable '{name}' payloads...")
     config = Configuration.get_session_config(conn)
     info = config["airtable_webhooks"][name]
     base_id = info["base_id"]
@@ -165,6 +169,7 @@ def fetch_hook_payloads(conn: Connection, name: str) -> list[dict]:
         might_have_more = data.get("mightHaveMore", False)
     info["cursor"] = cursor
     config.save_to_connection(conn)
+    logger.info(f"Got {len(payloads)} '{name}' payload(s).")
     return payloads
 
 

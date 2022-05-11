@@ -23,6 +23,7 @@
 import sqlalchemy as sa
 from sqlalchemy.future import Connection
 
+from .assignment import insert_needed_assignments
 from .schema import fetch_and_validate_table_schema, FieldInfo
 from .utils import (
     upsert_records,
@@ -125,7 +126,7 @@ def upsert_contacts(conn: Connection, people: list[ActionNetworkPerson]) -> (int
     pairs = [(person, create_contact_record(conn, person)) for person in people]
     (inserted, updated) = upsert_records(conn, "contact", pairs)
     # now insert any needed assignments for these people
-
+    insert_needed_assignments(conn, people)
     return inserted, updated
 
 

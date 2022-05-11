@@ -31,11 +31,7 @@ from ..data_store import model, Postgres
 from ..data_store.persisted_dict import PersistedDict, lookup_objects
 
 logger = get_logger(__name__)
-internal_domains = {
-    "clickonetwo.io",
-    "seedthevote.org",
-    "everydaypeoplepac.org",
-}
+internal_domains = set()
 internal_emails = set()
 
 

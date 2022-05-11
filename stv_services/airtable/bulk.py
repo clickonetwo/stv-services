@@ -26,9 +26,11 @@ from sqlalchemy.future import Connection
 
 from stv_services.action_network.donation import ActionNetworkDonation
 from stv_services.action_network.person import ActionNetworkPerson
-from stv_services.data_store.persisted_dict import PersistedDict
 from stv_services.airtable import webhook
-from stv_services.airtable.assignment import verify_assignment_schema
+from stv_services.airtable.assignment import (
+    verify_assignment_schema,
+    insert_needed_assignments,
+)
 from stv_services.airtable.contact import (
     verify_contact_schema,
     create_contact_record,
@@ -51,6 +53,7 @@ from stv_services.airtable.volunteer import (
 )
 from stv_services.core import Configuration
 from stv_services.data_store import Postgres
+from stv_services.data_store.persisted_dict import PersistedDict
 from stv_services.worker.airtable import process_webhook_notification
 
 
@@ -131,6 +134,9 @@ def bulk_upsert_records(
         with Postgres.get_global_engine().connect() as conn:  # type: Connection
             pairs = [(p_dict, record_maker(conn, p_dict)) for p_dict in dicts]
             i, u = upsert_records(conn, record_type, pairs[start : start + 100])
+            # now insert any needed assignments for contacts
+            if record_type == "contact":
+                insert_needed_assignments(conn, dicts)
             conn.commit()
         inserts += i
         updates += u

@@ -21,6 +21,7 @@
 #  SOFTWARE.
 #
 import os
+from random import random
 from typing import Any
 
 from sqlalchemy.future import Connection
@@ -43,12 +44,24 @@ def main():
     db = RedisSync.connect()
     pubsub = db.pubsub(ignore_subscribe_messages=True)
     pubsub.subscribe("webhooks")
-    queue_name = None
-    logger.info("Waiting for published webhooks...")
     try:
-        for message in pubsub.listen():  # type dict
-            queue_name = message["data"].decode("utf-8")
-            locking_queue = locking_queues[queue_name]
+        while True:
+            timeout = 50.0 + 20.0 * random()
+            logger.info(f"Waiting {timeout} seconds for new publish...")
+            message: dict = pubsub.get_message(timeout=timeout)
+            if not dict:
+                continue
+            if message.get("type") != "message":
+                logger.warning(f"Ignoring non-message: {message}")
+                continue
+            queue_name = message.get("data", b"stop").decode("utf-8").lower()
+            if not queue_name or queue_name == "stop":
+                logger.error(f"Received exit signal, stopping: {message}")
+                break
+            locking_queue = locking_queues.get(queue_name)
+            if not locking_queue:
+                logger.error(f"Received unknown queue name, ignoring: {queue_name}")
+                continue
             processed_name = f"{queue_name}:processed"
             results_name = f"{queue_name}:results"
             try:
@@ -60,19 +73,20 @@ def main():
                     db.lpush(results_name, process_result)
                 logger.info(f"Waiting for published webhooks...")
             except (KeyError, ValueError, UnicodeDecodeError):
-                message = log_exception(logger, "While processing queue item")
-                db.lpush(results_name, message)
+                msg = log_exception(logger, "While processing queue item")
+                db.lpush(results_name, msg)
             except LockingQueue.LockedByOther:
                 # some other worker got it, move on
                 logger.info(f"Failed to lock '{queue_name}'")
-                logger.info(f"Waiting for published webhooks...")
                 continue
             finally:
                 locking_queue.unlock()
-    except KeyError:
-        logger.info(f"Terminating on unknown queue name: '{queue_name}'...")
+    except (UnicodeDecodeError, KeyError) as err:
+        logger.info(f"Terminating on message decode error: '{err}'...")
     except KeyboardInterrupt:
         logger.info("Terminating on interrupt...")
+    finally:
+        pubsub.reset()
     db.close()
     logger.info(f"Stopping worker at {local_timestamp()}.")
 

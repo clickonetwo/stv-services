@@ -49,6 +49,7 @@ def process_webhook_notification(conn: Connection, name: str):
 def process_promotion_webhook_payloads(
     conn: Connection, name: str, payloads: list[dict]
 ):
+    logger.info(f"Processing airtable '{name}' payloads for promotion...")
     config = Configuration.get_session_config(conn)
     schema = config[f"airtable_stv_{name}_schema"]
     table_id = schema["table_id"]
@@ -63,6 +64,7 @@ def process_promotion_webhook_payloads(
                 if field_id in current:
                     record_ids.add(record_id)
     promote_volunteers_or_contacts(conn, name, list(record_ids))
+    logger.info(f"Promotion processing done.")
 
 
 def promote_volunteers_or_contacts(conn: Connection, name: str, record_ids: list[str]):
@@ -105,6 +107,7 @@ def promote_volunteers_or_contacts(conn: Connection, name: str, record_ids: list
 
 
 def process_team_webhook_payloads(conn: Connection, name: str, payloads: list[dict]):
+    logger.info(f"Processing airtable '{name}' payloads for team changes...")
     config = Configuration.get_session_config(conn)
     schema = config[f"airtable_stv_{name}_schema"]
     table_id = schema["table_id"]
@@ -133,6 +136,7 @@ def process_team_webhook_payloads(conn: Connection, name: str, payloads: list[di
                         old_lead = old_leads[0].get("id")
                         changed_ids.add(old_lead)
     change_team_leads(conn, list(changed_ids), new_lead_map)
+    logger.info(f"Team change processing done.")
 
 
 def change_team_leads(conn: Connection, changed_ids: list[str], new_lead_map: dict):
