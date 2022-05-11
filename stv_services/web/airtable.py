@@ -61,4 +61,5 @@ async def receive_notification(request: Request):
     db = await RedisAsync.connect()
     length = await db.lpush("airtable", hook_name)
     logger.info(f"Saved webhook '{hook_name}' as #{length} in 'airtable' queue")
+    await db.publish("webhooks", "airtable")
     return
