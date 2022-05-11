@@ -33,9 +33,11 @@ from .utils import (
 )
 from ..action_network.donation import ActionNetworkDonation
 from ..core import Configuration
+from ..core.logging import get_logger
 from ..core.utilities import airtable_timestamp
 from ..data_store import model
 
+logger = get_logger(__name__)
 donation_table_name = "Donations"
 donation_table_schema = {
     "uuid": FieldInfo("Donation ID*", "singleLineText", "donation"),
@@ -86,7 +88,7 @@ def create_donation_record(conn: Connection, donation: ActionNetworkDonation) ->
         if attribution := conn.execute(query).mappings().first():
             attribution_record_id = attribution["funder_record_id"]
             if not attribution_record_id:
-                raise KeyError(f"Attributor {attribution['uuid']} is not a funder")
+                logger.warning(f"Attributor {attribution['uuid']} is not a funder")
     column_ids = config["airtable_stv_donation_schema"]["column_ids"]
     record = dict()
     for field_name, info in donation_table_schema.items():
