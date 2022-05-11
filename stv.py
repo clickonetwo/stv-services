@@ -170,10 +170,11 @@ def import_external_data(ctx: click.Context, path: str = None):
 
 
 @stv.command()
+@click.option("--force/--no-force", default=False, help="Force compute of all")
 @click.pass_context
-def compute_status_all(ctx: click.Context):
+def compute_status_all(ctx: click.Context, force: bool = False):
     verbose = ctx.obj["verbose"]
-    an_bulk.compute_status_all(verbose)
+    an_bulk.compute_status_all(verbose, force)
 
 
 @stv.command()
