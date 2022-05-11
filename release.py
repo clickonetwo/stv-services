@@ -27,7 +27,9 @@ import alembic.config
 import stv_services.airtable.bulk as at_bulk
 
 from stv_services.core import Configuration
-from stv_services.core.logging import init_logging
+from stv_services.core.logging import init_logging, get_logger
+
+logger = get_logger("release")
 
 
 def run_release_process():
@@ -38,9 +40,13 @@ def run_release_process():
     alembic_args = ["--raiseerr", "upgrade", "head"]
     alembic.config.main(argv=alembic_args)
 
-    # make sure the configuration is loaded
+    # exit if no configuration data is loaded
     config = Configuration.get_global_config()
-    assert config.get("airtable_stv_base_name"), "No configuration is loaded"
+    if not config.get("airtable_stv_base_name"):
+        logger.critical(
+            "No configuration data: be sure to load configuration before services start"
+        )
+        return
 
     # make sure our endpoint matches our configuration
     url: str = config.get("stv_api_base_url", "")
@@ -52,12 +58,16 @@ def run_release_process():
     elif url.find("-stage") >= 0:
         assert env == "STG", "STG webserver but not in STG"
         assert os.getenv("DATABASE_URL"), "STG builds require a DATABASE_URL"
+        assert os.getenv("REDIS_URL"), "STG builds require a REDIS_URL"
     else:
         assert env == "PRD", "PRD webserver but not in PRD"
         assert os.getenv("DATABASE_URL"), "PRD builds require a DATABASE_URL"
+        assert os.getenv("REDIS_URL"), "PRD builds require a REDIS_URL"
 
     # make sure the Airtable schema validates
     at_bulk.verify_schemas(verbose=True)
+
+    logger.critical("Don't forget to load local data before starting services")
 
 
 if __name__ == "__main__":
