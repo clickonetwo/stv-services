@@ -29,14 +29,12 @@ from sqlalchemy.future import Connection
 import stv_services.airtable.bulk as at_bulk
 
 from stv_services.core import Configuration
-from stv_services.core.logging import init_logging, get_logger
+from stv_services.core.logging import logging, init_logging
 from stv_services.data_store import Postgres, model
-
-logger = get_logger("release")
 
 
 def run_release_process():
-    # start logging
+    # log the environment and log parameters
     init_logging()
 
     # initialize the database
@@ -46,8 +44,9 @@ def run_release_process():
     # exit if no configuration data is loaded
     config = Configuration.get_global_config()
     if not config.get("airtable_stv_base_name"):
-        logger.critical(
-            "No configuration data: be sure to load configuration before services start"
+        logging.error(
+            "No configuration data: "
+            "be sure to load configuration before starting services"
         )
         return
 
@@ -74,10 +73,10 @@ def run_release_process():
     with Postgres.get_global_engine().connect() as conn:  # type: Connection
         rows = conn.execute(sa.select(model.external_info)).first()
         if not rows:
-            logger.critical("There is no external spreadsheet data loaded!!")
-            logger.critical("heroku local:run ./stv.py import-from-local")
+            logging.error("There is no external spreadsheet data loaded!!")
+            logging.error("Execute the stv.py command `import-from-local`")
         else:
-            logger.info("Local data has been loaded: ready to run services")
+            logging.info("Local data has been loaded: ready to run services")
 
 
 if __name__ == "__main__":

@@ -20,40 +20,48 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 #
-from logging import getLogger, Logger, basicConfig, DEBUG, INFO
+import logging
 import os
 import sys
 
 from stv_services.core import Configuration
 
-_env_level = os.getenv("STV_LOG_LEVEL")
-_config_level = DEBUG if Configuration.get_env() == "DEV" else INFO
-_log_level = _env_level or _config_level
-basicConfig(
-    format=f"%(levelname)s:%(module)s:%(process)d: %(message)s",
-    level=_log_level,
-    stream=sys.stdout,
-)
 
-
-def init_logging(verbose: bool = False):
+def _init_level(level: str = os.getenv("STV_LOG_LEVEL")):
+    if level:
+        name = logging.getLevelName(level)
+        if name.startswith("Level"):
+            level = None
     env = Configuration.get_env()
-    if verbose:
-        logger = getLogger(__name__)
-        logger.info(f"Running in {env} environment")
+    config_level = logging.DEBUG if env == "DEV" else logging.INFO
+    return level or config_level
 
 
 def get_logger(name):
-    return getLogger(name)
+    return logging.getLogger(name)
 
 
-def log_exception(logger: Logger, context: str) -> str:
+def log_exception(local: logging.Logger, context: str) -> str:
     """Log a message about an exception, and return the message"""
     exc_type, exc_obj, exc_tb = sys.exc_info()
     f_name = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
     message = f"{context}: {f_name}, {exc_tb.tb_lineno}: {repr(exc_obj)}"
-    logger.critical(message)
+    local.critical(message)
     return message
 
 
-init_logging(verbose=True)
+def init_logging():
+    # a no-op just to get this module loaded
+    pass
+
+
+logging.basicConfig(
+    format=f"%(levelname)s:%(module)s:%(process)d: %(message)s",
+    level=_init_level(),
+    stream=sys.stdout,
+)
+logger = get_logger(__name__)
+logger.info(
+    f"Running in {Configuration.get_env()} environment "
+    f"(log level {logging.getLevelName(logger.getEffectiveLevel())})"
+)
