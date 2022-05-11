@@ -55,21 +55,16 @@ def stv(ctx: click.Context, verbose: bool):
 @stv.command()
 @click.pass_context
 def import_and_update_all(ctx: click.Context):
-    verbose = ctx.obj["verbose"]
-    import_all(ctx.obj)
-    an_bulk.compute_status_all(verbose)
-    at_bulk.verify_schemas(verbose)
-    update_all(ctx.obj)
-    at_bulk.sync_webhooks()
-    at_bulk.fetch_and_process_all_webhooks()
-    at_bulk.register_webhooks(verbose)
+    ctx.invoke(import_all)
+    ctx.invoke(compute_status_all)
+    ctx.invoke(update_all)
 
 
 @stv.command()
 @click.pass_context
 def import_all(ctx: click.Context):
     verbose = ctx.obj["verbose"]
-    import_external_data(ctx.obj)
+    ctx.invoke(import_external_data)
     an_bulk.import_submissions(verbose)
     an_bulk.import_fundraising_pages(verbose)
     an_bulk.import_donations(verbose)
@@ -79,8 +74,16 @@ def import_all(ctx: click.Context):
 
 @stv.command()
 @click.pass_context
+def compute_status_all(ctx: click.Context):
+    verbose = ctx.obj["verbose"]
+    an_bulk.compute_status_all(verbose)
+
+
+@stv.command()
+@click.pass_context
 def update_all(ctx: click.Context):
     verbose = ctx.obj["verbose"]
+    at_bulk.verify_schemas(verbose)
     at_bulk.update_volunteers(verbose)
     at_bulk.update_contacts(verbose)
     at_bulk.update_funders(verbose)
@@ -212,13 +215,6 @@ def update_donation_records(ctx: click.Context, force: bool = False):
 
 @stv.command()
 @click.pass_context
-def ensure_empty_assignments(ctx: click.Context):
-    verbose = ctx.obj["verbose"]
-    sync.ensure_empty_assignments(verbose)
-
-
-@stv.command()
-@click.pass_context
 def remove_contacts(ctx: click.Context):
     verbose = ctx.obj["verbose"]
     at_bulk.remove_contacts(verbose)
@@ -236,16 +232,6 @@ def remove_volunteers(ctx: click.Context):
 def remove_funders(ctx: click.Context):
     verbose = ctx.obj["verbose"]
     at_bulk.remove_funders(verbose)
-
-
-@stv.command()
-@click.option(
-    "--remove-all/--no-remove-all", default=False, help="Remove all not just empty"
-)
-@click.pass_context
-def remove_empty_assignments(ctx: click.Context, remove_all: bool = False):
-    verbose = ctx.obj["verbose"]
-    sync.remove_empty_assignments(verbose, remove_all)
 
 
 @stv.command()
