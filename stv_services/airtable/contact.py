@@ -54,9 +54,9 @@ contact_table_schema = {
     ),
     "signup_notes": FieldInfo("2022 Signup Notes*", "multilineText", "compute"),
     "fundraise_interests": FieldInfo(
-        "2022 Fundraise Interests*", "multipleSelects", "compute"
+        "2022 Fundraising Interests*", "multipleSelects", "compute"
     ),
-    "fundraise_notes": FieldInfo("2022 Fundraise Notes*", "multilineText", "compute"),
+    "fundraise_notes": FieldInfo("2022 Fundraising Notes*", "multilineText", "compute"),
     "team_lead": FieldInfo("Pod Leader", "multipleRecordLinks", "observe"),
     "team": FieldInfo("Pod Members*", "multipleRecordLinks", "compute"),
 }
@@ -101,7 +101,7 @@ def create_contact_record(conn: Connection, person: ActionNetworkPerson) -> dict
     for name in custom_fields:
         if interest := signup_interest_map.get(name):
             signup_interests.add(interest)
-        if interest := fundraise_interest_map[name]:
+        if interest := fundraise_interest_map.get(name):
             fundraise_interests.add(interest)
     record[column_ids["signup_interests"]] = list(signup_interests)
     record[column_ids["signup_notes"]] = custom_fields.get("2022_notes", "")

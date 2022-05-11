@@ -20,35 +20,15 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 #
-import json
-import os
-import sqlalchemy as sa
 
-from sqlalchemy.future import Connection
+import pytest
 
-from .metadata import import_metadata_from_webhooks
-from ..core.utilities import action_network_timestamp
-from ..data_store import Postgres, model
-from ..worker.act_blue import process_webhook_notification
+from stv_services.worker.act_blue import process_webhook_notification
 
 
-def import_donation_metadata(filepath: str, verbose: bool = True):
-    if verbose:
-        print(f"Importing ActBlue webhooks from '{filepath}'...")
-    batch: list[str] = []
+@pytest.skip
+def test_process_act_blue_webhooks():
+    filepath = "./local/act_blue_webhooks.json"
     with open(filepath) as file:
         while line := file.readline():
-            batch.append(line.strip())
-    with Postgres.get_global_engine().connect() as conn:  # type: Connection
-        # out with the old
-        conn.execute(sa.delete(model.external_info))
-        conn.commit()
-    # in with the new
-    total, imported = 0, 0
-    for line in batch:
-        total += 1
-        imported += 1 if process_webhook_notification(line) else 0
-        if verbose and total % 100 == 0:
-            print(f"Processed {total}, kept {imported}...")
-    if verbose:
-        print(f"Imported {imported} metadata records from {total} webhooks.")
+            process_webhook_notification(line.strip())

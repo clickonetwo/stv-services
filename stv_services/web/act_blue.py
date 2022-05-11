@@ -21,10 +21,9 @@
 #  SOFTWARE.
 #
 import json
-import os
 import secrets
 
-from fastapi import Depends, APIRouter, HTTPException, status, BackgroundTasks
+from fastapi import Depends, APIRouter, HTTPException, status
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
 from ..core import Configuration
@@ -54,13 +53,11 @@ def is_authenticated(credentials: HTTPBasicCredentials = Depends(basic)):
     status_code=204,
     summary="Receiver for ActBlue webhook notifications.",
 )
-async def receive_notifications(
-    body: dict, worker: BackgroundTasks, _=Depends(is_authenticated)
-):
+async def receive_notifications(body: dict):
     logger.info("Received ActBlue webhook")
     db = await RedisAsync.connect()
     compact = json.dumps(body, separators=(",", ":"))
-    len: int = await db.lpush("act_blue", compact)
-    logger.info(f"Saved webhook content as #{len} in 'act_blue' queue")
-    await db.publish("webhooks", "act_blue")
+    length: int = await db.lpush("act_blue", compact)
+    logger.info(f"Saved webhook content as #{length} in 'act_blue' queue")
+    await db.compute_status_for_type("webhooks", "act_blue")
     return

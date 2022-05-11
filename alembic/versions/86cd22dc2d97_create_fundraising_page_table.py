@@ -26,10 +26,10 @@ def upgrade():
         sa.Column("uuid", sa.Text, primary_key=True, nullable=False),
         sa.Column("created_date", Timestamp, nullable=False),
         sa.Column("modified_date", Timestamp, index=True, nullable=False),
-        sa.Column("published_date", Timestamp, index=True, default=epoch),
+        sa.Column("updated_date", Timestamp, index=True, default=epoch),
         sa.Column("origin_system", sa.Text, index=True, default=""),
         sa.Column("title", sa.Text, index=True, nullable=False),
-        sa.Column("attribution_email", sa.Text, index=True, default=""),
+        sa.Column("attribution_id", sa.Text, index=True, default=""),
         sa.Index("ix_fundraising_page_info_uuid_hash", "uuid", postgresql_using="hash"),
     )
 

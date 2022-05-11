@@ -22,18 +22,12 @@
 #
 import json
 
-import aioredis as redis
-from fastapi import APIRouter, BackgroundTasks, Request, HTTPException, status
-from pydantic import BaseModel
-from starlette.responses import JSONResponse
+from fastapi import APIRouter, Request
 
 from .utilities import request_error
-from ..airtable.bulk import register_webhooks
 from ..airtable.webhook import validate_notification
-from ..core.logging import get_logger, log_exception
-from ..core.utilities import local_timestamp
-from ..data_store import RedisAsync, ItemListAsync
-from ..worker.airtable import process_webhook_notification
+from ..core.logging import get_logger
+from ..data_store import RedisAsync
 
 logger = get_logger(__name__)
 airtable = APIRouter()
@@ -44,10 +38,7 @@ airtable = APIRouter()
     status_code=204,
     summary="Receiver for Airtable webhook notifications.",
 )
-async def receive_notification(
-    request: Request,
-    worker: BackgroundTasks,
-):
+async def receive_notification(request: Request):
     """
     Receive a notification from an Airtable webhook.
 
@@ -68,6 +59,6 @@ async def receive_notification(
     except ValueError:
         raise request_error(logger, f"while validating webhook")
     db = await RedisAsync.connect()
-    len = await db.lpush("airtable", hook_name)
-    logger.info(f"Saved webhook '{hook_name}' as #{len} in 'airtable' queue")
+    length = await db.lpush("airtable", hook_name)
+    logger.info(f"Saved webhook '{hook_name}' as #{length} in 'airtable' queue")
     return

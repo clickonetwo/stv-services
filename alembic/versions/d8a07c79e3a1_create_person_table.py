@@ -27,7 +27,7 @@ def upgrade():
         sa.Column("uuid", sa.Text, primary_key=True, nullable=False),
         sa.Column("created_date", Timestamp, index=True, nullable=False),
         sa.Column("modified_date", Timestamp, index=True, nullable=False),
-        sa.Column("published_date", Timestamp, index=True, default=epoch),
+        sa.Column("updated_date", Timestamp, index=True, default=epoch),
         sa.Column("email", sa.Text, unique=True, index=True, nullable=False),
         sa.Column("email_status", sa.Text, default=""),
         sa.Column("phone", sa.Text, index=True, default=""),

@@ -43,15 +43,32 @@ class ActionNetworkDonation(PersistedDict):
                 raise ValueError(f"Donation must have field '{key}': {fields}")
         super().__init__(model.donation_info, **fields)
 
-    def publish(self, conn: Connection, force: bool = False):
+    def compute_status(self, conn: Connection, force: bool = False):
         """Try to attribute this donation based on latest data."""
-        if not force and self["classification_date"] > self["modified_date"]:
+        if not force and self["attribution_id"]:
             return
-        # first find a matching refcode, if there is one
-        if metadata_id := self.get("metadata_id"):
-            metadata = ActBlueDonationMetadata.from_lookup(conn, metadata_id)
-            if codes := metadata.get("ref_codes"):
-                query = sa.select()
+        # get attribution from fundraising page, if any
+        query = sa.select(model.fundraising_page_info).where(
+            model.fundraising_page_info.c.uuid == self["fundraising_page_id"]
+        )
+        if page := conn.execute(query).mappings().first():
+            self.notice_fundraising_page(page)
+        # if we still need an attribution, look for a refcode
+        if force or not self["attribution_id"]:
+            if metadata_id := self.get("metadata_id"):
+                query = sa.select(model.donation_metadata).where(
+                    model.donation_metadata.c.uuid == self[metadata_id]
+                )
+                if metadata := conn.execute(query).mappings().first():
+                    self.notice_metadata(metadata)
+
+    def notice_fundraising_page(self, fundraising_page: dict):
+        if attribution_id := fundraising_page.get("attribution_id"):
+            self["attribution_id"] = attribution_id
+
+    def notice_metadata(self, metadata: dict):
+        if attribution_id := metadata.get("attribution_id"):
+            self["attribution_id"] = attribution_id
 
     @classmethod
     def from_hash(cls, data: dict) -> "ActionNetworkDonation":
@@ -89,7 +106,7 @@ class ActionNetworkDonation(PersistedDict):
     @classmethod
     def from_query(cls, conn: Connection, query: Any) -> list["ActionNetworkDonation"]:
         """
-        See `.utils.lookup_hashes` for details.
+        See `.utils.lookup_objects` for details.
         """
         return lookup_objects(conn, query, lambda d: cls(**d))
 

@@ -28,7 +28,7 @@ def upgrade():
         sa.Column("uuid", sa.Text, primary_key=True, nullable=False),
         sa.Column("created_date", Timestamp, index=True, nullable=False),
         sa.Column("modified_date", Timestamp, index=True, nullable=False),
-        sa.Column("published_date", Timestamp, index=True, default=epoch),
+        sa.Column("updated_date", Timestamp, index=True, default=epoch),
         sa.Column("amount", sa.Text, nullable=False),
         sa.Column("recurrence_data", psql.JSONB, nullable=False),
         sa.Column("donor_id", sa.Text, index=True, nullable=False),

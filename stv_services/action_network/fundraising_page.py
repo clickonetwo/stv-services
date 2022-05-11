@@ -54,6 +54,26 @@ class ActionNetworkFundraisingPage(PersistedDict):
             title=title,
         )
 
+    def compute_status(self, conn: Connection, force: bool = False):
+        """Try to attribute this fundraising page based on latest metadata."""
+        if self["origin_system"] != "ActBlue":
+            return
+        if not self["title"].startswith("actblue_146845_"):
+            return
+        if not force and self["attribution_id"]:
+            return
+        # get attribution from metadata, if any
+        form_name = self["title"][len("actblue_146845_") :]
+        query = sa.select(model.donation_metadata).where(
+            model.donation_metadata.c.form_name == form_name
+        )
+        if metadata := conn.execute(query).mappings().first():
+            self.notice_metadata(metadata)
+
+    def notice_metadata(self, metadata: dict):
+        if attribution_id := metadata.get("attribution_id"):
+            self["attribution_id"] = attribution_id
+
     @classmethod
     def from_lookup(cls, conn: Connection, uuid: str) -> "ActionNetworkFundraisingPage":
         query = sa.select(model.fundraising_page_info).where(
@@ -69,7 +89,7 @@ class ActionNetworkFundraisingPage(PersistedDict):
         cls, conn: Connection, query: Any
     ) -> list["ActionNetworkFundraisingPage"]:
         """
-        See `.utils.lookup_hashes` for details.
+        See `.utils.lookup_objects` for details.
         """
         return lookup_objects(conn, query, lambda d: cls(**d))
 

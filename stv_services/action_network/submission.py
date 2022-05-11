@@ -70,7 +70,7 @@ class ActionNetworkSubmission(PersistedDict):
         cls, conn: Connection, query: Any
     ) -> list["ActionNetworkSubmission"]:
         """
-        See `.utils.lookup_hashes` for details.
+        See `.utils.lookup_objects` for details.
         """
         return lookup_objects(conn, query, lambda d: cls(**d))
 

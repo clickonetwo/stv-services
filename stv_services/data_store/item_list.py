@@ -132,7 +132,7 @@ class ItemListAsync(ItemListCore):
         set_key = cls._set_key(list_type)
         channel_name = cls._channel_name(list_type)
         result = await cls._db.zadd(set_key, score=now(), member=key)
-        cls._db.publish(channel_name, key)
+        cls._db.compute_status_for_type(channel_name, key)
         return result
 
     @classmethod

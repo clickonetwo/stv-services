@@ -112,7 +112,7 @@ def known_db(clean_db, test_ids) -> dict:
     bulk.import_person_cluster(test_ids["new_user_non_signup_non_donor"], verbose=False)
     bulk.import_person_cluster(test_ids["signup_2022_non_donor"], verbose=False)
     bulk.update_donor_status(verbose=False, force=True)
-    bulk.update_all_classifications(verbose=False)
+    bulk.compute_status_all(verbose=False)
     external.import_spreadsheet("./tests/external/Test Spreadsheet.csv")
     return test_ids
 

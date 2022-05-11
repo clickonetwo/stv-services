@@ -32,10 +32,16 @@ from .utils import (
 )
 from ..action_network.person import ActionNetworkPerson
 from ..core import Configuration
+from ..data_store import model
 
 funder_table_name = "Fundraising"
 funder_table_schema = {
     "contact": FieldInfo("Name (from Contacts)*", "multipleRecordLinks", "compute"),
+    "recurring": FieldInfo("Recurring donation?*", "singleSelect", "compute"),
+}
+recurring_choices = {
+    True: "Active",
+    False: "Inactive (previously made recurring donation)",
 }
 
 
@@ -56,6 +62,13 @@ def create_funder_record(_: Connection, person: ActionNetworkPerson) -> dict:
         record = {column_ids["contact"]: [record_id]}
     else:
         raise ValueError(f"Person '{person['uuid']}' must be a contact to fundraise")
+    field_id = column_ids["recurring"]
+    start = person["recur_start"]
+    end = person["recur_end"]
+    if start == end == model.epoch:
+        pass
+    else:
+        record[field_id] = recurring_choices[start > end]
     return record
 
 

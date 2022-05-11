@@ -71,27 +71,22 @@ def verify_donation_schema() -> dict:
 
 def create_donation_record(conn: Connection, donation: ActionNetworkDonation) -> dict:
     config = Configuration.get_global_config()
+    table = model.person_info
     # find the matching donor record, if there is one
-    query = sa.select(model.person_info).where(
-        model.person_info.c.uuid == donation["donor_id"]
-    )
+    query = sa.select(table).where(table.c.uuid == donation["donor_id"])
     donor: dict = conn.execute(query).mappings().first()
     if not donor:
         raise KeyError("Donation '{donation['uuid']}' has no donor")
     if not donor["contact_record_id"]:
         raise KeyError(f"Donor '{donor['uuid']}' is not a contact")
-    # find the matching fundraising page record, if there is one
-    query = sa.select(model.person_info).where(
-        sa.and_(
-            model.fundraising_page_info.c.uuid == donation["fundraising_page_id"],
-            model.person_info.c.email
-            == model.fundraising_page_info.c.attribution_email,
-        )
-    )
-    attribution: dict = conn.execute(query).mappings().first()
-    if attribution is not None:
-        if not attribution["funder_record_id"]:
-            raise KeyError(f"Attributor {attribution['uuid']} is not a funder")
+    attribution_record_id = None
+    if attribution_id := donation["attribution_id"]:
+        # find the matching fundraising page record, if there is one
+        query = sa.select(table).where(table.uuid == attribution_id)
+        if attribution := conn.execute(query).mappings().first():
+            attribution_record_id = attribution["funder_record_id"]
+            if not attribution_record_id:
+                raise KeyError(f"Attributor {attribution['uuid']} is not a funder")
     column_ids = config["airtable_stv_donation_schema"]["column_ids"]
     record = dict()
     for field_name, info in donation_table_schema.items():
@@ -108,9 +103,9 @@ def create_donation_record(conn: Connection, donation: ActionNetworkDonation) ->
     # this is a link to the Donor's record ID in the Contacts table
     record[column_ids["donor_id"]] = [donor["contact_record_id"]]
     # set the attribution, if any
-    if attribution is not None:
-        record[column_ids["attribution_id"]] = attribution["funder_record_id"]
-        record[column_ids["override_attribution_id"]] = attribution["funder_record_id"]
+    if attribution_record_id:
+        record[column_ids["attribution_id"]] = attribution_record_id
+        record[column_ids["override_attribution_id"]] = attribution_record_id
     return record
 
 

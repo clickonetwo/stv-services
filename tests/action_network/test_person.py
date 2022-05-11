@@ -211,19 +211,19 @@ def test_publish_for_airtable(reload_db):
         person = ActionNetworkPerson.from_lookup(
             conn, uuid=reload_db["historical_donor"]
         )
-        person.publish(conn)
+        person.compute_status(conn)
         assert person["is_volunteer"] is True
         assert person["is_contact"] is False
         assert person["is_funder"] is False
         person["is_contact"] = True
-        person.publish(conn)
+        person.compute_status(conn)
         assert person["is_funder"] is True
         # new sign-ups are not volunteers or funders,
         # but they are contacts.
         person = ActionNetworkPerson.from_lookup(
             conn, uuid=reload_db["current_signup_non_donor"]
         )
-        person.publish(conn)
+        person.compute_status(conn)
         assert person["is_volunteer"] is False
         assert person["is_contact"] is True
         assert person["is_funder"] is False
@@ -232,7 +232,7 @@ def test_publish_for_airtable(reload_db):
         person = ActionNetworkPerson.from_lookup(
             conn, uuid=reload_db["current_donor_non_signup"]
         )
-        person.publish(conn)
+        person.compute_status(conn)
         assert person["is_volunteer"] is False
         assert person["is_contact"] is True
         assert person["is_funder"] is True
@@ -241,12 +241,12 @@ def test_publish_for_airtable(reload_db):
         person = ActionNetworkPerson.from_lookup(
             conn, uuid=reload_db["historical_signup_non_donor"]
         )
-        person.publish(conn)
+        person.compute_status(conn)
         assert person["is_volunteer"] is True
         assert person["is_contact"] is False
         assert person["is_funder"] is False
         person["is_contact"] = True
-        person.publish(conn)
+        person.compute_status(conn)
         assert person["is_funder"] is False
 
 

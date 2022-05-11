@@ -20,6 +20,7 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 #
+from datetime import datetime, timezone
 
 import sqlalchemy as sa
 from sqlalchemy.future import Connection
@@ -30,18 +31,12 @@ from ..data_store.persisted_dict import PersistedDict
 
 
 def find_records_to_update(dict_type: str, force: bool = False):
-    table, _, is_field, id_field, date_field = table_fields(dict_type)
+    table, is_col, id_col, date_col = table_columns(dict_type)
     if force:
-        query = sa.select(table).where(table.c[is_field])
+        query = sa.select(table).where(is_col)
     else:
         query = sa.select(table).where(
-            sa.and_(
-                table.c[is_field],
-                sa.or_(
-                    table.c[id_field] == "",
-                    table.c.published_date > table.c[date_field],
-                ),
-            )
+            sa.and_(is_col, sa.or_(id_col == "", table.c.updated_date > date_col))
         )
     return query
 
@@ -60,7 +55,7 @@ def insert_records(
     record_ids = _insert_records(schema, records)
     for record_id, p_dict in zip(record_ids, dicts):
         p_dict[id_field] = record_id
-        p_dict[date_field] = p_dict["modified_date"]
+        p_dict[date_field] = datetime.now(tz=timezone.utc)
         p_dict.persist(conn)
     return len(record_ids)
 
@@ -78,7 +73,7 @@ def update_records(
         updates.append({"id": record_id, "fields": record})
     _update_records(schema, updates)
     for p_dict, _ in pairs:
-        p_dict[date_field] = p_dict["modified_date"]
+        p_dict[date_field] = datetime.now(tz=timezone.utc)
         p_dict.persist(conn)
     return len(pairs)
 
@@ -131,8 +126,31 @@ def table_fields(dict_type: str) -> (sa.Table, str, str, str, str):
         f"airtable_stv_{dict_type}_schema",
         f"is_{dict_type}",
         f"{dict_type}_record_id",
-        f"{dict_type}_last_updated",
+        f"{dict_type}_updated",
     )
+
+
+def table_columns(dict_type: str) -> (sa.Table, sa.Column, sa.Column, sa.Column):
+    if Configuration.get_env() == "DEV" and dict_type not in {
+        "donation",
+        "contact",
+        "volunteer",
+        "funder",
+    }:
+        raise ValueError(f"Unknown persisted dict type: {dict_type}")
+    table = model.donation_info if dict_type == "donation" else model.person_info
+    is_col, record_col, updated_col = None, None, None
+    for column in table.columns:  # type: sa.Column
+        if column.key == f"is_{dict_type}":
+            is_col = column
+        elif column.key == f"{dict_type}_record_id":
+            record_col = column
+        elif column.key == f"{dict_type}_updated":
+            updated_col = column
+    else:
+        if is_col is None or record_col is None or updated_col is None:
+            raise ValueError("Table is missing expected columns")
+    return table, is_col, record_col, updated_col
 
 
 #

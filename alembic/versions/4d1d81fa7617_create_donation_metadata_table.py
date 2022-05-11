@@ -23,7 +23,7 @@ def upgrade():
         sa.Column("uuid", sa.Text, primary_key=True, nullable=False),
         sa.Column("created_date", Timestamp, index=True, nullable=False),
         sa.Column("modified_date", Timestamp, index=True, nullable=False),
-        sa.Column("published_date", Timestamp, index=True, default=epoch),
+        sa.Column("updated_date", Timestamp, index=True, default=epoch),
         sa.Column("item_type", sa.Text, index=True, nullable=False),
         sa.Column("donor_email", sa.Text, index=True, nullable=False),
         sa.Column("order_id", sa.Text, index=True, default=""),
@@ -31,7 +31,7 @@ def upgrade():
         sa.Column("line_item_ids", sa.Text, index=True, default=""),
         sa.Column("form_name", sa.Text, index=True, default=""),
         sa.Column("form_owner_email", sa.Text, index=True, default=""),
-        sa.Column("ref_code", sa.Text, index=True, default=""),
+        sa.Column("refcode", sa.Text, index=True, default=""),
         sa.Column("attribution_id", sa.Text, index=True, default=""),
         sa.Index("ix_donation_metadata_uuid_hash", "uuid", postgresql_using="hash"),
     )

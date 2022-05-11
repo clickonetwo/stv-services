@@ -40,6 +40,34 @@ class ActBlueDonationMetadata(PersistedDict):
                 raise ValueError(f"Donation metadata must have field '{key}': {fields}")
         super().__init__(model.donation_metadata, **fields)
 
+    def compute_status(self, conn: Connection, force: bool = False):
+        if not force and self.get("attribution_id"):
+            return
+        if self["item_type"] != "contribution":
+            # only contributions can have attributions
+            return
+        # look for a person with the refcode or email.  Note that refcodes are
+        # only received against general pages, whereas emails are only found
+        # on supporter pages, so it can only be one or the other
+        if code := self["refcode"]:
+            query = sa.select(model.person_info).where(
+                model.person_info.c.funder_refcode == code
+            )
+        elif email := self["form_owner_email"]:
+            query = sa.select(model.person_info).where(
+                model.person_info.c.email == email
+            )
+        else:
+            return
+        if person := conn.execute(query).mappings().first():
+            self.notice_person(person)
+
+    def notice_person(self, person: dict):
+        if person["email"] == self["form_owner_email"]:
+            self["attribution_id"] = person["uuid"]
+        elif (refcode := self["refcode"]) and refcode == person["funder_refcode"]:
+            self["attribution_id"] = person["uuid"]
+
     @classmethod
     def from_webhook(cls, body: dict) -> "ActBlueDonationMetadata":
         donor_email = body["donor"]["email"].lower()
@@ -55,7 +83,7 @@ class ActBlueDonationMetadata(PersistedDict):
             raise ValueError(f"Missing unique ID in ActBlue webhook: {body}")
         order_date = contribution["createdAt"]
         order_id = contribution["orderNumber"]
-        ref_code = contribution["refcode"] or ""
+        refcode = contribution["refcode"] or ""
         lineitems = body["lineitems"]
         if not lineitems:
             raise ValueError(f"No lineitems in ActBlue webhook: {body}")
@@ -88,12 +116,14 @@ class ActBlueDonationMetadata(PersistedDict):
             line_item_ids=line_item_ids,
             form_name=form_name,
             form_owner_email=form_owner_email,
-            ref_code=ref_code,
+            refcode=refcode,
         )
 
     @classmethod
     def from_lookup(cls, conn: Connection, uuid: str) -> "ActBlueDonationMetadata":
-        query = sa.select(model.person_info).where(model.person_info.c.uuid == uuid)
+        query = sa.select(model.donation_metadata).where(
+            model.donation_metadata.c.uuid == uuid
+        )
         result = lookup_objects(conn, query, lambda d: cls(**d))
         if not result:
             raise KeyError(f"No donation metadata identified by '{uuid}'")
@@ -104,7 +134,7 @@ class ActBlueDonationMetadata(PersistedDict):
         cls, conn: Connection, query: Any
     ) -> list["ActBlueDonationMetadata"]:
         """
-        See `.utils.lookup_hashes` for details.
+        See `.utils.lookup_objects` for details.
         """
         return lookup_objects(conn, query, lambda d: cls(**d))
 
@@ -123,7 +153,7 @@ def import_metadata_from_webhooks(webhooks: list[dict]) -> int:
                 if metadata["item_type"] == "cancellation":
                     imported += 1
                     metadata.persist(conn)
-                elif metadata["ref_code"]:
+                elif metadata["refcode"]:
                     imported += 1
                     metadata.persist(conn)
                 elif metadata["form_owner_email"]:

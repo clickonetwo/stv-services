@@ -41,8 +41,9 @@ def main():
     db = RedisSync.connect()
     pubsub = db.pubsub(ignore_subscribe_messages=True)
     pubsub.subscribe("webhooks")
+    queue_name = None
+    logger.info("Waiting for published webhooks...")
     try:
-        logger.info("Waiting for published webhooks...")
         for message in pubsub.listen():  # type dict
             queue_name = message["data"].decode("utf-8")
             locking_queue = locking_queues[queue_name]
@@ -82,7 +83,10 @@ def process_queue_item(queue_name: str, result: bytes) -> str:
             airtable.process_webhook_notification(conn, body)
             result = "processed"
         elif queue_name == "act_blue":
-            result = act_blue.process_webhook_notification(body)
+            if act_blue.process_webhook_notification(body):
+                result = "processed and metadata saved"
+            else:
+                result = "processed and metadata discarded"
         elif queue_name == "action_network":
             result = "not processed"
         elif queue_name == "internal":

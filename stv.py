@@ -31,6 +31,7 @@ import os.path
 import click
 from click_shell import shell
 
+from stv_services.act_blue import bulk as ab_bulk
 from stv_services.action_network import bulk as an_bulk
 from stv_services.airtable import bulk as at_bulk, sync
 from stv_services.core import Configuration
@@ -53,76 +54,104 @@ def stv(ctx: click.Context, verbose: bool):
 
 @stv.command()
 @click.pass_context
-def update_all(ctx: click.Context):
+def import_and_update_all(ctx: click.Context):
     verbose = ctx.obj["verbose"]
-    an_bulk.update_submissions(verbose)
-    an_bulk.update_fundraising_pages(verbose)
-    an_bulk.update_donations(verbose)
-    an_bulk.update_people(verbose)
-    an_bulk.update_all_classifications(verbose)
+    import_all(ctx.obj)
+    an_bulk.compute_status_all(verbose)
     at_bulk.verify_schemas(verbose)
-    at_bulk.update_volunteers(verbose)
-    at_bulk.update_contacts(verbose)
-    at_bulk.update_funders(verbose)
-    at_bulk.update_donation_records(verbose)
+    update_all(ctx.obj)
     at_bulk.sync_webhooks()
     at_bulk.fetch_and_process_all_webhooks()
     at_bulk.register_webhooks(verbose)
 
 
 @stv.command()
-@click.option("--force/--no-force", default=False, help="Force update of all")
+@click.pass_context
+def import_all(ctx: click.Context):
+    verbose = ctx.obj["verbose"]
+    import_external_data(ctx.obj)
+    an_bulk.import_submissions(verbose)
+    an_bulk.import_fundraising_pages(verbose)
+    an_bulk.import_donations(verbose)
+    an_bulk.import_people(verbose)
+    ab_bulk.import_donation_metadata(verbose)
+
+
+@stv.command()
+@click.pass_context
+def update_all(ctx: click.Context):
+    verbose = ctx.obj["verbose"]
+    at_bulk.update_volunteers(verbose)
+    at_bulk.update_contacts(verbose)
+    at_bulk.update_funders(verbose)
+    at_bulk.update_donation_records(verbose)
+
+
+@stv.command()
+@click.option("--force/--no-force", default=False, help="Force re-import of all")
 @click.option("--skip-pages", default=0, help="Skip this many pages")
 @click.option("--max-pages", default=0, help="Import at most this many pages")
 @click.pass_context
-def update_people(ctx: click.Context, force: bool, skip_pages: int, max_pages: int):
+def import_people(ctx: click.Context, force: bool, skip_pages: int, max_pages: int):
     verbose = ctx.obj["verbose"]
-    an_bulk.update_people(
+    an_bulk.import_people(
         verbose=verbose, force=force, skip_pages=skip_pages, max_pages=max_pages
     )
 
 
 @stv.command()
-@click.option("--force/--no-force", default=False, help="Force update of all")
+@click.option("--force/--no-force", default=False, help="Force re-import of all")
 @click.option("--skip-pages", default=0, help="Skip this many pages")
 @click.option("--max-pages", default=0, help="Import at most this many pages")
 @click.pass_context
-def update_donations(ctx: click.Context, force: bool, skip_pages: int, max_pages: int):
+def import_donations(ctx: click.Context, force: bool, skip_pages: int, max_pages: int):
     verbose = ctx.obj["verbose"]
-    an_bulk.update_donations(verbose, force, skip_pages, max_pages)
+    an_bulk.import_donations(verbose, force, skip_pages, max_pages)
 
 
 @stv.command()
-@click.option("--force/--no-force", default=False, help="Force update of all")
+@click.option("--force/--no-force", default=False, help="Force re-import of all")
 @click.option("--skip-pages", default=0, help="Skip this many pages")
 @click.option("--max-pages", default=0, help="Import at most this many pages")
 @click.pass_context
-def update_fundraising_pages(
+def import_fundraising_pages(
     ctx: click.Context, force: bool, skip_pages: int, max_pages: int
 ):
     verbose = ctx.obj["verbose"]
-    an_bulk.update_fundraising_pages(
+    an_bulk.import_fundraising_pages(
         verbose=verbose, force=force, skip_pages=skip_pages, max_pages=max_pages
     )
 
 
 @stv.command()
-@click.option("--force/--no-force", default=False, help="Force update of all")
+@click.option("--force/--no-force", default=False, help="Force re-import of all")
 @click.pass_context
-def update_submissions(ctx: click.Context, force: bool):
+def import_submissions(ctx: click.Context, force: bool):
     verbose = ctx.obj["verbose"]
-    an_bulk.update_submissions(verbose=verbose, force=force)
+    an_bulk.import_submissions(verbose=verbose, force=force)
 
 
 @stv.command()
 @click.option("--path", help="Import from this path")
 @click.pass_context
-def update_external_data(ctx: click.Context, path: str = None):
+def import_donation_metadata(ctx: click.Context, path: str = None):
+    verbose = ctx.obj["verbose"]
+    if not path:
+        path = "./local/act_blue_webhooks.json"
+    if not os.path.isfile(path):
+        raise ValueError(f"Can't find ActBlue webhooks at path '{path}'")
+    ab_bulk.import_donation_metadata(path, verbose=verbose)
+
+
+@stv.command()
+@click.option("--path", help="Import from this path")
+@click.pass_context
+def import_external_data(ctx: click.Context, path: str = None):
     verbose = ctx.obj["verbose"]
     if not path:
         path = "./local/Cleaned Up Data Spreadsheet for Integration.csv"
     if not os.path.isfile(path):
-        raise ValueError("Can't find spreadsheet at path '{}'")
+        raise ValueError(f"Can't find spreadsheet at path '{path}'")
     if verbose:
         print(f"Importing from spreadsheet at '{path}'...")
     success, total = import_spreadsheet(path, verbose=verbose)
@@ -133,14 +162,14 @@ def update_external_data(ctx: click.Context, path: str = None):
 
 @stv.command()
 @click.pass_context
-def update_airtable_classifications(ctx: click.Context):
+def compute_status_all(ctx: click.Context):
     verbose = ctx.obj["verbose"]
-    an_bulk.update_all_classifications(verbose)
+    an_bulk.compute_status_all(verbose)
 
 
 @stv.command()
 @click.pass_context
-def verify_airtable_schemas(ctx: click.Context):
+def verify_schemas(ctx: click.Context):
     verbose = ctx.obj["verbose"]
     if verbose:
         print("Verifying Airtable schemas...")
