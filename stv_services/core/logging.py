@@ -26,9 +26,12 @@ import sys
 
 from stv_services.core import Configuration
 
+_env_level = os.getenv("STV_LOG_LEVEL")
+_config_level = DEBUG if Configuration.get_env() == "DEV" else INFO
+_log_level = _env_level or _config_level
 basicConfig(
     format=f"%(levelname)s:%(module)s:%(process)d: %(message)s",
-    level=DEBUG if Configuration.get_env() == "DEV" else INFO,
+    level=_log_level,
     stream=sys.stdout,
 )
 
