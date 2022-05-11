@@ -93,7 +93,7 @@ def insert_needed_assignments(conn: Connection, people: list[PersistedDict]) -> 
             if existing_map.get(name):
                 continue
             if assignment_name := field_assignment_map.get(name):
-                assignments[record_id].append(assignment_name)
+                assignments.append(assignment_name)
                 added[name] = assignment_name
         if added:
             existing_map.update(added)
