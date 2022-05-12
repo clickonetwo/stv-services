@@ -47,7 +47,7 @@ class ActionNetworkDonation(PersistedDict):
         if not force and self["attribution_id"]:
             return
         # get attribution from fundraising page, if any
-        query = sa.select(model.fundraising_page_info.attribution_id).where(
+        query = sa.select(model.fundraising_page_info.c.attribution_id).where(
             model.fundraising_page_info.c.uuid == self["fundraising_page_id"],
         )
         if page := conn.execute(query).mappings().first():

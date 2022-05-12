@@ -102,14 +102,14 @@ class ActBlueDonationMetadata(PersistedDict):
 
     def notify_fundraising_pages(self, conn: Connection, attribution_id: str):
         query = sa.select(model.fundraising_page_info).where(
-            model.fundraising_page_info.metadata_id == self["uuid"]
+            model.fundraising_page_info.c.metadata_id == self["uuid"]
         )
         for page in ActionNetworkFundraisingPage.from_query(conn, query):
             page.notice_attribution(conn, attribution_id)
 
     def notify_donations(self, conn: Connection, attribution_id: str):
         query = sa.select(model.donation_info).where(
-            model.donation_info.metadata_id == self["uuid"]
+            model.donation_info.c.metadata_id == self["uuid"]
         )
         for donation in ActionNetworkDonation.from_query(conn, query):
             donation.notice_attribution(conn, attribution_id)

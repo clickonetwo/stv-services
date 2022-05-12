@@ -81,7 +81,7 @@ class ActionNetworkFundraisingPage(PersistedDict):
 
     def notify_donations(self, conn: Connection, attribution_id: str):
         query = sa.select(model.donation_info).where(
-            model.donation_info.fundraising_page_id == self["uuid"]
+            model.donation_info.c.fundraising_page_id == self["uuid"]
         )
         for donation in ActionNetworkDonation.from_query(conn, query):
             donation.notice_attribution(conn, attribution_id)
