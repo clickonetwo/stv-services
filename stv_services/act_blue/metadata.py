@@ -20,31 +20,30 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 #
+from datetime import datetime, timezone
 from typing import Any, ClassVar
 
 import sqlalchemy as sa
 from dateutil.parser import parse
 from sqlalchemy.future import Connection
 
+from ..action_network.donation import ActionNetworkDonation
+from ..action_network.fundraising_page import ActionNetworkFundraisingPage
+from ..action_network.person import ActionNetworkPerson
 from ..core.logging import get_logger
 from ..data_store import model, Postgres
 from ..data_store.persisted_dict import PersistedDict, lookup_objects
 
 logger = get_logger(__name__)
-internal_domains = set()
-internal_emails = set()
 
 
 def supporter_email(email: str) -> str:
     email = email.strip().lower()
     if not email:
         return ""
-    if len(parts := email.split("@")) != 2:
+    if len(_parts := email.split("@")) != 2:
         return ""
-    if parts[1] in internal_domains:
-        return ""
-    if email in internal_emails:
-        return ""
+    # maybe validate the email or domain
     return email
 
 
@@ -57,11 +56,20 @@ class ActBlueDonationMetadata(PersistedDict):
                 raise ValueError(f"Donation metadata must have field '{key}': {fields}")
         super().__init__(model.donation_metadata, **fields)
 
+    # noinspection PyUnusedLocal
     def compute_status(self, conn: Connection, force: bool = False):
-        if not force and self.get("attribution_id"):
+        if self["item_type"] == "cancellation":
+            try:
+                person = ActionNetworkPerson.from_lookup(
+                    conn, email=self["donor_email"]
+                )
+                person.notice_cancellation(conn, self)
+                self["updated_date"] = datetime.now(tz=timezone.utc)
+            except KeyError:
+                pass
             return
         if self["item_type"] != "contribution":
-            # only contributions can have attributions
+            # we don't process returns or other types
             return
         # look for a person with the refcode or email.  Note that refcodes are
         # only received against general pages, whereas emails are only found
@@ -75,15 +83,36 @@ class ActBlueDonationMetadata(PersistedDict):
                 model.person_info.c.email == email
             )
         else:
+            self["updated_date"] = datetime.now(tz=timezone.utc)
             return
         if person := conn.execute(query).mappings().first():
-            self.notice_person(person)
+            self.notice_person(conn, person)
 
-    def notice_person(self, person: dict):
+    def notice_person(self, conn: Connection, person: dict):
+        if self["attribution_id"] != "":
+            # we've already noticed this person, break the propagation
+            return
+        attribution_id = person["uuid"]
+        self["attribution_id"] = attribution_id
         if person["email"] == self["form_owner_email"]:
-            self["attribution_id"] = person["uuid"]
+            self.notify_fundraising_pages(conn, attribution_id)
         elif (refcode := self["refcode"]) and refcode == person["funder_refcode"]:
-            self["attribution_id"] = person["uuid"]
+            self.notify_donations(conn, attribution_id)
+        self["updated_date"] = datetime.now(tz=timezone.utc)
+
+    def notify_fundraising_pages(self, conn: Connection, attribution_id: str):
+        query = sa.select(model.fundraising_page_info).where(
+            model.fundraising_page_info.metadata_id == self["uuid"]
+        )
+        for page in ActionNetworkFundraisingPage.from_query(conn, query):
+            page.notice_attribution(conn, attribution_id)
+
+    def notify_donations(self, conn: Connection, attribution_id: str):
+        query = sa.select(model.donation_info).where(
+            model.donation_info.metadata_id == self["uuid"]
+        )
+        for donation in ActionNetworkDonation.from_query(conn, query):
+            donation.notice_attribution(conn, attribution_id)
 
     def contributes_to_status(self):
         if self["item_type"] == "cancellation":

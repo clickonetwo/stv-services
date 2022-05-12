@@ -20,11 +20,13 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 #
+from datetime import datetime, timezone
 from typing import Optional, Any
 
 import sqlalchemy as sa
 from sqlalchemy.future import Connection
 
+from .donation import ActionNetworkDonation
 from .utils import (
     validate_hash,
     fetch_hash,
@@ -68,11 +70,21 @@ class ActionNetworkFundraisingPage(PersistedDict):
             model.donation_metadata.c.form_name == form_name
         )
         if metadata := conn.execute(query).mappings().first():
-            self.notice_metadata(metadata)
+            self.notice_attribution(conn, metadata["attribution_id"])
+        self["updated_date"] = datetime.now(tz=timezone.utc)
 
-    def notice_metadata(self, metadata: dict):
-        if attribution_id := metadata.get("attribution_id"):
+    def notice_attribution(self, conn: Connection, attribution_id: str):
+        if attribution_id:
             self["attribution_id"] = attribution_id
+            self.notify_donations(conn, attribution_id)
+        self["updated_date"] = datetime.now(tz=timezone.utc)
+
+    def notify_donations(self, conn: Connection, attribution_id: str):
+        query = sa.select(model.donation_info).where(
+            model.donation_info.fundraising_page_id == self["uuid"]
+        )
+        for donation in ActionNetworkDonation.from_query(conn, query):
+            donation.notice_attribution(conn, attribution_id)
 
     @classmethod
     def from_lookup(cls, conn: Connection, uuid: str) -> "ActionNetworkFundraisingPage":

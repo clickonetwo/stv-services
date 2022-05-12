@@ -31,9 +31,8 @@ from .utils import (
     fetch_hash,
     fetch_all_hashes,
 )
-from ..act_blue.metadata import ActBlueDonationMetadata
-from ..data_store.persisted_dict import PersistedDict, lookup_objects
 from ..data_store import model, Postgres
+from ..data_store.persisted_dict import PersistedDict, lookup_objects
 
 
 class ActionNetworkDonation(PersistedDict):
@@ -48,11 +47,11 @@ class ActionNetworkDonation(PersistedDict):
         if not force and self["attribution_id"]:
             return
         # get attribution from fundraising page, if any
-        query = sa.select(model.fundraising_page_info).where(
-            model.fundraising_page_info.c.uuid == self["fundraising_page_id"]
+        query = sa.select(model.fundraising_page_info.attribution_id).where(
+            model.fundraising_page_info.c.uuid == self["fundraising_page_id"],
         )
         if page := conn.execute(query).mappings().first():
-            self.notice_fundraising_page(page)
+            self.notice_attribution(conn, page["attribution_id"])
         # if we still need an attribution, look for a refcode
         if force or not self["attribution_id"]:
             if metadata_id := self.get("metadata_id"):
@@ -60,15 +59,13 @@ class ActionNetworkDonation(PersistedDict):
                     model.donation_metadata.c.uuid == self[metadata_id]
                 )
                 if metadata := conn.execute(query).mappings().first():
-                    self.notice_metadata(metadata)
+                    self.notice_attribution(conn, metadata["attribution_id"])
+        self["updated_date"] = datetime.now(tz=timezone.utc)
 
-    def notice_fundraising_page(self, fundraising_page: dict):
-        if attribution_id := fundraising_page.get("attribution_id"):
+    def notice_attribution(self, _conn: Connection, attribution_id: str):
+        if attribution_id:
             self["attribution_id"] = attribution_id
-
-    def notice_metadata(self, metadata: dict):
-        if attribution_id := metadata.get("attribution_id"):
-            self["attribution_id"] = attribution_id
+        self["updated_date"] = datetime.now(tz=timezone.utc)
 
     @classmethod
     def from_hash(cls, data: dict) -> "ActionNetworkDonation":

@@ -21,16 +21,15 @@
 #  SOFTWARE.
 
 from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 
 from .act_blue import act_blue
 from .airtable import airtable
+from ..act_blue.metadata import ActBlueDonationMetadata
 from ..airtable.bulk import register_webhooks, verify_schemas
 from ..core import Configuration
 from ..core.logging import get_logger
 from ..core.utilities import local_timestamp
-from ..data_store import ItemListAsync
 
 logger = get_logger(__name__)
 
@@ -63,6 +62,8 @@ async def startup():
     verify_schemas(verbose=True)
     # make sure the Airtable webhooks are registered
     register_webhooks(verbose=True, sync_first=True)
+    # make sure the metadata forms are loaded
+    ActBlueDonationMetadata.initialize_forms()
 
 
 @app.on_event("shutdown")

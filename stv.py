@@ -33,7 +33,7 @@ from click_shell import shell
 
 from stv_services.act_blue import bulk as ab_bulk
 from stv_services.action_network import bulk as an_bulk
-from stv_services.airtable import bulk as at_bulk, sync
+from stv_services.airtable import bulk as at_bulk
 from stv_services.core import Configuration
 from stv_services.data_store import Postgres
 from stv_services.external.spreadsheet import import_spreadsheet
@@ -55,7 +55,6 @@ def stv(ctx: click.Context, verbose: bool):
 @stv.command()
 @click.pass_context
 def import_from_local(ctx: click.Context):
-    verbose = ctx.obj["verbose"]
     ctx.invoke(import_external_data)
     ctx.invoke(import_donation_metadata)
 

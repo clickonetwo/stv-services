@@ -23,11 +23,10 @@
 import json
 from datetime import datetime, timezone
 
-import sqlalchemy as sa
 from sqlalchemy.future import Connection
 
 from ..act_blue.metadata import ActBlueDonationMetadata
-from ..data_store import Postgres, model
+from ..data_store import Postgres
 
 
 def process_webhook_notification(body: str) -> bool:

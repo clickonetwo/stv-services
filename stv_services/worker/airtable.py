@@ -29,7 +29,7 @@ from ..airtable.funder import upsert_funders
 from ..airtable.volunteer import upsert_volunteers
 from ..airtable.webhook import fetch_hook_payloads
 from ..core import logging, Configuration
-from ..data_store import Postgres, model
+from ..data_store import model
 
 logger = logging.get_logger(__name__)
 
@@ -90,7 +90,7 @@ def promote_volunteers_or_contacts(conn: Connection, name: str, record_ids: list
                 person["is_contact"] = True
                 contacts.append(person)
                 # new contact may also become a funder
-                person.compute_status(conn)
+                person.notice_promotion(conn)
                 if person["is_funder"]:
                     funders.append(person)
         else:

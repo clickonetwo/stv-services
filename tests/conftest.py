@@ -111,8 +111,7 @@ def known_db(clean_db, test_ids) -> dict:
     bulk.import_person_cluster(test_ids["current_signup_non_donor"], verbose=False)
     bulk.import_person_cluster(test_ids["new_user_non_signup_non_donor"], verbose=False)
     bulk.import_person_cluster(test_ids["signup_2022_non_donor"], verbose=False)
-    bulk.update_donor_status(verbose=False, force=True)
-    bulk.compute_status_all(verbose=False)
+    bulk.compute_status_all(verbose=False, force=True)
     external.import_spreadsheet("./tests/external/Test Spreadsheet.csv")
     return test_ids
 
@@ -153,7 +152,9 @@ def ensure_webhooks(ensure_schemas):
 
 @pytest.fixture(scope="session")
 def ensure_web_process():
-    import requests, subprocess, signal
+    import requests
+    import subprocess
+    import signal
 
     response = requests.get("http://localhost:8080/status", timeout=0.1)
     process = None

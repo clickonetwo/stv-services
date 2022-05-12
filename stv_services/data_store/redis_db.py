@@ -111,7 +111,7 @@ class LockingQueue:
         self.db = None
 
     def __repr__(self):
-        f"<LockingQueue '{self.key_name}' ({self.state})>"
+        return f"<LockingQueue '{self.key_name}' ({self.state})>"
 
     def state(self):
         return self.state

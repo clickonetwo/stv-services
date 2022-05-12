@@ -15,7 +15,7 @@ click = "^8.1.2"
 pyairtable = "^1.1.0"
 click-shell = "^2.1"
 redis = "^4.2.2"
-fastapi = "^0.75.2"
+fastapi = "^0.77.1"
 aioredis = "^2.0.1"
 uvicorn = {extras = ["standard"], version = "^0.17.6"}
 gunicorn = "^20.1.0"

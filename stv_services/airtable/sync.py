@@ -26,7 +26,6 @@ import sqlalchemy as sa
 from sqlalchemy.future import Connection
 
 from stv_services.action_network.person import ActionNetworkPerson
-from stv_services.airtable.assignment import insert_assignments
 from stv_services.core import Session, Configuration
 from stv_services.data_store import model, Postgres
 

@@ -43,7 +43,7 @@ def test_airtable_notification_validation(ensure_webhooks):
     secret = base64.b64decode(vol_info["secret"])
     digest = hmac.digest(secret, message, "sha256")
     digest64 = base64.b64encode(digest)
-    name = validate_notification(body, digest64)
+    name = validate_notification(notification, body.encode("utf-8"), digest64)
     assert name == "volunteer"
     with pytest.raises(ValueError):
-        validate_notification(body, "crapcrapcrapcrapcrapcrap")
+        validate_notification(notification, body, "crapcrapcrapcrapcrapcrap")

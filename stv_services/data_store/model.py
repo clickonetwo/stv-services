@@ -61,6 +61,7 @@ person_info = sa.Table(
     sa.Column("country", sa.Text, default=""),
     sa.Column("custom_fields", psql.JSONB, default={}),
     sa.Column("has_submission", sa.Boolean, default=False),
+    sa.Column("last_donation", Timestamp, default=epoch),
     sa.Column("recur_start", Timestamp, default=epoch),
     sa.Column("recur_end", Timestamp, default=epoch),
     sa.Column("total_2020", sa.Integer, index=True, default=0),

@@ -31,7 +31,7 @@ from stv_services.action_network.person import (
     ActionNetworkPerson,
 )
 from stv_services.action_network.submission import ActionNetworkSubmission
-from stv_services.data_store import Postgres
+from stv_services.data_store import Postgres, model
 
 fake_an_id = "action_network:fake-person-identifier"
 
@@ -199,7 +199,7 @@ def test_compute_donation_summaries(reload_db):
         person = ActionNetworkPerson.from_lookup(
             conn, uuid=reload_db["historical_donor"]
         )
-        person.compute_donor_status(conn)
+        person.compute_donor_status(conn, model.epoch)
         assert person["total_2020"] == 2750
         assert person["total_2021"] == 250
 
