@@ -174,7 +174,7 @@ def compute_status_for_type(plural: str, verbose: bool = True, force: bool = Fal
         objects = cls.from_query(conn, query)
         total, count, start_time = len(objects), 0, datetime.now(tz=timezone.utc)
         if verbose:
-            print(f"Updating status for {total} {plural}...", end="", flush=True)
+            print(f"Updating status for {total} {plural}...", flush=True)
             progress_time = start_time
         for obj in objects:
             count += 1
@@ -183,7 +183,7 @@ def compute_status_for_type(plural: str, verbose: bool = True, force: bool = Fal
             obj["updated_date"] = now
             obj.persist(conn)
             if verbose and (now - progress_time).seconds > 5:
-                print(f"({count})...", end="", flush=True)
+                print(f"({count})...", flush=True)
                 progress_time = now
         conn.commit()
     if verbose:

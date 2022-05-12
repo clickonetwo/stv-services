@@ -127,10 +127,10 @@ def bulk_upsert_records(
 ):
     total, inserts, updates = len(dicts), 0, 0
     if verbose:
-        print(f"Updating {total} {record_type} records...", end="", flush=True)
+        print(f"Updating {total} {record_type} records...", flush=True)
     for start in range(0, total, 100):
         if verbose and inserts + updates > 0:
-            print(f"({inserts+updates})...", end="", flush=True)
+            print(f"({inserts+updates})...", flush=True)
         with Postgres.get_global_engine().connect() as conn:  # type: Connection
             pairs = [(p_dict, record_maker(conn, p_dict)) for p_dict in dicts]
             i, u = upsert_records(conn, record_type, pairs[start : start + 100])
@@ -184,10 +184,10 @@ def bulk_remove_records(
 ):
     total, deletes = len(dicts), 0
     if verbose:
-        print(f"Deleting {total} {record_type} records...", end="", flush=True)
+        print(f"Deleting {total} {record_type} records...", flush=True)
     for start in range(0, total, 100):
         if verbose and deletes > 0:
-            print(f"({deletes})...", end="", flush=True)
+            print(f"({deletes})...", flush=True)
         with Postgres.get_global_engine().connect() as conn:  # type: Connection
             deletes += delete_records(conn, record_type, dicts[start : start + 100])
             conn.commit()
