@@ -191,7 +191,7 @@ class ActionNetworkPerson(PersistedDict):
         if not donation:
             return
         donation_date = donation["created_date"]
-        if donation_date > self["last_donation"]:
+        if donation_date >= self["last_donation"]:
             self["last_donation"] = donation_date
         else:
             logger.warning(f"Donation '{self['uuid']}' arrived out of order")
@@ -203,7 +203,10 @@ class ActionNetworkPerson(PersistedDict):
             # contacts who donate are funders
             self["is_funder"] = True
         # if this is a recurring donation, update their recurring start date
-        if donation.get("recurrence_data", {}).get("recurring"):
+        recurrence_data = donation.get("recurrence_data", {})
+        if recurrence_data.get("recurring"):
+            if recurrence_data.get("period") == "Yearly":
+                logger.warning(f"Yearly donor '{self['uuid']}' will show as lapsed")
             if donation_date > self["recur_start"]:
                 self["recur_start"] = donation_date
         # Data problem: Action Network doesn't mark recurring donations after
@@ -216,7 +219,13 @@ class ActionNetworkPerson(PersistedDict):
         # Testing shows this code works well enough for our purposes.
         elif self["recur_end"] == model.epoch:
             delta = donation_date - self["recur_start"]
-            if timedelta(days=0) < delta < timedelta(days=32):
+            # why do we allow 64 days rather than 32 between recurring
+            # monthly donations?  Because sometimes your credit expires
+            # and you miss a month, then you fix it and it resumes in
+            # the next month!  We have several donors like this, e.g.,
+            # 'action_network:259aac2e-b796-4b98-9674-c9ab86893c84'
+            # and this is why it's better to be on ActBlue
+            if timedelta(days=0) <= delta <= timedelta(days=64):
                 self["recur_start"] = donation_date
         self["updated_date"] = datetime.now(tz=timezone.utc)
 

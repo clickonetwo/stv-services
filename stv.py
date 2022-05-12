@@ -177,6 +177,17 @@ def compute_status_all(ctx: click.Context, force: bool = False):
 
 
 @stv.command()
+@click.option("--force/--no-force", default=False, help="Force compute of all")
+@click.option(
+    "--type", default="people", help="metadata, fundraising pages, donations, or people"
+)
+@click.pass_context
+def compute_status_for_type(ctx: click.Context, type: str, force: bool = False):
+    verbose = ctx.obj["verbose"]
+    an_bulk.compute_status_for_type(type, verbose, force)
+
+
+@stv.command()
 @click.pass_context
 def verify_schemas(ctx: click.Context):
     verbose = ctx.obj["verbose"]

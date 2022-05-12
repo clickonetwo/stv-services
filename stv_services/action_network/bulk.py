@@ -155,10 +155,10 @@ def compute_status_all(verbose: bool = True, force: bool = False):
         verbose: print progress reports
         force: recompute status for all objects whether updated or not
     """
-    compute_status_for_type("ActBlue webhooks", verbose, force)
-    compute_status_for_type("Action Network fundraising pages", verbose, force)
-    compute_status_for_type("Action Network donations", verbose, force)
-    compute_status_for_type("Action Network people", verbose, force)
+    compute_status_for_type("metadata", verbose, force)
+    compute_status_for_type("fundraising pages", verbose, force)
+    compute_status_for_type("donations", verbose, force)
+    compute_status_for_type("people", verbose, force)
 
 
 def compute_status_for_type(plural: str, verbose: bool = True, force: bool = False):
@@ -178,7 +178,7 @@ def compute_status_for_type(plural: str, verbose: bool = True, force: bool = Fal
             progress_time = start_time
         for obj in objects:
             count += 1
-            obj.compute_status(conn)
+            obj.compute_status(conn, force)
             now = datetime.now(tz=timezone.utc)
             obj["updated_date"] = now
             obj.persist(conn)
@@ -192,13 +192,13 @@ def compute_status_for_type(plural: str, verbose: bool = True, force: bool = Fal
 
 
 def get_classification_parameters(plural: str) -> (sa.Table, Any):
-    if plural == "Action Network people":
+    if plural == "people":
         return model.person_info, ActionNetworkPerson
-    elif plural == "Action Network donations":
+    elif plural == "donations":
         return model.donation_info, ActionNetworkDonation
-    elif plural == "Action Network fundraising pages":
+    elif plural == "fundraising pages":
         return model.fundraising_page_info, ActionNetworkFundraisingPage
-    elif plural == "ActBlue webhooks":
+    elif plural == "metadata":
         return model.donation_metadata, ActBlueDonationMetadata
     else:
         raise ValueError(f"Don't know how to compute status for {plural}")

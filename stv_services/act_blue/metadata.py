@@ -56,7 +56,6 @@ class ActBlueDonationMetadata(PersistedDict):
                 raise ValueError(f"Donation metadata must have field '{key}': {fields}")
         super().__init__(model.donation_metadata, **fields)
 
-    # noinspection PyUnusedLocal
     def compute_status(self, conn: Connection, force: bool = False):
         if self["item_type"] == "cancellation":
             try:
@@ -74,6 +73,9 @@ class ActBlueDonationMetadata(PersistedDict):
         # look for a person with the refcode or email.  Note that refcodes are
         # only received against general pages, whereas emails are only found
         # on supporter pages, so it can only be one or the other
+        if force:
+            # remove computed attributions
+            self["attribution_id"] = ""
         if code := self["refcode"]:
             query = sa.select(model.person_info).where(
                 model.person_info.c.funder_refcode == code
@@ -101,8 +103,9 @@ class ActBlueDonationMetadata(PersistedDict):
         self["updated_date"] = datetime.now(tz=timezone.utc)
 
     def notify_fundraising_pages(self, conn: Connection, attribution_id: str):
+        title = "actblue_146845_" + self["form_name"]
         query = sa.select(model.fundraising_page_info).where(
-            model.fundraising_page_info.c.metadata_id == self["uuid"]
+            model.fundraising_page_info.c.title == title
         )
         for page in ActionNetworkFundraisingPage.from_query(conn, query):
             page.notice_attribution(conn, attribution_id)
