@@ -111,20 +111,6 @@ def create_donation_record(conn: Connection, donation: ActionNetworkDonation) ->
     return record
 
 
-def insert_donations(conn: Connection, donations: list[ActionNetworkDonation]) -> int:
-    pairs = [
-        (donation, create_donation_record(conn, donation)) for donation in donations
-    ]
-    return insert_records(conn, "donation", pairs)
-
-
-def update_donations(conn: Connection, donations: list[ActionNetworkDonation]) -> int:
-    pairs = [
-        (donation, create_donation_record(conn, donation)) for donation in donations
-    ]
-    return update_records(conn, "donation", pairs)
-
-
 def upsert_donations(
     conn: Connection, donations: list[ActionNetworkDonation]
 ) -> (int, int):

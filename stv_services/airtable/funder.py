@@ -38,6 +38,7 @@ funder_table_name = "Fundraising"
 funder_table_schema = {
     "contact": FieldInfo("Name (from Contacts)*", "multipleRecordLinks", "compute"),
     "recurring": FieldInfo("Recurring donation?*", "singleSelect", "compute"),
+    "is_fundraising": FieldInfo("Currently fundraising?*", "checkbox", "compute"),
 }
 recurring_choices = {
     True: "Active",
@@ -69,17 +70,9 @@ def create_funder_record(_: Connection, person: ActionNetworkPerson) -> dict:
         pass
     else:
         record[field_id] = recurring_choices[start > end]
+    field_id = column_ids["is_fundraising"]
+    record[field_id] = person["funder_has_page"] or person["funder_refcode"] != ""
     return record
-
-
-def insert_funders(conn: Connection, people: list[ActionNetworkPerson]) -> int:
-    pairs = [(person, create_funder_record(conn, person)) for person in people]
-    return insert_records(conn, "funder", pairs)
-
-
-def update_funders(conn: Connection, people: list[ActionNetworkPerson]) -> int:
-    pairs = [(person, create_funder_record(conn, person)) for person in people]
-    return update_records(conn, "funder", pairs)
 
 
 def upsert_funders(conn: Connection, people: list[ActionNetworkPerson]) -> (int, int):

@@ -85,6 +85,7 @@ class ActionNetworkFundraisingPage(PersistedDict):
         )
         for donation in ActionNetworkDonation.from_query(conn, query):
             donation.notice_attribution(conn, attribution_id)
+            donation.persist(conn)
 
     @classmethod
     def from_lookup(cls, conn: Connection, uuid: str) -> "ActionNetworkFundraisingPage":

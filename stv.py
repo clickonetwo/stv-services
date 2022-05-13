@@ -145,7 +145,7 @@ def import_submissions(ctx: click.Context, force: bool):
 def import_donation_metadata(ctx: click.Context, path: str = None):
     verbose = ctx.obj["verbose"]
     if not path:
-        path = "./local/act_blue_webhooks.json"
+        path = "./local/actblue-backfill-2022-05-12.json"
     if not os.path.isfile(path):
         raise ValueError(f"Can't find ActBlue webhooks at path '{path}'")
     ab_bulk.import_donation_metadata(path, verbose=verbose)

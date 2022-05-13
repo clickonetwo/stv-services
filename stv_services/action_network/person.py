@@ -211,7 +211,7 @@ class ActionNetworkPerson(PersistedDict):
                 self["recur_start"] = donation_date
         # Data problem: Action Network doesn't mark recurring donations after
         # the first one as being recurring.  So if this donation comes within
-        # a month of the recur start date, and we don't have an actual
+        # a month of the recur_start date, and we don't have an actual
         # cancellation, we assume that it's actually a recurring donation.
         # This only matters for donations that don't come through ActBlue,
         # so we could also check on the fundraising page origin system,
@@ -220,8 +220,8 @@ class ActionNetworkPerson(PersistedDict):
         elif self["recur_end"] == model.epoch:
             delta = donation_date - self["recur_start"]
             # why do we allow 64 days rather than 32 between recurring
-            # monthly donations?  Because sometimes your credit expires
-            # and you miss a month, then you fix it and it resumes in
+            # monthly donations?  Because sometimes your credit card expires,
+            # you miss a month, and then you fix it, so it resumes in
             # the next month!  We have several donors like this, e.g.,
             # 'action_network:259aac2e-b796-4b98-9674-c9ab86893c84'
             # and this is why it's better to be on ActBlue
@@ -251,6 +251,13 @@ class ActionNetworkPerson(PersistedDict):
         cancel_date = metadata["create_date"]
         if cancel_date > self["recur_end"]:
             self["recur_end"] = cancel_date
+        self["updated_date"] = datetime.now(tz=timezone.utc)
+
+    def notice_supporter_page(self, conn: Connection):
+        """This person is a supporter."""
+        self["funder_has_page"] = True
+        self["is_contact"] = True
+        self["is_funder"] = True
         self["updated_date"] = datetime.now(tz=timezone.utc)
 
     def notice_update(self, data: dict):

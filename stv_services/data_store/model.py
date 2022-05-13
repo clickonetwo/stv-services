@@ -79,6 +79,7 @@ person_info = sa.Table(
     sa.Column("is_funder", sa.Boolean, index=True, default=False),
     sa.Column("funder_record_id", sa.Text, index=True, default=""),
     sa.Column("funder_updated", Timestamp, index=True, default=epoch),
+    sa.Column("funder_has_page", sa.Boolean, default=False),
     sa.Column("funder_refcode", sa.Text, index=True, default=""),
     sa.Index("ix_person_info_uuid_hash", "uuid", postgresql_using="hash"),
     sa.Index("ix_person_info_email_hash", "email", postgresql_using="hash"),

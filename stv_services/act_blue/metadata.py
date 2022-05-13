@@ -97,10 +97,16 @@ class ActBlueDonationMetadata(PersistedDict):
         attribution_id = person["uuid"]
         self["attribution_id"] = attribution_id
         if person["email"] == self["form_owner_email"]:
+            self.notify_supporter_page(conn)
             self.notify_fundraising_pages(conn, attribution_id)
         elif (refcode := self["refcode"]) and refcode == person["funder_refcode"]:
             self.notify_donations(conn, attribution_id)
         self["updated_date"] = datetime.now(tz=timezone.utc)
+
+    def notify_supporter_page(self, conn: Connection):
+        person = ActionNetworkPerson.from_lookup(conn, uuid=self["attribution_id"])
+        person.notice_supporter_page(conn)
+        person.persist(conn)
 
     def notify_fundraising_pages(self, conn: Connection, attribution_id: str):
         title = "actblue_146845_" + self["form_name"]
@@ -109,6 +115,7 @@ class ActBlueDonationMetadata(PersistedDict):
         )
         for page in ActionNetworkFundraisingPage.from_query(conn, query):
             page.notice_attribution(conn, attribution_id)
+            page.persist(conn)
 
     def notify_donations(self, conn: Connection, attribution_id: str):
         query = sa.select(model.donation_info).where(
@@ -116,6 +123,7 @@ class ActBlueDonationMetadata(PersistedDict):
         )
         for donation in ActionNetworkDonation.from_query(conn, query):
             donation.notice_attribution(conn, attribution_id)
+            donation.persist(conn)
 
     def contributes_to_status(self):
         if self["item_type"] == "cancellation":
