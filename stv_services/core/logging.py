@@ -27,6 +27,28 @@ import sys
 from stv_services.core import Configuration
 
 
+def init_logging():
+    is_heroku = "HEROKU" == os.getenv("STV_RUNTIME") or "LOCAL"
+    if is_heroku:
+        log_format = "%(levelname)s:%(module)s:%(process)d: %(message)s"
+    else:
+        log_format = "%(asctime):s%(levelname)s:%(module)s:%(process)d: %(message)s"
+    level = os.getenv("STV_LOG_LEVEL")
+    if level:
+        level = logging.getLevelName(level)
+        if not isinstance(level, int):
+            level = None
+    if not level:
+        env = Configuration.get_env()
+        level = logging.DEBUG if env == "DEV" else logging.INFO
+    logging.basicConfig(
+        format=log_format,
+        level=level,
+        stream=sys.stdout,
+        force=True,
+    )
+
+
 def get_logger(name):
     return logging.getLogger(name)
 
@@ -38,23 +60,6 @@ def log_exception(local: logging.Logger, context: str) -> str:
     message = f"{context}: {f_name}, {exc_tb.tb_lineno}: {repr(exc_obj)}"
     local.critical(message)
     return message
-
-
-def init_logging():
-    level = os.getenv("STV_LOG_LEVEL")
-    if level:
-        level = logging.getLevelName(level)
-        if not isinstance(level, int):
-            level = None
-    if not level:
-        env = Configuration.get_env()
-        level = logging.DEBUG if env == "DEV" else logging.INFO
-    logging.basicConfig(
-        format=f"%(levelname)s:%(module)s:%(process)d: %(message)s",
-        level=level,
-        stream=sys.stdout,
-        force=True,
-    )
 
 
 init_logging()
