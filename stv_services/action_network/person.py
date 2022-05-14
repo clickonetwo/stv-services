@@ -32,7 +32,7 @@ from .utils import (
     fetch_hash,
 )
 from ..core.logging import get_logger
-from ..data_store import model, Postgres
+from ..data_store import model, Postgres, RedisSync
 from ..data_store.persisted_dict import PersistedDict, lookup_objects
 
 logger = get_logger(__name__)
@@ -274,6 +274,24 @@ class ActionNetworkPerson(PersistedDict):
         if modified_date > self["modified_date"]:
             self["modified_date"] = modified_date
         self["custom_fields"].update(custom_fields)
+
+    def notice_refcode(self, _conn: Connection, new: str) -> bool:
+        """Tell a person of a refcode.  Unlike most tells, this one can fail,
+        because the person may already have a refcode.  So this noticer returns
+        whether the new refcode was accepted or not."""
+        current = self["refcode"]
+        if current and current != new:
+            logger.error(
+                f"Can't assign a new refcode '{new}' to '{self['uuid']}' because "
+                f"refcode '{current}' already exists."
+            )
+            return False
+        if current == new:
+            # this person already has this refcode, so nothing changes
+            return False
+        self["refcode"] = new
+        self["updated_date"] = datetime.now(tz=timezone.utc)
+        return True
 
     @classmethod
     def from_hash(cls, data: dict) -> "ActionNetworkPerson":

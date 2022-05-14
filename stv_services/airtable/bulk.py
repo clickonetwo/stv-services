@@ -30,6 +30,7 @@ from stv_services.airtable import webhook
 from stv_services.airtable.assignment import (
     verify_assignment_schema,
     insert_needed_assignments,
+    register_assignment_hook,
 )
 from stv_services.airtable.contact import (
     verify_contact_schema,
@@ -206,6 +207,9 @@ def register_webhooks(verbose: bool = True, sync_first: bool = False):
     if verbose:
         print(f"Registering volunteer webhook...")
     register_volunteer_hook()
+    if verbose:
+        print(f"Registering assignment webhook...")
+    register_assignment_hook()
     if verbose:
         print(f"Done.")
 

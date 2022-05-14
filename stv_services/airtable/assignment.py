@@ -23,6 +23,7 @@
 from sqlalchemy.future import Connection
 
 from .schema import fetch_and_validate_table_schema, FieldInfo
+from .webhook import register_hook
 from ..core import Configuration, Session
 from ..data_store.persisted_dict import PersistedDict
 
@@ -32,6 +33,7 @@ assignment_table_schema = {
     "assignment_name": FieldInfo("Assignment", "singleSelect", "provided"),
     "assignment_status": FieldInfo("Status", "singleSelect", "provided"),
     "summary": FieldInfo("Assignment Summary*", "formula", "immutable"),
+    "refcode": FieldInfo("Referrer Code in ActBlue", "singleLineText", "immutable"),
 }
 field_assignment_map = {
     "2022_calls": "Phone Banker",
@@ -99,3 +101,12 @@ def insert_needed_assignments(conn: Connection, people: list[PersistedDict]) -> 
             existing_map.update(added)
             person.persist(conn)
     return insert_assignments(assignment_map)
+
+
+def register_assignment_hook():
+    schema = verify_assignment_schema()
+    base_id = schema["base_id"]
+    table_id = schema["table_id"]
+    column_ids = schema["column_ids"]
+    field_ids = [column_ids[name] for name in ["contact_record_id", "refcode"]]
+    register_hook("contact", base_id, table_id, field_ids)

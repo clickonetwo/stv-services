@@ -33,7 +33,7 @@ from ..data_store import Postgres
 from ..data_store.redis_db import LockingQueue, RedisSync
 
 logger = get_logger(__name__)
-queues = ("airtable", "internal", "act_blue", "action_network")
+queues = ("internal", "airtable", "act_blue", "action_network")
 
 
 def main():

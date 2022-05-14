@@ -34,8 +34,8 @@ def import_donation_metadata(filepath: str, verbose: bool = True):
         print(f"Importing ActBlue webhooks from '{filepath}'...")
     batch: list[dict] = []
     with open(filepath) as file:
-        while line := file.readline():
-            batch.append(json.loads(line.strip()))
+        while line := file.readline().strip():
+            batch.append(json.loads(line))
     with Postgres.get_global_engine().connect() as conn:  # type: Connection
         # out with the old
         conn.execute(sa.delete(model.donation_metadata))

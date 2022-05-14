@@ -23,6 +23,7 @@
 import sqlalchemy as sa
 from sqlalchemy.future import Connection
 
+from ..act_blue.metadata import ActBlueDonationMetadata
 from ..action_network.person import ActionNetworkPerson
 from ..airtable.contact import upsert_contacts
 from ..airtable.funder import upsert_funders
@@ -42,6 +43,9 @@ def process_webhook_notification(conn: Connection, name: str):
         payloads = fetch_hook_payloads(conn, "contact")
         process_promotion_webhook_payloads(conn, "contact", payloads)
         process_team_webhook_payloads(conn, "contact", payloads)
+    elif name == "assignment":
+        payloads = fetch_hook_payloads(conn, "assignment")
+        process_refcode_payloads(conn, "assignment", payloads)
     else:
         raise ValueError(f"Unknown webhook type: '{name}'")
 
@@ -152,3 +156,52 @@ def change_team_leads(conn: Connection, changed_ids: list[str], new_lead_map: di
             person["team_lead"] = ""
         person.persist(conn)
     upsert_contacts(conn, people)
+
+
+def process_refcode_payloads(conn: Connection, name: str, payloads: list[dict]):
+    logger.info(f"Processing airtable '{name}' payloads for refcode assignments...")
+    config = Configuration.get_session_config(conn)
+    schema = config[f"airtable_stv_{name}_schema"]
+    table_id = schema["table_id"]
+    column_ids = schema["column_ids"]
+    refcode_field_id = column_ids["refcode"]
+    contact_field_id = column_ids["contact_record_id"]
+    refcode_map = {}
+    for payload in payloads:
+        change: dict = payload.get("changedTablesById", {}).get(table_id, {})
+        if change and (records := change.get("changedRecordsById")):
+            for change in records.values():
+                current = change.get("current", {}).get("cellValuesByFieldId", {})
+                contact_record_list = current.get(contact_field_id)
+                refcode = current.get(refcode_field_id)
+                if not contact_record_list or not refcode:
+                    logger.warning("Ignoring invalid assignment change: {records}")
+                refcode_map[contact_record_list[0]] = refcode
+    process_refcode_assignments(conn, refcode_map)
+    logger.info(f"Refcode assignment processing done.")
+
+
+def process_refcode_assignments(conn: Connection, refcode_map: dict):
+    for contact_record_id, refcode in refcode_map.items():
+        # find the user
+        query = sa.select(model.person_info).where(
+            model.person_info.c.contact_record_id == contact_record_id
+        )
+        row = conn.execute(query).mappings().first()
+        if not row:
+            logger.error(f"No person with contact record '{contact_record_id}'")
+            continue
+        # notify the user of their assigned refcode
+        person = ActionNetworkPerson.from_lookup(conn, uuid=row["uuid"])
+        if person.notice_refcode(conn, refcode):
+            # this is a new refcode for this person, so we persist the change
+            # and notify any existing donation metadata with this refcode that
+            # there is now a attribution to this person.
+            person.persist(conn)
+            query = sa.select(model.donation_metadata).where(
+                model.donation_metadata.c.refcode == refcode
+            )
+            for row in conn.execute(query).mappings().all():
+                metadata = ActBlueDonationMetadata.from_lookup(conn, row["uuid"])
+                metadata.notice_person(conn, person)
+                metadata.persist(conn)
