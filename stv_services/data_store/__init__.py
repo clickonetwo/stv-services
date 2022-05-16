@@ -20,7 +20,6 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 #
-from .item_list import ItemListAsync, ItemListSync
 from .model import metadata
 from .postgres_db import get_engine_url, Postgres
 from .redis_db import RedisAsync, RedisSync

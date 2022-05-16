@@ -20,23 +20,16 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 #
-import json
 from datetime import datetime, timezone
 
 from sqlalchemy.future import Connection
 
 from ..act_blue.metadata import ActBlueDonationMetadata
-from ..data_store import Postgres
 
 
-def process_webhook_notification(body: str) -> bool:
-    body = json.loads(body)
-    with Postgres.get_global_engine().connect() as conn:  # type: Connection
-        metadata = ActBlueDonationMetadata.from_webhook(body)
-        if metadata.contributes_to_status():
-            metadata.compute_status(conn)
-            metadata["updated_date"] = datetime.now(tz=timezone.utc)
-            metadata.persist(conn)
-            conn.commit()
-            return True
-    return False
+def process_webhook_notification(conn: Connection, body: dict):
+    metadata = ActBlueDonationMetadata.from_webhook(body)
+    if metadata.contributes_to_status():
+        metadata.compute_status(conn)
+        metadata["updated_date"] = datetime.now(tz=timezone.utc)
+        metadata.persist(conn)

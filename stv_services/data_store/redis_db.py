@@ -56,6 +56,7 @@ class RedisSync:
     from redis import Redis, RedisError
 
     _pool = None
+    Redis = Redis
     Error = RedisError
 
     @classmethod
@@ -101,7 +102,7 @@ class LockingQueue:
         self.queue_name = queue_name
         self.key_name = f"LockingQueue<{queue_name}>"
         self.lock_value = str(uuid.uuid4())
-        self.state = "unlocked"
+        self.lock_state = "unlocked"
         self.duration = secs_to_lock
         self.db = RedisSync.connect()
         self.script = self.db.script_load(self.lock_release_script)
@@ -111,34 +112,34 @@ class LockingQueue:
         self.db = None
 
     def __repr__(self):
-        return f"<LockingQueue '{self.key_name}' ({self.state})>"
+        return f"<LockingQueue '{self.key_name}' ({self.lock_state})>"
 
     def state(self):
-        return self.state
+        return self.lock_state
 
     def lock(self):
         """Lock the queue"""
-        if self.state == "locked":
+        if self.lock_state == "locked":
             raise self.AlreadyLocked("The queue is already locked")
         result = self.db.set(self.key_name, self.lock_value, nx=True, ex=self.duration)
         if not result:
             raise self.LockedByOther("The queue is locked by another client")
-        self.state = "locked"
+        self.lock_state = "locked"
 
     def unlock(self):
         """Unlock the queue"""
-        if self.state == "unlocked":
+        if self.lock_state == "unlocked":
             raise self.AlreadyUnlocked("The queue is already unlocked")
         result = self.db.evalsha(self.script, 1, self.key_name, self.lock_value)
-        self.state = "unlocked"
+        self.lock_state = "unlocked"
         if not result:
             raise self.NotLocked("The queue's lock had already expired")
 
     def renew_lock(self):
         """Renew an existing queue lock"""
-        if self.state == "unlocked":
+        if self.lock_state == "unlocked":
             raise self.AlreadyUnlocked("You must lock before you renew")
         result = self.db.set(self.key_name, self.lock_value, xx=True, ex=self.duration)
         if not result:
-            self.state = "locked"
+            self.lock_state = "locked"
             raise self.NotLocked("The lock has been lost")

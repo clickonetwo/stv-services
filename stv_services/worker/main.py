@@ -20,8 +20,14 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 #
+import hashlib
+import json
+from datetime import datetime, timezone, timedelta
 from random import random
+from time import sleep
 
+from requests import HTTPError
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.future import Connection
 
 from . import airtable, act_blue
@@ -33,18 +39,59 @@ from ..data_store import Postgres
 from ..data_store.redis_db import LockingQueue, RedisSync
 
 logger = get_logger(__name__)
-queues = ("internal", "airtable", "act_blue", "action_network")
+queues = ("control", "act_blue", "action_network", "airtable")
+locking_queues = {}
+db: RedisSync.Redis
 
 
 def main():
+    startup()
+    process_incoming_webhooks()
+    shutdown()
+
+
+def startup():
+    global db, locking_queues
     logger.info(f"Starting worker at {local_timestamp()}...")
+    db = RedisSync.connect()
     locking_queues = {queue: LockingQueue(queue) for queue in queues}
     ActBlueDonationMetadata.initialize_forms()
-    db = RedisSync.connect()
+
+
+def shutdown():
+    db.close()
+    logger.info(f"Stopping worker at {local_timestamp()}.")
+
+
+def do_housekeeping(scheduled: datetime):
+    """Do routine housekeeping, such as processing hooks that have
+    to be retried, or importing data from external systems that
+    don't have webhook capabilities.  The argument is the time
+    the houskeeping was scheduled to run.  The return value is
+    the time that housekeeping should next be scheduled to run."""
+    logger.info("Processing pending webhooks on all queues")
+    for queue in queues:
+        target, completed = process_queue_items(queue)
+        if target == 0:
+            logger.info(f"No items on queue '{queue}'")
+        elif completed < 0:
+            # assume another worker has this queue
+            logger.info(f"Skipping locked queue '{queue}'")
+        elif completed < target:
+            # an item failed; it will get picked
+            # up in the housekeeping phase later
+            logger.info(f"Failed webhook left on queue '{queue}'")
+    return datetime.now(tz=timezone.utc) + timedelta(minutes=5)
+
+
+def process_incoming_webhooks():
     pubsub = db.pubsub(ignore_subscribe_messages=True)
     pubsub.subscribe("webhooks")
+    next_housekeeping = datetime.now(tz=timezone.utc)
     try:
         while True:
+            if datetime.now(tz=timezone.utc) >= next_housekeeping:
+                next_housekeeping = do_housekeeping(next_housekeeping)
             timeout = 50.0 + 20.0 * random()
             logger.info(f"Waiting {timeout} seconds for new publish...")
             message: dict = pubsub.get_message(timeout=timeout)
@@ -53,66 +100,97 @@ def main():
             if message.get("type") != "message":
                 logger.warning(f"Ignoring non-message: {message}")
                 continue
-            queue_name = message.get("data", b"stop").decode("utf-8").lower()
-            if not queue_name or queue_name == "stop":
-                logger.error(f"Received exit signal, stopping: {message}")
+            queue = message.get("data", b"stop").decode("utf-8").lower()
+            if queue not in queues:
+                logger.error(f"Received non-webhook: stopping: {message}")
                 break
-            locking_queue = locking_queues.get(queue_name)
-            if not locking_queue:
-                logger.error(f"Received unknown queue name, ignoring: {queue_name}")
-                continue
-            processed_name = f"{queue_name}:processed"
-            results_name = f"{queue_name}:results"
-            try:
-                logger.info(f"Locking queue '{queue_name}'...")
-                locking_queue.lock()
-                logger.info(f"Processing messages on queue '{queue_name}'...")
-                while result := db.lmove(queue_name, processed_name, "RIGHT", "LEFT"):
-                    process_result = process_queue_item(queue_name, result)
-                    db.lpush(results_name, process_result)
-                logger.info(f"Waiting for published webhooks...")
-            except (KeyError, ValueError, UnicodeDecodeError):
-                msg = log_exception(logger, "While processing queue item")
-                db.lpush(results_name, msg)
-                if Configuration.get_env() == "DEV":
-                    raise
-            except LockingQueue.LockedByOther:
-                # some other worker got it, move on
-                logger.info(f"Failed to lock '{queue_name}'")
-                continue
-            finally:
-                locking_queue.unlock()
+            process_queue_items(queue)
     except (UnicodeDecodeError, KeyError) as err:
-        logger.info(f"Terminating on message decode error: '{err}'...")
+        log_exception(logger, f"While receiving message: '{err}'")
+        logger.critical(f"Terminating on message receive error.")
         if Configuration.get_env() == "DEV":
             raise
     except KeyboardInterrupt:
         logger.info("Terminating on interrupt...")
     finally:
         pubsub.reset()
-    db.close()
-    logger.info(f"Stopping worker at {local_timestamp()}.")
 
 
-def process_queue_item(queue_name: str, result: bytes) -> str:
-    body: str = result.decode("utf-8")
-    logger.info(f"Processing '{queue_name}' webhook: {body}")
-    with Postgres.get_global_engine().connect() as conn:  # type: Connection
-        if queue_name == "airtable":
-            airtable.process_webhook_notification(conn, body)
-            result = "processed"
-        elif queue_name == "act_blue":
-            if act_blue.process_webhook_notification(body):
-                result = "processed and metadata saved"
+def process_queue_items(queue: str) -> (int, int):
+    """Try locking and processing all items on the queue.
+    Returns the number of items found and the number processed.
+
+    Note that items can be added to the queue while it's being
+    processed, so the second number may be higher than the first.
+
+    As a special case, if the second number is negative, that
+    means that we failed to lock the queue."""
+    if target := db.llen(queue):
+        processed = 0
+    else:
+        return 0, 0
+    locking_queue = locking_queues[queue]
+    try:
+        logger.info(f"Locking queue '{queue}'...")
+        locking_queue.lock()
+    except LockingQueue.LockedByOther:
+        # some other worker got it, move on
+        logger.info(f"Failed to lock '{queue}'")
+        return target, -1
+    try:
+        logger.info(f"Starting to process {target} webhooks on queue '{queue}'")
+        while result := db.lrange(queue, -1, -1):
+            hook_id = hashlib.md5(result[0]).hexdigest()
+            hook = json.loads(result[0])
+            if process_webhook(queue, hook, hook_id):
+                processed += 1
+                db.rpop(queue, 1)
+                locking_queue.renew_lock()
             else:
-                result = "processed and metadata discarded"
-        elif queue_name == "action_network":
-            result = "not processed"
-        elif queue_name == "internal":
-            result = "not processed"
+                logger.warning(f"Temporary processing failure, will retry item later")
+                break
+    except (KeyError, ValueError, json.JSONDecodeError, NotImplementedError, HTTPError):
+        log_exception(logger, f"While processing webhook on '{queue}'")
+        logger.error("Permanent processing failure, putting item in quarantine")
+        db.lmove(queue, "quarantine", "RIGHT", "LEFT")
+        if Configuration.get_env() == "DEV":
+            raise
+    finally:
+        logger.info(f"Processed {processed} webhook(s) on queue '{queue}'")
+        if locking_queue.state() == "locked":
+            locking_queue.unlock()
+    return target, processed
+
+
+def process_webhook(queue: str, hook: dict, hook_id: str) -> bool:
+    try:
+        logger.info(f"Processing webhook '{hook_id}' from '{queue}'")
+        with Postgres.get_global_engine().connect() as conn:  # type: Connection
+            if queue == "airtable":
+                airtable.process_webhook_notification(conn, hook["name"])
+            elif queue == "act_blue":
+                act_blue.process_webhook_notification(conn, hook)
+            elif queue == "action_network":
+                logger.error("Action Network webhooks are not implemented.")
+                raise NotImplementedError
+            elif queue == "control":
+                logger.error("Control webhooks are not implemented.")
+                raise NotImplementedError
+            else:
+                logger.error(f"Unknown queue: '{queue}'")
+                raise NotImplementedError
+            conn.commit()
+            logger.info(f"Processing complete on webhook '{hook_id}'")
+            return True
+    except SQLAlchemyError:
+        log_exception(logger, f"Database error on webhook '{hook_id}' on '{queue}'")
+        return False
+    except HTTPError as err:
+        if err.response.status_code in [429, 500, 502, 503]:
+            log_exception(logger, f"Network error on webhook '{hook_id}' on '{queue}'")
+            delay = 30.0 + 10.0 * random()
+            logger.info("Backing off {delay} seconds before retry")
+            sleep(delay)
         else:
-            result = f"no such queue: '{queue_name}'"
-            logger.error(result)
-        conn.commit()
-    logger.info(f"Result for '{queue_name}' webhook: {result}")
-    return result
+            raise
+        return False

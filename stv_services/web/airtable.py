@@ -56,10 +56,11 @@ async def receive_notification(request: Request):
         raise request_error(logger, f"while decoding webhook")
     try:
         hook_name = validate_notification(payload, body, signature)
+        hook_value = json.dumps(dict(name=hook_name, body=payload))
     except ValueError:
         raise request_error(logger, f"while validating webhook")
     db = await RedisAsync.connect()
-    length = await db.lpush("airtable", hook_name)
+    length = await db.lpush("airtable", hook_value)
     logger.info(f"Saved webhook '{hook_name}' as #{length} in 'airtable' queue")
     await db.publish("webhooks", "airtable")
     return
