@@ -105,8 +105,9 @@ def insert_needed_assignments(conn: Connection, people: list[PersistedDict]) -> 
 
 def register_assignment_hook():
     schema = verify_assignment_schema()
-    base_id = schema["base_id"]
-    table_id = schema["table_id"]
+    base = schema["base_id"]
+    table = schema["table_id"]
     column_ids = schema["column_ids"]
-    field_ids = [column_ids[name] for name in ["contact_record_id", "refcode"]]
-    register_hook("contact", base_id, table_id, field_ids)
+    targets = [column_ids["refcode"]]
+    watches = [column_ids["contact_record_id"]]
+    register_hook("assignment", base, table, targets, watches)

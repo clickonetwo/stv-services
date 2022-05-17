@@ -158,7 +158,11 @@ def process_queue_items(queue: str) -> (int, int):
     finally:
         logger.info(f"Processed {processed} webhook(s) on queue '{queue}'")
         if locking_queue.state() == "locked":
-            locking_queue.unlock()
+            try:
+                locking_queue.unlock()
+            except LockingQueue.NotLocked:
+                # lock may have timed out during the operation, that's OK
+                pass
     return target, processed
 
 

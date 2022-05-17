@@ -56,7 +56,7 @@ class ActionNetworkDonation(PersistedDict):
         if force or not self["attribution_id"]:
             if metadata_id := self.get("metadata_id"):
                 query = sa.select(model.donation_metadata).where(
-                    model.donation_metadata.c.uuid == self[metadata_id]
+                    model.donation_metadata.c.uuid == self["metadata_id"]
                 )
                 if metadata := conn.execute(query).mappings().first():
                     self.notice_attribution(conn, metadata["attribution_id"])
@@ -81,6 +81,13 @@ class ActionNetworkDonation(PersistedDict):
             donor_id = "action_network:" + donor_id
         if fundraising_page_id := data.get("action_network:fundraising_page_id"):
             fundraising_page_id = "action_network:" + fundraising_page_id
+        # donations that come through ActBlue have a metadata ID
+        for candidate in data.get("identifiers", []):  # type: str
+            if candidate.startswith("act_blue:"):
+                metadata_id = candidate
+                break
+        else:
+            metadata_id = None
         return cls(
             uuid=uuid,
             created_date=created_date,
@@ -90,6 +97,7 @@ class ActionNetworkDonation(PersistedDict):
             recurrence_data=recurrence_data,
             donor_id=donor_id,
             fundraising_page_id=fundraising_page_id,
+            metadata_id=metadata_id,
         )
 
     @classmethod

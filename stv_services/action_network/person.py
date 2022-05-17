@@ -32,7 +32,7 @@ from .utils import (
     fetch_hash,
 )
 from ..core.logging import get_logger
-from ..data_store import model, Postgres, RedisSync
+from ..data_store import model, Postgres
 from ..data_store.persisted_dict import PersistedDict, lookup_objects
 
 logger = get_logger(__name__)
@@ -253,12 +253,38 @@ class ActionNetworkPerson(PersistedDict):
             self["recur_end"] = cancel_date
         self["updated_date"] = datetime.now(tz=timezone.utc)
 
-    def notice_supporter_page(self, conn: Connection):
+    def notice_supporter_page(self, _conn: Connection):
         """This person is a supporter."""
         self["funder_has_page"] = True
         self["is_contact"] = True
         self["is_funder"] = True
         self["updated_date"] = datetime.now(tz=timezone.utc)
+
+    def notice_refcode(self, _conn: Connection, new: str):
+        """Tell a person of a refcode.  This is allowed to remove as well as
+        change an existing refcode, because people make mistakes sometimes,
+        and we have to allow for data updates.  Note, however, that once a
+        donation has been received with a given refcode, and that refcode was
+        associated at that time with a given user, changing that user's
+        refcode will have no effect on past or future donations with the old
+        code."""
+        current = self["funder_refcode"]
+        if current == new:
+            # this person already has this refcode, so nothing changes
+            return
+        if current and new != current:
+            # If the new refcode is an extension of the current one, we assume
+            # that we're just seeing multiple notifications during refcode entry
+            if new.startswith(current):
+                logger.warning(f"Extending refcode from '{current}' to '{new}'")
+            else:
+                logger.warning(f"Replacing refcode '{current}' with '{new}'")
+        self["funder_refcode"] = new
+        self["updated_date"] = datetime.now(tz=timezone.utc)
+        # all supporters are both contacts and funders
+        self["is_contact"] = True
+        self["is_funder"] = True
+        return True
 
     def notice_update(self, data: dict):
         """Update data from a notified hash"""
@@ -274,24 +300,6 @@ class ActionNetworkPerson(PersistedDict):
         if modified_date > self["modified_date"]:
             self["modified_date"] = modified_date
         self["custom_fields"].update(custom_fields)
-
-    def notice_refcode(self, _conn: Connection, new: str) -> bool:
-        """Tell a person of a refcode.  Unlike most tells, this one can fail,
-        because the person may already have a refcode.  So this noticer returns
-        whether the new refcode was accepted or not."""
-        current = self["refcode"]
-        if current and current != new:
-            logger.error(
-                f"Can't assign a new refcode '{new}' to '{self['uuid']}' because "
-                f"refcode '{current}' already exists."
-            )
-            return False
-        if current == new:
-            # this person already has this refcode, so nothing changes
-            return False
-        self["refcode"] = new
-        self["updated_date"] = datetime.now(tz=timezone.utc)
-        return True
 
     @classmethod
     def from_hash(cls, data: dict) -> "ActionNetworkPerson":

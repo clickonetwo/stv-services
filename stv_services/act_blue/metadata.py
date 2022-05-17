@@ -92,7 +92,7 @@ class ActBlueDonationMetadata(PersistedDict):
 
     def notice_person(self, conn: Connection, person: dict):
         if self["attribution_id"] != "":
-            # we've already noticed this person, break the propagation
+            # we've already attributed this refcode, so do nothing
             return
         attribution_id = person["uuid"]
         self["attribution_id"] = attribution_id
@@ -101,6 +101,12 @@ class ActBlueDonationMetadata(PersistedDict):
             self.notify_fundraising_pages(conn, attribution_id)
         elif (refcode := self["refcode"]) and refcode == person["funder_refcode"]:
             self.notify_donations(conn, attribution_id)
+        else:
+            logger.critical(
+                f"Incorrect attribution of metadata '{self['uuid']}' "
+                f"to person '{attribution_id}': "
+                f"neither form_owner_email nor refcode match user"
+            )
         self["updated_date"] = datetime.now(tz=timezone.utc)
 
     def notify_supporter_page(self, conn: Connection):

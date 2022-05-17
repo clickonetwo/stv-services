@@ -171,17 +171,22 @@ def process_refcode_payloads(conn: Connection, name: str, payloads: list[dict]):
         change: dict = payload.get("changedTablesById", {}).get(table_id, {})
         if change and (records := change.get("changedRecordsById")):
             for change in records.values():
-                current = change.get("current", {}).get("cellValuesByFieldId", {})
-                contact_record_list = current.get(contact_field_id)
-                refcode = current.get(refcode_field_id)
-                if not contact_record_list or not refcode:
+                changed = change.get("current", {}).get("cellValuesByFieldId", {})
+                refcode = changed.get(refcode_field_id)
+                unchanged = change.get("unchanged", {}).get("cellValuesByFieldId", {})
+                contact_record_list = unchanged.get(contact_field_id)
+                if not contact_record_list:
                     logger.warning("Ignoring invalid assignment change: {records}")
-                refcode_map[contact_record_list[0]] = refcode
+                # because this is a record linked to a field with a value, each link
+                # is a dict of both a record ID and a value field.
+                contact_record_id = contact_record_list[0]["id"]
+                refcode_map[contact_record_id] = refcode or ""
     process_refcode_assignments(conn, refcode_map)
     logger.info(f"Refcode assignment processing done.")
 
 
 def process_refcode_assignments(conn: Connection, refcode_map: dict):
+    """When a refcode assignment gets made in Airtable, we are likely to get multiple payloads, because Airtable sends incremental updates as users type."""
     for contact_record_id, refcode in refcode_map.items():
         # find the user
         query = sa.select(model.person_info).where(
@@ -193,11 +198,10 @@ def process_refcode_assignments(conn: Connection, refcode_map: dict):
             continue
         # notify the user of their assigned refcode
         person = ActionNetworkPerson.from_lookup(conn, uuid=row["uuid"])
-        if person.notice_refcode(conn, refcode):
-            # this is a new refcode for this person, so we persist the change
-            # and notify any existing donation metadata with this refcode that
-            # there is now a attribution to this person.
-            person.persist(conn)
+        person.notice_refcode(conn, refcode)
+        person.persist(conn)
+        if refcode:
+            # if this is not an empty refcode, we notify the user that has it
             query = sa.select(model.donation_metadata).where(
                 model.donation_metadata.c.refcode == refcode
             )

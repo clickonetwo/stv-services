@@ -33,7 +33,9 @@ from stv_services.core.logging import get_logger
 logger = get_logger(__name__)
 
 
-def register_hook(name: str, base_id: str, table_id: str, field_ids: list[str]):
+def register_hook(
+    name: str, base: str, table: str, targets: list[str], watches: list[str] = None
+):
     config = Configuration.get_global_config()
     hook_info: dict = config.setdefault("airtable_webhooks", {})
     if hook_info.get(name):
@@ -44,14 +46,16 @@ def register_hook(name: str, base_id: str, table_id: str, field_ids: list[str]):
             "filters": {
                 "fromSources": ["client", "automation"],
                 "dataTypes": ["tableData"],
-                "recordChangeScope": table_id,
-                "watchDataInFieldIds": field_ids,
+                "recordChangeScope": table,
+                "watchDataInFieldIds": targets,
             },
             "includes": {
                 "includePreviousCellValues": True,
             },
         },
     }
+    if watches:
+        spec["options"]["includes"]["includeCellValuesInFieldIds"] = watches
     url = None
     if server_url := config.get("stv_api_base_url"):
         url = server_url + "/airtable/notifications"
@@ -60,7 +64,7 @@ def register_hook(name: str, base_id: str, table_id: str, field_ids: list[str]):
         "notificationUrl": url,
     }
     session = Session.get_global_session("airtable")
-    url = config["airtable_api_base_url"] + f"/bases/{base_id}/webhooks"
+    url = config["airtable_api_base_url"] + f"/bases/{base}/webhooks"
     response = session.post(url, json=body)
     if response.status_code == 422:
         print("Unprocessable entity exception")
@@ -72,8 +76,8 @@ def register_hook(name: str, base_id: str, table_id: str, field_ids: list[str]):
         "spec": spec,
         "hook_name": name,
         "hook_id": results["id"],
-        "base_id": base_id,
-        "table_id": table_id,
+        "base_id": base,
+        "table_id": table,
         "secret": results["macSecretBase64"],
         "cursor": 0,
     }
@@ -231,9 +235,16 @@ def find_spec(hook: dict, hook_info: dict) -> str:
             continue
         s1 = hook["specification"]
         s2 = info["spec"]
-        field_ids1: list = s1["options"]["filters"]["watchDataInFieldIds"]
-        field_ids2: list = s2["options"]["filters"]["watchDataInFieldIds"]
-        if field_ids1.sort() == field_ids2.sort():
-            return name
+        o1 = s1["options"]
+        o2 = s2["options"]
+        targets1: list = o1["filters"]["watchDataInFieldIds"]
+        targets2: list = o2["filters"]["watchDataInFieldIds"]
+        if targets1.sort() != targets2.sort():
+            continue
+        watches1: list = o1["includes"].get("includeCellValuesInFieldIds", [])
+        watches2: list = o2["includes"].get("includeCellValuesInFieldIds", [])
+        if watches1.sort() != watches2.sort():
+            continue
+        return name
     else:
         return ""
