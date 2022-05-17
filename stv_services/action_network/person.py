@@ -287,11 +287,21 @@ class ActionNetworkPerson(PersistedDict):
         self["updated_date"] = datetime.now(tz=timezone.utc)
         return True
 
-    def notice_team_lead(self, _conn: Connection, new: str):
-        current = self["team_lead"]
-        if current == new:
+    def notice_team_lead_change(
+        self, _conn: Connection, old: PersistedDict, new: PersistedDict
+    ):
+        """Change someone's team lead.  This actually affects three people:
+        the person whose lead changed, the old lead, and the new lead, because
+        all of their records have to be updated to show the lead change."""
+        if old == new:
             return
-        self["team_lead"] = new
+        if old:
+            old["updated_date"] = datetime.now(tz=timezone.utc)
+        if new:
+            new["updated_date"] = datetime.now(tz=timezone.utc)
+            self["team_lead"] = new["uuid"]
+        else:
+            self["team_lead"] = ""
         self["updated_date"] = datetime.now(tz=timezone.utc)
 
     def notice_update(self, data: dict):

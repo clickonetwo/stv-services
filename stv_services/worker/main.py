@@ -32,7 +32,7 @@ from sqlalchemy.future import Connection
 
 from . import airtable, act_blue
 from ..act_blue.metadata import ActBlueDonationMetadata
-from ..airtable.bulk import update_all_records
+from ..airtable.bulk import update_all_records, verify_schemas, register_webhooks
 from ..core import Configuration
 from ..core.logging import get_logger, log_exception
 from ..core.utilities import local_timestamp
@@ -54,8 +54,14 @@ def main():
 def startup():
     global db, locking_queues
     logger.info(f"Starting worker at {local_timestamp()}...")
+    # make sure the Airtable schema is as expected
+    verify_schemas(verbose=True)
+    # make sure the Airtable webhooks are registered
+    register_webhooks(verbose=True, sync_first=True)
+    # connect to the redis signalling backend
     db = RedisSync.connect()
     locking_queues = {queue: LockingQueue(queue) for queue in queues}
+    # make sure the metadata form cache is loaded
     ActBlueDonationMetadata.initialize_forms()
 
 

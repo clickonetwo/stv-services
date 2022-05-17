@@ -25,10 +25,6 @@ from sqlalchemy.future import Connection
 
 from ..act_blue.metadata import ActBlueDonationMetadata
 from ..action_network.person import ActionNetworkPerson
-from ..airtable.bulk import update_all_records
-from ..airtable.contact import upsert_contacts
-from ..airtable.funder import upsert_funders
-from ..airtable.volunteer import upsert_volunteers
 from ..airtable.webhook import fetch_hook_payloads
 from ..core import logging, Configuration
 from ..data_store import model
@@ -96,7 +92,8 @@ def process_team_webhook_payloads(conn: Connection, name: str, payloads: list[di
     table_id = schema["table_id"]
     column_ids = schema["column_ids"]
     field_id = column_ids["team_lead"]
-    changed_ids, new_lead_map = set(), {}
+    changed_ids = set()
+    lead_map: dict[str, (str, str)] = {}
     for payload in payloads:
         change: dict = payload.get("changedTablesById", {}).get(table_id, {})
         if change and (records := change.get("changedRecordsById")):
@@ -110,29 +107,35 @@ def process_team_webhook_payloads(conn: Connection, name: str, payloads: list[di
                             logger.error(f"Two team leads for {record_id}: {new_leads}")
                         new_lead = new_leads[0].get("id")
                         changed_ids.add(new_lead)
-                        new_lead_map[record_id] = new_lead
                     else:
-                        new_lead_map[record_id] = ""
+                        new_lead = ""
                     if old_leads := old_vals.get(field_id, []):
                         if len(old_leads) > 1:
                             logger.error(f"Two team leads for {record_id}: {old_leads}")
                         old_lead = old_leads[0].get("id")
                         changed_ids.add(old_lead)
-    change_team_leads(conn, list(changed_ids), new_lead_map)
+                    else:
+                        old_lead = ""
+                    if new_lead != old_lead:
+                        lead_map[record_id] = (old_lead, new_lead)
+    change_team_leads(conn, list(changed_ids), lead_map)
     logger.info(f"Team change processing done.")
 
 
-def change_team_leads(conn: Connection, changed_ids: list[str], new_lead_map: dict):
+def change_team_leads(
+    conn: Connection, changed_ids: list[str], lead_map: dict[str, (str, str)]
+):
     query = sa.select(model.person_info).where(
         model.person_info.c.contact_record_id.in_(changed_ids)
     )
     people = ActionNetworkPerson.from_query(conn, query)
-    back_map = {person["contact_record_id"]: person["uuid"] for person in people}
+    back_map = {person["contact_record_id"]: person for person in people}
+    for member, (old, new) in lead_map.items():
+        person = back_map[member]
+        old_lead = back_map.get(old)
+        new_lead = back_map.get(new)
+        person.notice_team_lead_change(conn, old_lead, new_lead)
     for person in people:
-        if new_lead := new_lead_map.get(person["contact_record_id"]):
-            person.notice_team_lead(conn, back_map[new_lead])
-        else:
-            person.notice_team_lead(conn, "")
         person.persist(conn)
 
 

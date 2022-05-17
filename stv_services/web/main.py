@@ -62,7 +62,7 @@ async def startup():
     verify_schemas(verbose=True)
     # make sure the Airtable webhooks are registered
     register_webhooks(verbose=True, sync_first=True)
-    # make sure the metadata forms are loaded
+    # make sure the metadata form cache is loaded
     ActBlueDonationMetadata.initialize_forms()
 
 
