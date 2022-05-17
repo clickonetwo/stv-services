@@ -280,10 +280,9 @@ class ActionNetworkPerson(PersistedDict):
             else:
                 logger.warning(f"Replacing refcode '{current}' with '{new}'")
         self["funder_refcode"] = new
-        self["updated_date"] = datetime.now(tz=timezone.utc)
-        # all supporters are both contacts and funders
         self["is_contact"] = True
         self["is_funder"] = True
+        self["updated_date"] = datetime.now(tz=timezone.utc)
         return True
 
     def notice_update(self, data: dict):

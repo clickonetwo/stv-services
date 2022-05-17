@@ -106,9 +106,9 @@ def promote_volunteers_or_contacts(conn: Connection, name: str, record_ids: list
                 funders.append(person)
         person.persist(conn)
     # now refresh all three tables, as needed
-    upsert_volunteers(conn, people)
-    upsert_contacts(conn, contacts)
-    upsert_funders(conn, funders)
+    # upsert_volunteers(conn, people)
+    # upsert_contacts(conn, contacts)
+    # upsert_funders(conn, funders)
 
 
 def process_team_webhook_payloads(conn: Connection, name: str, payloads: list[dict]):
@@ -156,7 +156,7 @@ def change_team_leads(conn: Connection, changed_ids: list[str], new_lead_map: di
         else:
             person["team_lead"] = ""
         person.persist(conn)
-    upsert_contacts(conn, people)
+    # upsert_contacts(conn, people)
 
 
 def process_refcode_payloads(conn: Connection, name: str, payloads: list[dict]):
@@ -214,5 +214,3 @@ def process_refcode_assignments(conn: Connection, refcode_map: dict):
                 metadata = ActBlueDonationMetadata.from_lookup(conn, row["uuid"])
                 metadata.notice_person(conn, person)
                 metadata.persist(conn)
-    # because adding a refcode may propagate through many records, we update all
-    update_all_records(verbose=True, force=False)

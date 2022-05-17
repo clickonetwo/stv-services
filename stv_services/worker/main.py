@@ -32,6 +32,7 @@ from sqlalchemy.future import Connection
 
 from . import airtable, act_blue
 from ..act_blue.metadata import ActBlueDonationMetadata
+from ..airtable.bulk import update_all_records
 from ..core import Configuration
 from ..core.logging import get_logger, log_exception
 from ..core.utilities import local_timestamp
@@ -157,6 +158,8 @@ def process_queue_items(queue: str) -> (int, int):
             raise
     finally:
         logger.info(f"Processed {processed} webhook(s) on queue '{queue}'")
+        # update all the records touched by the processing
+        update_all_records()
         if locking_queue.state() == "locked":
             try:
                 locking_queue.unlock()
