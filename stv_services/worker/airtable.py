@@ -25,6 +25,7 @@ from sqlalchemy.future import Connection
 
 from ..act_blue.metadata import ActBlueDonationMetadata
 from ..action_network.person import ActionNetworkPerson
+from ..airtable.bulk import update_all_records
 from ..airtable.contact import upsert_contacts
 from ..airtable.funder import upsert_funders
 from ..airtable.volunteer import upsert_volunteers
@@ -186,7 +187,11 @@ def process_refcode_payloads(conn: Connection, name: str, payloads: list[dict]):
 
 
 def process_refcode_assignments(conn: Connection, refcode_map: dict):
-    """When a refcode assignment gets made in Airtable, we are likely to get multiple payloads, because Airtable sends incremental updates as users type."""
+    """When a refcode assignment gets made in Airtable, we are likely to get
+    multiple payloads, because Airtable sends incremental updates as users
+    type. If all the payloads arrive in the same fetch, then we will only be
+    called once with the last value, but if they arrive in different fetches,
+    then we will get multiple calls and the last will win."""
     for contact_record_id, refcode in refcode_map.items():
         # find the user
         query = sa.select(model.person_info).where(
@@ -209,3 +214,5 @@ def process_refcode_assignments(conn: Connection, refcode_map: dict):
                 metadata = ActBlueDonationMetadata.from_lookup(conn, row["uuid"])
                 metadata.notice_person(conn, person)
                 metadata.persist(conn)
+    # because adding a refcode may propagate through many records, we update all
+    update_all_records(verbose=True, force=False)

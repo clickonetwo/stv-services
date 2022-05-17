@@ -25,11 +25,19 @@ from datetime import datetime, timezone
 from sqlalchemy.future import Connection
 
 from ..act_blue.metadata import ActBlueDonationMetadata
+from ..airtable.bulk import update_all_records
+from ..core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 def process_webhook_notification(conn: Connection, body: dict):
+    logger.info(f"Processing incoming donation metadata webhook")
     metadata = ActBlueDonationMetadata.from_webhook(body)
     if metadata.contributes_to_status():
         metadata.compute_status(conn)
         metadata["updated_date"] = datetime.now(tz=timezone.utc)
         metadata.persist(conn)
+    # computing metadata status can propagate changes to many records
+    update_all_records(verbose=True, force=False)
+    logger.info(f"Donation metadata processing done")

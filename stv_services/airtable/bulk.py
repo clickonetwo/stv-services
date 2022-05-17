@@ -80,7 +80,14 @@ def verify_schemas(verbose: bool = True):
     config.save_to_data_store()
 
 
-def update_contacts(verbose: bool = True, force: bool = False):
+def update_all_records(verbose: bool = True, force: bool = False):
+    update_volunteer_records(verbose, force)
+    update_contact_records(verbose, force)
+    update_funder_records(verbose, force)
+    update_donation_records(verbose, force)
+
+
+def update_contact_records(verbose: bool = True, force: bool = False):
     with Postgres.get_global_engine().connect() as conn:  # type: Connection
         if verbose:
             print(f"Loading person data for contacts...")
@@ -90,7 +97,7 @@ def update_contacts(verbose: bool = True, force: bool = False):
     bulk_upsert_records("contact", create_contact_record, people, verbose)
 
 
-def update_volunteers(verbose: bool = True, force: bool = False):
+def update_volunteer_records(verbose: bool = True, force: bool = False):
     with Postgres.get_global_engine().connect() as conn:  # type: Connection
         if verbose:
             print(f"Loading person data for historical volunteers...")
@@ -100,7 +107,7 @@ def update_volunteers(verbose: bool = True, force: bool = False):
     bulk_upsert_records("volunteer", create_volunteer_record, people, verbose)
 
 
-def update_funders(verbose: bool = True, force: bool = False):
+def update_funder_records(verbose: bool = True, force: bool = False):
     with Postgres.get_global_engine().connect() as conn:  # type: Connection
         if verbose:
             print(f"Loading person data for funders...")

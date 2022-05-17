@@ -64,7 +64,8 @@ def import_from_local(ctx: click.Context):
 def import_and_update_all(ctx: click.Context):
     ctx.invoke(import_all)
     ctx.invoke(compute_status_all)
-    ctx.invoke(update_all)
+    ctx.invoke(verify_schemas)
+    ctx.invoke(update_all_records)
 
 
 @stv.command()
@@ -85,14 +86,11 @@ def compute_status_all(ctx: click.Context):
 
 
 @stv.command()
+@click.option("--force/--no-force", default=False, help="Force update of all")
 @click.pass_context
-def update_all(ctx: click.Context):
+def update_all_records(ctx: click.Context, force: bool = False):
     verbose = ctx.obj["verbose"]
-    at_bulk.verify_schemas(verbose)
-    at_bulk.update_volunteers(verbose)
-    at_bulk.update_contacts(verbose)
-    at_bulk.update_funders(verbose)
-    at_bulk.update_donation_records(verbose)
+    at_bulk.update_all_records(verbose, force)
 
 
 @stv.command()
@@ -203,7 +201,7 @@ def verify_schemas(ctx: click.Context):
 @click.pass_context
 def update_contacts(ctx: click.Context, force: bool = False):
     verbose = ctx.obj["verbose"]
-    at_bulk.update_contacts(verbose, force)
+    at_bulk.update_contact_records(verbose, force)
 
 
 @stv.command()
@@ -211,7 +209,7 @@ def update_contacts(ctx: click.Context, force: bool = False):
 @click.pass_context
 def update_volunteers(ctx: click.Context, force: bool = False):
     verbose = ctx.obj["verbose"]
-    at_bulk.update_volunteers(verbose, force)
+    at_bulk.update_volunteer_records(verbose, force)
 
 
 @stv.command()
@@ -219,7 +217,7 @@ def update_volunteers(ctx: click.Context, force: bool = False):
 @click.pass_context
 def update_funders(ctx: click.Context, force: bool = False):
     verbose = ctx.obj["verbose"]
-    at_bulk.update_funders(verbose, force)
+    at_bulk.update_funder_records(verbose, force)
 
 
 @stv.command()
