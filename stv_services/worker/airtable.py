@@ -84,31 +84,9 @@ def promote_volunteers_or_contacts(conn: Connection, name: str, record_ids: list
     else:
         raise ValueError(f"Hook name ({name}) is not volunteer or contact")
     people = ActionNetworkPerson.from_query(conn, query)
-    volunteers = []
-    contacts = []
-    funders = []
     for person in people:
-        if name == "volunteer":
-            # have to refresh the volunteer record to fix the checkmark
-            volunteers.append(person)
-            if not person["is_contact"]:
-                person["is_contact"] = True
-                contacts.append(person)
-                # new contact may also become a funder
-                person.notice_promotion(conn)
-                if person["is_funder"]:
-                    funders.append(person)
-        else:
-            # have to refresh the contact record to fix the checkmark
-            contacts.append(person)
-            if not person["is_funder"]:
-                person["is_funder"] = True
-                funders.append(person)
+        person.notice_promotion(conn, name)
         person.persist(conn)
-    # now refresh all three tables, as needed
-    # upsert_volunteers(conn, people)
-    # upsert_contacts(conn, contacts)
-    # upsert_funders(conn, funders)
 
 
 def process_team_webhook_payloads(conn: Connection, name: str, payloads: list[dict]):
@@ -152,11 +130,10 @@ def change_team_leads(conn: Connection, changed_ids: list[str], new_lead_map: di
     back_map = {person["contact_record_id"]: person["uuid"] for person in people}
     for person in people:
         if new_lead := new_lead_map.get(person["contact_record_id"]):
-            person["team_lead"] = back_map[new_lead]
+            person.notice_team_lead(conn, back_map[new_lead])
         else:
-            person["team_lead"] = ""
+            person.notice_team_lead(conn, "")
         person.persist(conn)
-    # upsert_contacts(conn, people)
 
 
 def process_refcode_payloads(conn: Connection, name: str, payloads: list[dict]):

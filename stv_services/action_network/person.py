@@ -92,12 +92,14 @@ class ActionNetworkPerson(PersistedDict):
         self.compute_donor_status(conn, cutoff_lo)
         self["updated_date"] = datetime.now(tz=timezone.utc)
 
-    def notice_promotion(self, _conn: Connection):
-        """Notice that volunteer has become a contact or that a contact has
-        become a funder."""
-        if self["last_donation"] > model.epoch:
+    def notice_promotion(self, _conn: Connection, source: str):
+        """Notice that volunteer has become a contact or that contact has
+        become a funder.  Always updates the source person so that the
+        checkboxes get updated in various records showing the person."""
+        self["is_contact"] = True
+        if source == "contact" or self["last_donation"] > model.epoch:
             self["is_funder"] = True
-            self["updated_date"] = datetime.now(tz=timezone.utc)
+        self["updated_date"] = datetime.now(tz=timezone.utc)
 
     def compute_submission_status(self, conn: Connection, cutoff_lo: datetime):
         table = model.submission_info
@@ -284,6 +286,13 @@ class ActionNetworkPerson(PersistedDict):
         self["is_funder"] = True
         self["updated_date"] = datetime.now(tz=timezone.utc)
         return True
+
+    def notice_team_lead(self, _conn: Connection, new: str):
+        current = self["team_lead"]
+        if current == new:
+            return
+        self["team_lead"] = new
+        self["updated_date"] = datetime.now(tz=timezone.utc)
 
     def notice_update(self, data: dict):
         """Update data from a notified hash"""
