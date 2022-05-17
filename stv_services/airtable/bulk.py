@@ -55,7 +55,6 @@ from stv_services.airtable.volunteer import (
 from stv_services.core import Configuration
 from stv_services.data_store import Postgres
 from stv_services.data_store.persisted_dict import PersistedDict
-from stv_services.worker.airtable import process_webhook_notification
 
 
 def verify_schemas(verbose: bool = True):
@@ -227,16 +226,3 @@ def sync_webhooks(verbose: bool = True, force_remove: bool = False):
     webhook.sync_hooks(verbose, force_remove)
     if verbose:
         print(f"Done.")
-
-
-def fetch_and_process_all_webhooks(verbose: bool = True):
-    with Postgres.get_global_engine().connect() as conn:  # type: Connection
-        if verbose:
-            print(f"Fetching and processing 'volunteer' Airtable payloads...")
-        process_webhook_notification(conn, "volunteer")
-        if verbose:
-            print(f"Fetching and processing 'contact' Airtable payloads...")
-        process_webhook_notification(conn, "contact")
-        if verbose:
-            print(f"Done.")
-        conn.commit()

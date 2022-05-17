@@ -328,12 +328,5 @@ def sync_webhooks(ctx: click.Context, force_remove: bool = False):
     at_bulk.sync_webhooks(verbose, force_remove)
 
 
-@stv.command()
-@click.pass_context
-def fetch_and_process_webhooks(ctx: click.Context):
-    verbose = ctx.obj["verbose"]
-    at_bulk.fetch_and_process_all_webhooks(verbose)
-
-
 if __name__ == "__main__":
     stv()
