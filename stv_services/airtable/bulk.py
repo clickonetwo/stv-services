@@ -79,14 +79,16 @@ def verify_schemas(verbose: bool = True):
     config.save_to_data_store()
 
 
-def update_all_records(verbose: bool = True, force: bool = False):
-    update_volunteer_records(verbose, force)
-    update_contact_records(verbose, force)
-    update_funder_records(verbose, force)
-    update_donation_records(verbose, force)
+def update_all_records(verbose: bool = True, force: bool = False) -> int:
+    total = 0
+    total += update_volunteer_records(verbose, force)
+    total += update_contact_records(verbose, force)
+    total += update_funder_records(verbose, force)
+    total += update_donation_records(verbose, force)
+    return total
 
 
-def update_contact_records(verbose: bool = True, force: bool = False):
+def update_contact_records(verbose: bool = True, force: bool = False) -> int:
     with Postgres.get_global_engine().connect() as conn:  # type: Connection
         if verbose:
             print(f"Loading person data for contacts...")
@@ -94,9 +96,10 @@ def update_contact_records(verbose: bool = True, force: bool = False):
             conn, find_records_to_update("contact", force)
         )
     bulk_upsert_records("contact", create_contact_record, people, verbose)
+    return len(people)
 
 
-def update_volunteer_records(verbose: bool = True, force: bool = False):
+def update_volunteer_records(verbose: bool = True, force: bool = False) -> int:
     with Postgres.get_global_engine().connect() as conn:  # type: Connection
         if verbose:
             print(f"Loading person data for historical volunteers...")
@@ -104,9 +107,10 @@ def update_volunteer_records(verbose: bool = True, force: bool = False):
             conn, find_records_to_update("volunteer", force)
         )
     bulk_upsert_records("volunteer", create_volunteer_record, people, verbose)
+    return len(people)
 
 
-def update_funder_records(verbose: bool = True, force: bool = False):
+def update_funder_records(verbose: bool = True, force: bool = False) -> int:
     with Postgres.get_global_engine().connect() as conn:  # type: Connection
         if verbose:
             print(f"Loading person data for funders...")
@@ -114,9 +118,10 @@ def update_funder_records(verbose: bool = True, force: bool = False):
             conn, find_records_to_update("funder", force)
         )
     bulk_upsert_records("funder", create_funder_record, people, verbose)
+    return len(people)
 
 
-def update_donation_records(verbose: bool = True, force: bool = False):
+def update_donation_records(verbose: bool = True, force: bool = False) -> int:
     with Postgres.get_global_engine().connect() as conn:  # type: Connection
         if verbose:
             print(f"Loading donation data...")
@@ -124,6 +129,7 @@ def update_donation_records(verbose: bool = True, force: bool = False):
             conn, find_records_to_update("donation", force)
         )
     bulk_upsert_records("donation", create_donation_record, donations, verbose)
+    return len(donations)
 
 
 def bulk_upsert_records(

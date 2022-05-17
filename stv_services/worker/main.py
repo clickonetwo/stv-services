@@ -158,8 +158,10 @@ def process_queue_items(queue: str) -> (int, int):
             raise
     finally:
         logger.info(f"Processed {processed} webhook(s) on queue '{queue}'")
-        # update all the records touched by the processing
-        update_all_records()
+        if processed > 0:
+            # update all the records touched by the processing
+            count = update_all_records(verbose=False, force=False)
+            logger.info(f"Updated {count} affected record(s)")
         if locking_queue.state() == "locked":
             try:
                 locking_queue.unlock()
