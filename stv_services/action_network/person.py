@@ -98,7 +98,8 @@ class ActionNetworkPerson(PersistedDict):
         based on data since the last check unless we are forced to.
         """
         if force:
-            # initialize the fields we compute if we are recomputing them
+            # initialize the fields we conditionally recompute, so we are sure
+            # to recompute them in this pass
             self["updated_date"] = model.epoch
             self["recur_start"] = model.epoch
             self["recur_end"] = model.epoch
@@ -324,8 +325,8 @@ class ActionNetworkPerson(PersistedDict):
             self["team_lead"] = ""
         self["updated_date"] = datetime.now(tz=timezone.utc)
 
-    def notice_update(self, data: dict):
-        """Update data from a notified hash"""
+    def notice_webhook(self, data: dict):
+        """Update data from the info in a webhook"""
         updated_self = self.from_hash(data)
         # preserve the two fields we want to update manually
         modified_date = updated_self["modified_date"]
@@ -338,6 +339,7 @@ class ActionNetworkPerson(PersistedDict):
         if modified_date > self["modified_date"]:
             self["modified_date"] = modified_date
         self["custom_fields"].update(custom_fields)
+        self["updated_date"] = datetime.now(tz=timezone.utc)
 
     @classmethod
     def from_hash(cls, data: dict) -> "ActionNetworkPerson":
