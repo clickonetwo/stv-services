@@ -84,7 +84,8 @@ class ActionNetworkPerson(PersistedDict):
             funder_has_page=False,
             funder_refcode="",
         )
-        initial_values.update(fields)
+        value_fields = {k: v for k, v in fields.items() if v is not None}
+        initial_values.update(value_fields)
         super().__init__(model.person_info, **initial_values)
 
     def compute_status(self, conn: Connection, force: bool = False):

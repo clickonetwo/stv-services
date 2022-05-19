@@ -39,7 +39,8 @@ class ActionNetworkSubmission(PersistedDict):
             if not fields.get(key):
                 raise ValueError(f"Submission must have field '{key}': {fields}")
         initial_values = dict()
-        initial_values.update(fields)
+        value_fields = {k: v for k, v in fields.items() if v is not None}
+        initial_values.update(value_fields)
         super().__init__(model.submission_info, **initial_values)
 
     @classmethod

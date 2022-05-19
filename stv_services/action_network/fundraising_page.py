@@ -46,7 +46,8 @@ class ActionNetworkFundraisingPage(PersistedDict):
             origin_system="",
             attribution_id="",
         )
-        initial_values.update(fields)
+        value_fields = {k: v for k, v in fields.items() if v is not None}
+        initial_values.update(value_fields)
         super().__init__(model.fundraising_page_info, **initial_values)
 
     @classmethod
