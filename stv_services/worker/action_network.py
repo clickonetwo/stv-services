@@ -26,6 +26,7 @@ from sqlalchemy.future import Connection
 
 from ..action_network.donation import ActionNetworkDonation
 from ..action_network.person import ActionNetworkPerson
+from ..action_network.submission import ActionNetworkSubmission
 from ..action_network.utils import validate_hash
 from ..core.logging import get_logger
 from ..data_store import RedisSync
@@ -68,8 +69,9 @@ def process_donation_webhook(conn: Connection, body: dict):
     person_id = donation["donor_id"]
     try:
         person = ActionNetworkPerson.from_lookup(conn, uuid=person_id)
-        if body.get("person"):
-            person.notice_webhook(body)
+        if person_data := body.get("person"):
+            person_data["identifiers"] = [person_id]
+            person.notice_webhook(person_data)
     except KeyError:
         person = ActionNetworkPerson.from_action_network(conn, person_id)
     # now update the person status given the donation
@@ -77,8 +79,31 @@ def process_donation_webhook(conn: Connection, body: dict):
     person.persist(conn)
 
 
-def process_submission_webhook(_conn: Connection, body: dict):
+def process_submission_webhook(conn: Connection, body: dict):
     save_webhook("action_network:submissions", {"osdi:submission": body})
+    try:
+        uuid, created_date, modified_date = validate_hash(body)
+        submission = ActionNetworkSubmission.from_lookup(conn, uuid)
+        # we really shouldn't be getting webhook updates to submissions...
+        logger.warning(f"Received unknown update to existing submission '{uuid}'")
+        submission.update(dict(modified_date=modified_date))
+    except KeyError:
+        # no existing one, so build a new one
+        submission = ActionNetworkSubmission.from_webhook(body)
+    # make sure the donation exists in the database
+    submission.persist(conn)
+    # now make sure we have the person in the database
+    person_id = submission["person_id"]
+    try:
+        person = ActionNetworkPerson.from_lookup(conn, uuid=person_id)
+        if person_data := body.get("person"):
+            person_data["identifiers"] = [person_id]
+            person.notice_webhook(person_data)
+    except KeyError:
+        person = ActionNetworkPerson.from_action_network(conn, person_id)
+    # now update the person status given the donation
+    person.compute_status(conn)
+    person.persist(conn)
 
 
 def save_webhook(list_name: str, body: dict):

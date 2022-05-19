@@ -50,7 +50,6 @@ interest_table_map = {
     "2022_fundraisepage": "funder",
     "2022_donate": "funder",
     "2022_fundraiseidea": "funder",
-    "2022_fundraisingnotes": "funder",
 }
 
 
@@ -67,7 +66,7 @@ class ActionNetworkPerson(PersistedDict):
             raise ValueError(f"Person record must have either email or phone: {fields}")
         initial_values = dict(
             updated_date=model.epoch,
-            has_subission=False,
+            has_submission=False,
             last_donation=model.epoch,
             recur_start=model.epoch,
             recur_end=model.epoch,
@@ -327,22 +326,23 @@ class ActionNetworkPerson(PersistedDict):
 
     def notice_webhook(self, data: dict):
         """Update data from the info in a webhook"""
-        updated_self = self.from_hash(data)
+        new = self._parse_hash(data)
+        new = {key: val for key, val in new.items() if val is not None}
         # preserve the two fields we want to update manually
-        modified_date = updated_self["modified_date"]
-        custom_fields = updated_self["custom_fields"]
+        modified_date = new["modified_date"]
+        custom_fields = new["custom_fields"]
         # remove any fields that shouldn't be fully replaced in self
         for key in ["uuid", "created_date", "modified_date", "custom_fields"]:
-            del updated_self[key]
+            del new[key]
         # update the fields that should come from the new copy
-        self.update(updated_self)
+        self.update(new)
         if modified_date > self["modified_date"]:
             self["modified_date"] = modified_date
         self["custom_fields"].update(custom_fields)
         self["updated_date"] = datetime.now(tz=timezone.utc)
 
-    @classmethod
-    def from_hash(cls, data: dict) -> "ActionNetworkPerson":
+    @staticmethod
+    def _parse_hash(data: dict) -> dict:
         uuid, created_date, modified_date = validate_hash(data)
         is_contact, is_volunteer = None, None
         if created_date.year >= 2022:
@@ -383,7 +383,7 @@ class ActionNetworkPerson(PersistedDict):
                 country = entry.get("country")
                 break
         custom_fields: dict = data.get("custom_fields", {})
-        return cls(
+        return dict(
             uuid=uuid,
             created_date=created_date,
             email=email,
@@ -403,6 +403,11 @@ class ActionNetworkPerson(PersistedDict):
             is_contact=is_contact,
             is_volunteer=is_volunteer,
         )
+
+    @classmethod
+    def from_hash(cls, data: dict) -> "ActionNetworkPerson":
+        parse = cls._parse_hash(data)
+        return cls(**parse)
 
     @classmethod
     def from_lookup(

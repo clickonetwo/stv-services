@@ -47,7 +47,7 @@ class ActionNetworkFundraisingPage(PersistedDict):
             attribution_id="",
         )
         initial_values.update(fields)
-        super().__init__(model.donation_info, **initial_values)
+        super().__init__(model.fundraising_page_info, **initial_values)
 
     @classmethod
     def from_hash(cls, data: dict) -> "ActionNetworkFundraisingPage":

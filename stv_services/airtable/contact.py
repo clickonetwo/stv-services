@@ -107,7 +107,7 @@ def create_contact_record(conn: Connection, person: ActionNetworkPerson) -> dict
     record[column_ids["signup_interests"]] = list(signup_interests)
     record[column_ids["signup_notes"]] = custom_fields.get("2022_notes", "")
     record[column_ids["fundraise_interests"]] = list(fundraise_interests)
-    record[column_ids["fundraise_notes"]] = custom_fields.get("2022_notes", "")
+    record[column_ids["fundraise_notes"]] = custom_fields.get("2022_fundraiseidea", "")
     query = sa.select(model.person_info.c.contact_record_id).where(
         sa.and_(
             model.person_info.c.team_lead == person["uuid"],

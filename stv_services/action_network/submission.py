@@ -40,7 +40,30 @@ class ActionNetworkSubmission(PersistedDict):
                 raise ValueError(f"Submission must have field '{key}': {fields}")
         initial_values = dict()
         initial_values.update(fields)
-        super().__init__(model.donation_info, **initial_values)
+        super().__init__(model.submission_info, **initial_values)
+
+    @classmethod
+    def from_webhook(cls, data: dict) -> "ActionNetworkSubmission":
+        uuid, created_date, modified_date = validate_hash(data)
+        # person_id and form_id are in links, not embedded data
+        links = data.get("_links", {})
+        if person_id := links.get("osdi:person", {}).get("href"):
+            id_part = person_id[person_id.rfind("/") + 1 :]
+            person_id = "action_network:" + id_part
+        else:
+            raise KeyError(f"Submission webhook does not have person link")
+        if form_id := links.get("osdi:form", {}).get("href"):
+            id_part = form_id[form_id.rfind("/") + 1 :]
+            form_id = "action_network:" + id_part
+        else:
+            raise KeyError(f"Submission webhook does not have form link")
+        return cls(
+            uuid=uuid,
+            created_date=created_date,
+            modified_date=modified_date,
+            person_id=person_id,
+            form_id=form_id,
+        )
 
     @classmethod
     def from_hash(cls, data: dict) -> "ActionNetworkSubmission":
