@@ -57,7 +57,7 @@ def register_hook(
     if watches:
         spec["options"]["includes"]["includeCellValuesInFieldIds"] = watches
     url = None
-    if server_url := config.get("stv_api_base_url"):
+    if server_url := config["stv_api_base_url"]:
         url = server_url + "/airtable/notifications"
     body = {
         "specification": spec,

@@ -31,7 +31,7 @@ from stv_services.data_store import model, Postgres
 
 
 def sync_contacts(_conn: Connection, people: list[ActionNetworkPerson]) -> (dict, dict):
-    emails = {person.get("email"): person for person in people}
+    emails = {person["email"]: person for person in people}
     extras = {}
     unmatched = {}
     empties = []

@@ -41,7 +41,13 @@ class ActionNetworkFundraisingPage(PersistedDict):
         for key in ["title"]:
             if not fields.get(key):
                 raise ValueError(f"Fundraising page must have field '{key}': {fields}")
-        super().__init__(model.fundraising_page_info, **fields)
+        initial_values = dict(
+            updated_date=model.epoch,
+            origin_system="",
+            attribution_id="",
+        )
+        initial_values.update(fields)
+        super().__init__(model.donation_info, **initial_values)
 
     @classmethod
     def from_hash(cls, data: dict) -> "ActionNetworkFundraisingPage":
@@ -60,7 +66,7 @@ class ActionNetworkFundraisingPage(PersistedDict):
         """Try to attribute this fundraising page based on latest metadata."""
         if self["origin_system"] != "ActBlue":
             return
-        if not self["title"].startswith("actblue_146845_"):
+        if not self.get("title", "").startswith("actblue_146845_"):
             return
         if not force and self["attribution_id"]:
             return

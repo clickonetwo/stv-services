@@ -54,7 +54,18 @@ class ActBlueDonationMetadata(PersistedDict):
         for key in ["item_type", "donor_email"]:
             if not fields.get(key):
                 raise ValueError(f"Donation metadata must have field '{key}': {fields}")
-        super().__init__(model.donation_metadata, **fields)
+        initial_values = dict(
+            updated_date=model.epoch,
+            order_id="",
+            order_date=model.epoch,
+            line_item_ids="",
+            form_name="",
+            form_owner_email="",
+            refcode="",
+            attribution_id="",
+        )
+        initial_values.update(fields)
+        super().__init__(model.donation_info, **initial_values)
 
     def compute_status(self, conn: Connection, force: bool = False):
         if self["item_type"] == "cancellation":
@@ -91,7 +102,7 @@ class ActBlueDonationMetadata(PersistedDict):
             self.notice_person(conn, person)
 
     def notice_person(self, conn: Connection, person: dict):
-        if self["attribution_id"] != "":
+        if self["attribution_id"]:
             # we've already attributed this refcode, so do nothing
             return
         attribution_id = person["uuid"]

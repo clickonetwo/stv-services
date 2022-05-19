@@ -65,7 +65,28 @@ class ActionNetworkPerson(PersistedDict):
     def __init__(self, **fields):
         if not fields.get("email") and not fields.get("phone"):
             raise ValueError(f"Person record must have either email or phone: {fields}")
-        super().__init__(model.person_info, **fields)
+        initial_values = dict(
+            updated_date=model.epoch,
+            has_subission=False,
+            last_donation=model.epoch,
+            recur_start=model.epoch,
+            recur_end=model.epoch,
+            team_lead="",
+            is_contact=False,
+            contact_record_id="",
+            contact_updated=model.epoch,
+            contact_assignments={},
+            is_volunteer=False,
+            volunteer_record_id="",
+            volunteer_updated=model.epoch,
+            is_funder=False,
+            funder_record_id="",
+            funder_updated=model.epoch,
+            funder_has_page=False,
+            funder_refcode="",
+        )
+        initial_values.update(fields)
+        super().__init__(model.person_info, **initial_values)
 
     def compute_status(self, conn: Connection, force: bool = False):
         """
@@ -77,8 +98,7 @@ class ActionNetworkPerson(PersistedDict):
         based on data since the last check unless we are forced to.
         """
         if force:
-            # clear the fields we compute
-            # that aren't computed from scratch
+            # initialize the fields we compute if we are recomputing them
             self["updated_date"] = model.epoch
             self["recur_start"] = model.epoch
             self["recur_end"] = model.epoch
@@ -201,7 +221,7 @@ class ActionNetworkPerson(PersistedDict):
             # donations on or after 11/1/2021 make them a contact and a funder
             self["is_contact"] = True
             self["is_funder"] = True
-        elif self.get("is_contact"):
+        elif self["is_contact"]:
             # contacts who donate are funders
             self["is_funder"] = True
         # if this is a recurring donation, update their recurring start date

@@ -20,21 +20,34 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 #
-from datetime import datetime, timezone
+import json
 
-from sqlalchemy.future import Connection
+from fastapi import APIRouter
 
-from ..act_blue.metadata import ActBlueDonationMetadata
 from ..core.logging import get_logger
+from ..data_store import RedisAsync
 
 logger = get_logger(__name__)
+action_network = APIRouter()
 
 
-def process_webhook_notification(conn: Connection, body: dict):
-    logger.info(f"Processing incoming donation metadata webhook")
-    metadata = ActBlueDonationMetadata.from_webhook(body)
-    if metadata.contributes_to_status():
-        metadata.compute_status(conn)
-        metadata["updated_date"] = datetime.now(tz=timezone.utc)
-        metadata.persist(conn)
-    logger.info(f"Donation metadata processing done")
+@action_network.post(
+    "/notifications",
+    status_code=200,
+    summary="Receiver for Action Network webhook notifications.",
+)
+async def receive_notifications(body: list[dict]):
+    logger.info("Received Action Network webhook")
+    db = await RedisAsync.connect()
+    for hash_dict in body:
+        for key, val in hash_dict.items():
+            if key == "action_network:sponsor":
+                logger.info(f"Ignoring '{key}' content")
+            else:
+                compact = json.dumps({key: val}, separators=(",", ":"))
+                length: int = await db.lpush("action_network", compact)
+                logger.info(
+                    f"Saved '{key}' content as #{length} in 'action_network' queue"
+                )
+    await db.publish("webhooks", "action_network")
+    return "Accepted"

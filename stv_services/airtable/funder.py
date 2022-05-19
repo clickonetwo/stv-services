@@ -25,8 +25,6 @@ from sqlalchemy.future import Connection
 
 from .schema import fetch_and_validate_table_schema, FieldInfo
 from .utils import (
-    insert_records,
-    update_records,
     upsert_records,
     delete_records,
 )
@@ -48,7 +46,7 @@ recurring_choices = {
 
 def verify_funder_schema() -> dict:
     config = Configuration.get_global_config()
-    base_name = config.get("airtable_stv_base_name")
+    base_name = config["airtable_stv_base_name"]
     access_info = fetch_and_validate_table_schema(
         base_name, funder_table_name, funder_table_schema
     )
@@ -59,7 +57,7 @@ def verify_funder_schema() -> dict:
 def create_funder_record(_: Connection, person: ActionNetworkPerson) -> dict:
     config = Configuration.get_global_config()
     column_ids = config["airtable_stv_funder_schema"]["column_ids"]
-    if record_id := person.get("contact_record_id"):
+    if record_id := person["contact_record_id"]:
         record = {column_ids["contact"]: [record_id]}
     else:
         raise ValueError(f"Person '{person['uuid']}' must be a contact to fundraise")

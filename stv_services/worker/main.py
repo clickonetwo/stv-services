@@ -30,7 +30,7 @@ from requests import HTTPError
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.future import Connection
 
-from . import airtable, act_blue
+from . import airtable, act_blue, action_network
 from ..act_blue.metadata import ActBlueDonationMetadata
 from ..airtable.bulk import update_all_records, verify_schemas, register_webhooks
 from ..core import Configuration
@@ -54,10 +54,11 @@ def main():
 def startup():
     global db, locking_queues
     logger.info(f"Starting worker at {local_timestamp()}...")
-    # make sure the Airtable schema is as expected
-    verify_schemas(verbose=True)
-    # make sure the Airtable webhooks are registered
-    register_webhooks(verbose=True, sync_first=True)
+    if Configuration.get_env() != "DEV":
+        # make sure the Airtable schema is as expected
+        verify_schemas(verbose=True)
+        # make sure the Airtable webhooks are registered
+        register_webhooks(verbose=True, sync_first=True)
     # connect to the redis signalling backend
     db = RedisSync.connect()
     locking_queues = {queue: LockingQueue(queue) for queue in queues}
@@ -70,11 +71,11 @@ def shutdown():
     logger.info(f"Stopping worker at {local_timestamp()}.")
 
 
-def do_housekeeping(scheduled: datetime):
+def do_housekeeping(_scheduled: datetime):
     """Do routine housekeeping, such as processing hooks that have
     to be retried, or importing data from external systems that
     don't have webhook capabilities.  The argument is the time
-    the houskeeping was scheduled to run.  The return value is
+    the housekeeping was scheduled to run.  The return value is
     the time that housekeeping should next be scheduled to run."""
     logger.info("Processing pending webhooks on all queues")
     for queue in queues:
@@ -186,8 +187,7 @@ def process_webhook(queue: str, hook: dict, hook_id: str) -> bool:
             elif queue == "act_blue":
                 act_blue.process_webhook_notification(conn, hook)
             elif queue == "action_network":
-                logger.error("Action Network webhooks are not implemented.")
-                raise NotImplementedError
+                action_network.process_webhook_notification(conn, hook)
             elif queue == "control":
                 logger.error("Control webhooks are not implemented.")
                 raise NotImplementedError

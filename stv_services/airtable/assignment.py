@@ -46,7 +46,7 @@ field_assignment_map = {
 
 def verify_assignment_schema() -> dict:
     config = Configuration.get_global_config()
-    base_name = config.get("airtable_stv_base_name")
+    base_name = config["airtable_stv_base_name"]
     access_info = fetch_and_validate_table_schema(
         base_name, assignment_table_name, assignment_table_schema
     )
@@ -85,13 +85,13 @@ def insert_needed_assignments(conn: Connection, people: list[PersistedDict]) -> 
     """Insert assignments needed for contacts"""
     assignment_map = {}
     for person in people:
-        record_id = person.get("contact_record_id")
+        record_id = person["contact_record_id"]
         if not record_id:
             continue
         existing_map = person["contact_assignments"]
         added = {}
         assignments = assignment_map.setdefault(record_id, [])
-        for name in person.get("custom_fields"):
+        for name in person["custom_fields"]:
             if existing_map.get(name):
                 continue
             if assignment_name := field_assignment_map.get(name):

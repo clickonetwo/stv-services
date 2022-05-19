@@ -40,7 +40,16 @@ class ActionNetworkDonation(PersistedDict):
         for key in ["amount", "recurrence_data", "donor_id", "fundraising_page_id"]:
             if not fields.get(key):
                 raise ValueError(f"Donation must have field '{key}': {fields}")
-        super().__init__(model.donation_info, **fields)
+        initial_values = dict(
+            updated_date=model.epoch,
+            metadata_id="",
+            attribution_id="",
+            is_donation=False,
+            donation_record_id="",
+            donation_updated=model.epoch,
+        )
+        initial_values.update(fields)
+        super().__init__(model.donation_info, **initial_values)
 
     def compute_status(self, conn: Connection, force: bool = False):
         """Try to attribute this donation based on latest data."""
@@ -54,9 +63,9 @@ class ActionNetworkDonation(PersistedDict):
             self.notice_attribution(conn, page["attribution_id"])
         # if we still need an attribution, look for a refcode
         if force or not self["attribution_id"]:
-            if metadata_id := self.get("metadata_id"):
+            if metadata_id := self["metadata_id"]:
                 query = sa.select(model.donation_metadata).where(
-                    model.donation_metadata.c.uuid == self["metadata_id"]
+                    model.donation_metadata.c.uuid == metadata_id
                 )
                 if metadata := conn.execute(query).mappings().first():
                     self.notice_attribution(conn, metadata["attribution_id"])
@@ -66,6 +75,52 @@ class ActionNetworkDonation(PersistedDict):
         if attribution_id:
             self["attribution_id"] = attribution_id
         self["updated_date"] = datetime.now(tz=timezone.utc)
+
+    def notice_amount_change(self, _conn: Connection, amount: str):
+        self["amount"] = amount
+        self["updated_date"] = datetime.now(tz=timezone.utc)
+
+    @staticmethod
+    def _get_metadata_id(data: dict):
+        """Return the ActBlue metadata ID for this donation, if any"""
+        for candidate in data.get("identifiers", []):  # type: str
+            if candidate.startswith("act_blue:"):
+                return candidate
+        else:
+            return None
+
+    @classmethod
+    def from_webhook(cls, data: dict) -> "ActionNetworkDonation":
+        uuid, created_date, modified_date = validate_hash(data)
+        # we are in 2022, so this is a donation
+        is_donation = True
+        # amount is typically specified, but not if this is a return
+        amount = data.get("amount") or "0.00"
+        # recurrence data is in the embedded data
+        recurrence_data = data.get("action_network:recurrence")
+        # donor_id and fundraising_page_id are in links, not embedded data
+        links = data.get("_links", {})
+        if donor_id := links.get("osdi:person", {}).get("href"):
+            id_part = donor_id[donor_id.rfind("/") + 1 :]
+            donor_id = "action_network:" + id_part
+        else:
+            raise KeyError(f"Donation webhook does not have donor link")
+        if fundraising_page_id := links.get("osdi:fundraising_page", {}).get("href"):
+            id_part = fundraising_page_id[fundraising_page_id.rfind("/") + 1 :]
+            fundraising_page_id = "action_network:" + id_part
+        else:
+            raise KeyError(f"Donation webhook does not have fundraising page link")
+        return cls(
+            uuid=uuid,
+            created_date=created_date,
+            modified_date=modified_date,
+            is_donation=is_donation,
+            amount=amount,
+            recurrence_data=recurrence_data,
+            donor_id=donor_id,
+            fundraising_page_id=fundraising_page_id,
+            metadata_id=cls._get_metadata_id(data),
+        )
 
     @classmethod
     def from_hash(cls, data: dict) -> "ActionNetworkDonation":
@@ -81,13 +136,6 @@ class ActionNetworkDonation(PersistedDict):
             donor_id = "action_network:" + donor_id
         if fundraising_page_id := data.get("action_network:fundraising_page_id"):
             fundraising_page_id = "action_network:" + fundraising_page_id
-        # donations that come through ActBlue have a metadata ID
-        for candidate in data.get("identifiers", []):  # type: str
-            if candidate.startswith("act_blue:"):
-                metadata_id = candidate
-                break
-        else:
-            metadata_id = None
         return cls(
             uuid=uuid,
             created_date=created_date,
@@ -97,7 +145,7 @@ class ActionNetworkDonation(PersistedDict):
             recurrence_data=recurrence_data,
             donor_id=donor_id,
             fundraising_page_id=fundraising_page_id,
-            metadata_id=metadata_id,
+            metadata_id=cls._get_metadata_id(data),
         )
 
     @classmethod

@@ -26,8 +26,6 @@ from sqlalchemy.future import Connection
 
 from .schema import fetch_and_validate_table_schema, FieldInfo
 from .utils import (
-    insert_records,
-    update_records,
     upsert_records,
     delete_records,
 )
@@ -63,7 +61,7 @@ donation_table_schema = {
 
 def verify_donation_schema() -> dict:
     config = Configuration.get_global_config()
-    base_name = config.get("airtable_stv_base_name")
+    base_name = config["airtable_stv_base_name"]
     access_info = fetch_and_validate_table_schema(
         base_name, donation_table_name, donation_table_schema
     )

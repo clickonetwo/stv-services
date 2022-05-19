@@ -24,6 +24,7 @@ from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 
 from .act_blue import act_blue
+from .action_network import action_network
 from .airtable import airtable
 from ..act_blue.metadata import ActBlueDonationMetadata
 from ..airtable.bulk import register_webhooks, verify_schemas
@@ -43,6 +44,7 @@ else:
 # add the sub-APIs
 app.include_router(airtable, prefix="/airtable", tags=["airtable"])
 app.include_router(act_blue, prefix="/actblue", tags=["actblue"])
+app.include_router(action_network, prefix="/action_network", tags=["action_network"])
 
 
 @app.get("/", response_class=RedirectResponse, status_code=303)
@@ -58,10 +60,11 @@ async def status():
 @app.on_event("startup")
 async def startup():
     logger.info(f"Web server startup at {local_timestamp()}")
-    # make sure the Airtable schema is as expected
-    verify_schemas(verbose=True)
-    # make sure the Airtable webhooks are registered
-    register_webhooks(verbose=True, sync_first=True)
+    if Configuration.get_env() != "DEV":
+        # make sure the Airtable schema is as expected
+        verify_schemas(verbose=True)
+        # make sure the Airtable webhooks are registered
+        register_webhooks(verbose=True, sync_first=True)
     # make sure the metadata form cache is loaded
     ActBlueDonationMetadata.initialize_forms()
 

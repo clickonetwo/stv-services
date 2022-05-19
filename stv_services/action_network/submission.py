@@ -38,7 +38,9 @@ class ActionNetworkSubmission(PersistedDict):
         for key in ["form_id", "person_id"]:
             if not fields.get(key):
                 raise ValueError(f"Submission must have field '{key}': {fields}")
-        super().__init__(model.submission_info, **fields)
+        initial_values = dict()
+        initial_values.update(fields)
+        super().__init__(model.donation_info, **initial_values)
 
     @classmethod
     def from_hash(cls, data: dict) -> "ActionNetworkSubmission":
