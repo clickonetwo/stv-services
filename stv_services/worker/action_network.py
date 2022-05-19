@@ -43,7 +43,7 @@ def process_webhook_notification(conn: Connection, body: dict):
             process_submission_webhook(conn, val)
         else:
             save_webhook("action_network:other", {key: val})
-            raise NotImplementedError("Don't know how to handle webhook '{key}'")
+            raise NotImplementedError(f"Don't know how to handle webhook '{key}'")
 
 
 def process_donation_webhook(conn: Connection, body: dict):
