@@ -64,7 +64,8 @@ class ActBlueDonationMetadata(PersistedDict):
             refcode="",
             attribution_id="",
         )
-        initial_values.update(fields)
+        value_fields = {k: v for k, v in fields.items() if v is not None}
+        initial_values.update(value_fields)
         super().__init__(model.donation_info, **initial_values)
 
     def compute_status(self, conn: Connection, force: bool = False):
