@@ -58,6 +58,6 @@ async def receive_notifications(body: dict):
     db = await RedisAsync.connect()
     compact = json.dumps(body, separators=(",", ":"))
     length: int = await db.lpush("act_blue", compact)
-    logger.info(f"Saved webhook content as #{length} in 'act_blue' queue")
+    logger.info(f"Saved webhook content as #1/{length} in 'act_blue' queue")
     await db.publish("webhooks", "act_blue")
     return

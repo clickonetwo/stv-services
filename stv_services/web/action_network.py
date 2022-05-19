@@ -47,7 +47,7 @@ async def receive_notifications(body: list[dict]):
                 compact = json.dumps({key: val}, separators=(",", ":"))
                 length: int = await db.lpush("action_network", compact)
                 logger.info(
-                    f"Saved '{key}' content as #{length} in 'action_network' queue"
+                    f"Saved '{key}' content as #1/{length} in 'action_network' queue"
                 )
     await db.publish("webhooks", "action_network")
     return "Accepted"

@@ -43,7 +43,7 @@ def process_webhook_notification(conn: Connection, body: dict):
             process_submission_webhook(conn, val)
         else:
             save_webhook("action_network:other", {key: val})
-            raise NotImplementedError("Don't know how to handle")
+            raise NotImplementedError("Don't know how to handle webhook '{key}'")
 
 
 def process_donation_webhook(conn: Connection, body: dict):
@@ -109,4 +109,4 @@ def process_submission_webhook(conn: Connection, body: dict):
 def save_webhook(list_name: str, body: dict):
     compact = json.dumps(body, separators=(",", ":"))
     length: int = db.lpush(list_name, compact)
-    logger.info(f"Saved webhook as #{length} in '{list_name}' list")
+    logger.info(f"Saved webhook as #1/{length} in '{list_name}' list")
