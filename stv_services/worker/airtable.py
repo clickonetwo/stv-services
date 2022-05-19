@@ -50,7 +50,7 @@ def process_webhook_notification(conn: Connection, name: str):
 def process_promotion_webhook_payloads(
     conn: Connection, name: str, payloads: list[dict]
 ):
-    logger.info(f"Processing airtable '{name}' payloads for promotion...")
+    logger.info(f"Processing Airtable '{name}' payloads for promotion...")
     config = Configuration.get_session_config(conn)
     schema = config[f"airtable_stv_{name}_schema"]
     table_id = schema["table_id"]
@@ -86,7 +86,7 @@ def promote_volunteers_or_contacts(conn: Connection, name: str, record_ids: list
 
 
 def process_team_webhook_payloads(conn: Connection, name: str, payloads: list[dict]):
-    logger.info(f"Processing airtable '{name}' payloads for team changes...")
+    logger.info(f"Processing Airtable '{name}' payloads for team changes...")
     config = Configuration.get_session_config(conn)
     schema = config[f"airtable_stv_{name}_schema"]
     table_id = schema["table_id"]
@@ -140,7 +140,7 @@ def change_team_leads(
 
 
 def process_refcode_payloads(conn: Connection, name: str, payloads: list[dict]):
-    logger.info(f"Processing airtable '{name}' payloads for refcode assignments...")
+    logger.info(f"Processing Airtable '{name}' payloads for refcode assignments...")
     config = Configuration.get_session_config(conn)
     schema = config[f"airtable_stv_{name}_schema"]
     table_id = schema["table_id"]

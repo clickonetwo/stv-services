@@ -79,7 +79,7 @@ def do_housekeeping(_scheduled: datetime):
     the time that housekeeping should next be scheduled to run."""
     logger.info("Processing pending webhooks on all queues")
     for queue in queues:
-        target, completed = process_queue_items(queue)
+        target, completed = process_queue(queue)
         if target == 0:
             logger.info(f"No items on queue '{queue}'")
         elif completed < 0:
@@ -112,7 +112,7 @@ def process_incoming_webhooks():
             if queue not in queues:
                 logger.error(f"Received non-webhook: stopping: {message}")
                 break
-            process_queue_items(queue)
+            process_queue(queue)
     except (UnicodeDecodeError, KeyError) as err:
         log_exception(logger, f"While receiving message: '{err}'")
         logger.critical(f"Terminating on message receive error.")
@@ -124,7 +124,7 @@ def process_incoming_webhooks():
         pubsub.reset()
 
 
-def process_queue_items(queue: str) -> (int, int):
+def process_queue(queue: str) -> (int, int):
     """Try locking and processing all items on the queue.
     Returns the number of items found and the number processed.
 
@@ -146,66 +146,78 @@ def process_queue_items(queue: str) -> (int, int):
         logger.info(f"Failed to lock '{queue}'")
         return target, -1
     try:
-        logger.info(f"Starting to process {target} webhooks on queue '{queue}'")
+        logger.info(f"Starting to process {target} items on queue '{queue}'")
         while result := db.lrange(queue, -1, -1):
             hook_id = hashlib.md5(result[0]).hexdigest()
-            hook = json.loads(result[0])
-            if process_webhook(queue, hook, hook_id):
-                processed += 1
-                db.rpop(queue, 1)
-                locking_queue.renew_lock()
-            else:
-                logger.warning(f"Temporary processing failure, will retry item later")
-                break
-    except (KeyError, ValueError, json.JSONDecodeError, NotImplementedError, HTTPError):
-        log_exception(logger, f"While processing webhook on '{queue}'")
-        logger.error("Permanent processing failure, putting item in quarantine")
-        db.lmove(queue, "quarantine", "RIGHT", "LEFT")
-        if Configuration.get_env() == "DEV":
-            raise
+            try:
+                hook = json.loads(result[0])
+                if process_item(queue, hook, hook_id):
+                    processed += 1
+                    logger.info(f"Logging item '{hook_id}' in '{queue}:success'")
+                    db.lpush(f"{queue}:success", json.dumps({hook_id: hook}))
+                    db.ltrim(f"{queue}:success", 0, 99)
+                    db.rpop(queue)
+                    locking_queue.renew_lock()
+                else:
+                    logger.warning(f"Temporary failure processing item '{hook_id}'")
+                    logger.info(f"Leaving item '{hook_id}' in '{queue}'")
+                    break
+            except json.JSONDecodeError:
+                log_exception(logger, f"While decoding '{hook_id}' on '{queue}'")
+                logger.error(f"Putting item '{hook_id}' in '{queue}:decode-failure'")
+                db.hset(f"{queue}:decode-failure", hook_id, result[0])
+                db.rpop(queue)
+            except (KeyError, ValueError, NotImplementedError, HTTPError):
+                log_exception(logger, f"While processing '{hook_id}' on '{queue}'")
+                logger.error(f"Putting item '{hook_id}' in '{queue}:process-failure'")
+                db.hset(f"{queue}:process-failure", hook_id, result[0])
+                db.rpop(queue)
+                if Configuration.get_env() == "DEV":
+                    raise
     finally:
         logger.info(f"Processed {processed} webhook(s) on queue '{queue}'")
-        if processed > 0:
-            # update all the records touched by the processing
-            count = update_all_records(verbose=False, force=False)
-            logger.info(f"Updated {count} affected record(s)")
         if locking_queue.state() == "locked":
             try:
                 locking_queue.unlock()
             except LockingQueue.NotLocked:
                 # lock may have timed out during the operation, that's OK
                 pass
+        if processed > 0:
+            # update all the records touched by the processing
+            try:
+                count = update_all_records(verbose=False, force=False)
+                logger.info(f"Updated {count} affected record(s)")
+            except HTTPError:
+                log_exception(logger, f"While updating Airtable records")
+                logger.info("Will update records against at next housekeeping")
     return target, processed
 
 
-def process_webhook(queue: str, hook: dict, hook_id: str) -> bool:
+def process_item(queue: str, item: dict, item_id: str) -> bool:
     try:
-        logger.info(f"Processing webhook '{hook_id}' from '{queue}'")
+        logger.info(f"Processing item '{item_id}' from '{queue}'")
         with Postgres.get_global_engine().connect() as conn:  # type: Connection
             if queue == "airtable":
-                airtable.process_webhook_notification(conn, hook["name"])
+                airtable.process_webhook_notification(conn, item["name"])
             elif queue == "act_blue":
-                act_blue.process_webhook_notification(conn, hook)
+                act_blue.process_webhook_notification(conn, item)
             elif queue == "action_network":
-                action_network.process_webhook_notification(conn, hook)
+                action_network.process_webhook_notification(conn, item)
             elif queue == "control":
-                logger.error("Control webhooks are not implemented.")
+                logger.error("Control items are not implemented.")
                 raise NotImplementedError
             else:
-                logger.error(f"Unknown queue: '{queue}'")
+                logger.error(f"Don't know how to process queue '{queue}'")
                 raise NotImplementedError
             conn.commit()
-            logger.info(f"Processing complete on webhook '{hook_id}'")
+            logger.info(f"Processing complete on item '{item_id}'")
             return True
     except SQLAlchemyError:
-        log_exception(logger, f"Database error on webhook '{hook_id}' on '{queue}'")
+        log_exception(logger, f"Database error on item '{item_id}' on '{queue}'")
         return False
     except HTTPError as err:
         if err.response.status_code in [429, 500, 502, 503]:
-            log_exception(logger, f"Network error on webhook '{hook_id}' on '{queue}'")
-            delay = 30.0 + 10.0 * random()
-            logger.info("Backing off {delay} seconds before retry")
-            sleep(delay)
+            log_exception(logger, f"Network error on item '{item_id}' on '{queue}'")
         else:
             raise
         return False
