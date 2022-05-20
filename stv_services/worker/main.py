@@ -23,8 +23,6 @@
 import hashlib
 import json
 from datetime import datetime, timezone, timedelta
-from random import random
-from time import sleep
 
 from requests import HTTPError
 from sqlalchemy.exc import SQLAlchemyError
@@ -40,14 +38,14 @@ from ..data_store import Postgres
 from ..data_store.redis_db import LockingQueue, RedisSync
 
 logger = get_logger(__name__)
-queues = ("control", "act_blue", "action_network", "airtable")
+queues = ("act_blue", "action_network", "airtable")
 locking_queues = {}
 db: RedisSync.Redis
 
 
 def main():
     startup()
-    process_incoming_webhooks()
+    process_incoming_items()
     shutdown()
 
 
@@ -77,54 +75,67 @@ def do_housekeeping(_scheduled: datetime):
     don't have webhook capabilities.  The argument is the time
     the housekeeping was scheduled to run.  The return value is
     the time that housekeeping should next be scheduled to run."""
-    logger.info("Processing pending webhooks on all queues")
+    logger.info("Doing housekeeping...")
+    target_total, completed_total = 0, 0
+    need_airtable_update = False
     for queue in queues:
-        target, completed = process_queue(queue)
-        if target == 0:
-            logger.info(f"No items on queue '{queue}'")
-        elif completed < 0:
+        target, completed, airtable_updated = process_queue(queue)
+        target_total += target
+        completed_total += completed
+        if not airtable_updated:
+            need_airtable_update = True
+        if completed < 0:
             # assume another worker has this queue
             logger.info(f"Skipping locked queue '{queue}'")
-        elif completed < target:
-            # an item failed; it will get picked
-            # up in the housekeeping phase later
-            logger.info(f"Failed webhook left on queue '{queue}'")
+    if target_total > 0:
+        logger.info(f"Processed {completed_total}/{target_total} queued items")
+    if need_airtable_update:
+        try:
+            logger.info(f"Finding Airtable records that need update")
+            count = update_all_records(verbose=False, force=False)
+            logger.info(f"Updated {count} Airtable record(s)")
+        except HTTPError:
+            log_exception(logger, f"Updating Airtable records")
     return datetime.now(tz=timezone.utc) + timedelta(minutes=5)
 
 
-def process_incoming_webhooks():
+def process_incoming_items():
+    """Process items that are posted to published queue names"""
     pubsub = db.pubsub(ignore_subscribe_messages=True)
     pubsub.subscribe("webhooks")
-    next_housekeeping = datetime.now(tz=timezone.utc)
+    next_housekeeping = do_housekeeping(datetime.now(tz=timezone.utc))
     try:
         while True:
-            if datetime.now(tz=timezone.utc) >= next_housekeeping:
+            delta = next_housekeeping - datetime.now(tz=timezone.utc)
+            wait_time = delta.total_seconds()
+            if wait_time < 0.0:
                 next_housekeeping = do_housekeeping(next_housekeeping)
-            timeout = 50.0 + 20.0 * random()
-            logger.info(f"Waiting {timeout} seconds for new publish...")
-            message: dict = pubsub.get_message(timeout=timeout)
+                continue
+            logger.info(f"Waiting {round(wait_time)} seconds for new items...")
+            message: dict = pubsub.get_message(timeout=wait_time)
             if not message:
                 continue
-            if message.get("type") != "message":
-                logger.warning(f"Ignoring non-message: {message}")
-                continue
-            queue = message.get("data", b"stop").decode("utf-8").lower()
-            if queue not in queues:
-                logger.error(f"Received non-webhook: stopping: {message}")
-                break
-            process_queue(queue)
-    except (UnicodeDecodeError, KeyError) as err:
-        log_exception(logger, f"While receiving message: '{err}'")
-        logger.critical(f"Terminating on message receive error.")
-        if Configuration.get_env() == "DEV":
-            raise
+            try:
+                if message.get("type") != "message":
+                    logger.warning(f"Ignoring non-message: {message}")
+                    continue
+                queue = message.get("data", b"stop").decode("utf-8").lower()
+                if queue not in queues:
+                    logger.critical(f"Stopping on '{message}' which is not a queue")
+                    break
+                process_queue(queue)
+            except UnicodeDecodeError:
+                log_exception(logger, f"Receiving message '{message}'")
+                logger.critical(f"Terminating on message receive error.")
+                if Configuration.get_env() == "DEV":
+                    raise
     except KeyboardInterrupt:
         logger.info("Terminating on interrupt...")
     finally:
         pubsub.reset()
 
 
-def process_queue(queue: str) -> (int, int):
+def process_queue(queue: str) -> (int, int, bool):
     """Try locking and processing all items on the queue.
     Returns the number of items found and the number processed.
 
@@ -133,10 +144,11 @@ def process_queue(queue: str) -> (int, int):
 
     As a special case, if the second number is negative, that
     means that we failed to lock the queue."""
+    airtable_updated = True
     if target := db.llen(queue):
         processed = 0
     else:
-        return 0, 0
+        return 0, 0, airtable_updated
     locking_queue = locking_queues[queue]
     try:
         logger.info(f"Locking queue '{queue}'...")
@@ -144,7 +156,7 @@ def process_queue(queue: str) -> (int, int):
     except LockingQueue.LockedByOther:
         # some other worker got it, move on
         logger.info(f"Failed to lock '{queue}'")
-        return target, -1
+        return target, -1, airtable_updated
     try:
         logger.info(f"Starting to process {target} items on queue '{queue}'")
         while result := db.lrange(queue, -1, -1):
@@ -163,19 +175,19 @@ def process_queue(queue: str) -> (int, int):
                     logger.info(f"Leaving item '{hook_id}' in '{queue}'")
                     break
             except json.JSONDecodeError:
-                log_exception(logger, f"While decoding '{hook_id}' on '{queue}'")
-                logger.error(f"Putting item '{hook_id}' in '{queue}:decode-failure'")
+                log_exception(logger, f"Decoding item '{hook_id}' on '{queue}'")
+                logger.info(f"Putting item '{hook_id}' in '{queue}:decode-failure'")
                 db.hset(f"{queue}:decode-failure", hook_id, result[0])
                 db.rpop(queue)
             except (KeyError, ValueError, NotImplementedError, HTTPError):
-                log_exception(logger, f"While processing '{hook_id}' on '{queue}'")
-                logger.error(f"Putting item '{hook_id}' in '{queue}:process-failure'")
+                log_exception(logger, f"Processing item '{hook_id}' on '{queue}'")
+                logger.info(f"Putting item '{hook_id}' in '{queue}:process-failure'")
                 db.hset(f"{queue}:process-failure", hook_id, result[0])
                 db.rpop(queue)
                 if Configuration.get_env() == "DEV":
                     raise
     finally:
-        logger.info(f"Processed {processed} webhook(s) on queue '{queue}'")
+        logger.info(f"Processed {processed} item(s) on queue '{queue}'")
         if locking_queue.state() == "locked":
             try:
                 locking_queue.unlock()
@@ -185,12 +197,13 @@ def process_queue(queue: str) -> (int, int):
         if processed > 0:
             # update all the records touched by the processing
             try:
+                logger.info(f"Finding Airtable records that need update")
                 count = update_all_records(verbose=False, force=False)
-                logger.info(f"Updated {count} affected record(s)")
+                logger.info(f"Updated {count} Airtable record(s)")
             except HTTPError:
-                log_exception(logger, f"While updating Airtable records")
-                logger.info("Will update records against at next housekeeping")
-    return target, processed
+                airtable_updated = False
+                log_exception(logger, f"Updating Airtable records")
+    return target, processed, airtable_updated
 
 
 def process_item(queue: str, item: dict, item_id: str) -> bool:
@@ -203,14 +216,10 @@ def process_item(queue: str, item: dict, item_id: str) -> bool:
                 act_blue.process_webhook_notification(conn, item)
             elif queue == "action_network":
                 action_network.process_webhook_notification(conn, item)
-            elif queue == "control":
-                logger.error("Control items are not implemented.")
-                raise NotImplementedError
             else:
-                logger.error(f"Don't know how to process queue '{queue}'")
-                raise NotImplementedError
+                raise NotImplementedError(f"Don't know how to process queue '{queue}'")
             conn.commit()
-            logger.info(f"Processing complete on item '{item_id}'")
+            logger.info(f"Processing complete on item '{item_id}' from '{queue}'")
             return True
     except SQLAlchemyError:
         log_exception(logger, f"Database error on item '{item_id}' on '{queue}'")
