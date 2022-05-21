@@ -37,6 +37,7 @@ from stv_services.airtable import bulk as at_bulk
 from stv_services.core import Configuration
 from stv_services.data_store import Postgres
 from stv_services.external.spreadsheet import import_spreadsheet
+from stv_services.worker import control
 
 
 @shell(prompt="stv> ")
@@ -326,6 +327,25 @@ def register_webhooks(ctx: click.Context, sync_first: bool = False):
 def sync_webhooks(ctx: click.Context, force_remove: bool = False):
     verbose = ctx.obj["verbose"]
     at_bulk.sync_webhooks(verbose, force_remove)
+
+
+@stv.command()
+@click.option("--queue", help="Queue to resubmit (omit for all)")
+@click.pass_context
+def resubmit_failed_webhooks(ctx: click.Context, queue: str = None):
+    verbose = ctx.obj["verbose"]
+    if not queue:
+        if verbose:
+            print("Resubmitting all failed webhooks for re-processing")
+        control.resubmit_all_failed(None)
+        if verbose:
+            print("All Failed webhooks re-submitted")
+    else:
+        if verbose:
+            print(f"Resubmitting failed webhooks on '{queue}' for re-processing")
+        control.resubmit_all_failed([queue])
+        if verbose:
+            print(f"Failed webhooks on '{queue}' re-submitted")
 
 
 if __name__ == "__main__":

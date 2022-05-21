@@ -28,7 +28,7 @@ from requests import HTTPError
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.future import Connection
 
-from . import airtable, act_blue, action_network
+from . import airtable, act_blue, action_network, control
 from ..act_blue.metadata import ActBlueDonationMetadata
 from ..airtable.bulk import update_all_records, verify_schemas, register_webhooks
 from ..core import Configuration
@@ -38,7 +38,7 @@ from ..data_store import Postgres
 from ..data_store.redis_db import LockingQueue, RedisSync
 
 logger = get_logger(__name__)
-queues = ("act_blue", "action_network", "airtable")
+queues = ("act_blue", "action_network", "airtable", "control")
 locking_queues = {}
 db: RedisSync.Redis
 
@@ -216,6 +216,8 @@ def process_item(queue: str, item: dict, item_id: str) -> bool:
                 act_blue.process_webhook_notification(conn, item)
             elif queue == "action_network":
                 action_network.process_webhook_notification(conn, item)
+            elif queue == "control":
+                control.process_webhook_notification(conn, item)
             else:
                 raise NotImplementedError(f"Don't know how to process queue '{queue}'")
             conn.commit()
