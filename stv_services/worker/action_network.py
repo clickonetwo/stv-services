@@ -62,7 +62,7 @@ def process_donation_webhook(conn: Connection, body: dict):
     donation.compute_status(conn)
     donation.persist(conn)
     # now make sure we have the person in the database
-    process_webhook_person_data(conn, donation["person_id"], body)
+    process_webhook_person_data(conn, donation["donor_id"], body)
     logger.info(f"Donation webhook processing done")
 
 
