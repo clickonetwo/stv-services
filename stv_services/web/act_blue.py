@@ -23,7 +23,7 @@
 import json
 import secrets
 
-from fastapi import Depends, APIRouter, HTTPException, status
+from fastapi import Depends, APIRouter, HTTPException, status, Response
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
 from ..core import Configuration
@@ -52,6 +52,7 @@ def is_authenticated(credentials: HTTPBasicCredentials = Depends(basic)):
     "/notifications",
     status_code=204,
     summary="Receiver for ActBlue webhook notifications.",
+    response_class=Response,
 )
 async def receive_notifications(body: dict):
     logger.info("Received ActBlue webhook")
