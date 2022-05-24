@@ -8,14 +8,13 @@ authors = ["Daniel Brotsky <dan@clickonetwo.io>"]
 python = "^3.9"
 SQLAlchemy = {version = "^1.4.32", extras = ["postgresql"]}
 alembic = {extras = ["tz"], version = "^1.7.7"}
-python-dotenv = "^0.20.0"
 restnavigator = "^1.0.1"
 python-dateutil = "^2.8.2"
 click = "^8.1.2"
 pyairtable = "^1.1.0"
 click-shell = "^2.1"
 redis = "^4.2.2"
-fastapi = "^0.75.2"
+fastapi = "^0.78.0"
 aioredis = "^2.0.1"
 uvicorn = {extras = ["standard"], version = "^0.17.6"}
 gunicorn = "^20.1.0"
