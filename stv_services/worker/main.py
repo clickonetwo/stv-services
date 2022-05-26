@@ -30,7 +30,12 @@ from sqlalchemy.future import Connection
 
 from . import airtable, act_blue, action_network, control
 from ..act_blue.metadata import ActBlueDonationMetadata
-from ..airtable.bulk import update_all_records, verify_schemas, register_webhooks
+from ..airtable.bulk import (
+    update_all_records,
+    verify_schemas,
+    register_webhooks,
+    update_changed_records,
+)
 from ..core import Configuration
 from ..core.logging import get_logger, log_exception
 from ..core.utilities import local_timestamp
@@ -92,8 +97,8 @@ def do_housekeeping(_scheduled: datetime):
     if need_airtable_update:
         try:
             logger.info(f"Finding Airtable records that need update")
-            count = update_all_records(verbose=False, force=False)
-            logger.info(f"Updated {count} Airtable record(s)")
+            i, u = update_changed_records()
+            logger.info(f"Inserted {i} and updated {u} Airtable record(s)")
         except HTTPError:
             log_exception(logger, f"Updating Airtable records")
     return datetime.now(tz=timezone.utc) + timedelta(minutes=5)
@@ -198,8 +203,8 @@ def process_queue(queue: str) -> (int, int, bool):
             # update all the records touched by the processing
             try:
                 logger.info(f"Finding Airtable records that need update")
-                count = update_all_records(verbose=False, force=False)
-                logger.info(f"Updated {count} Airtable record(s)")
+                i, u = update_changed_records()
+                logger.info(f"Inserted {i} and updated {u} Airtable record(s)")
             except HTTPError:
                 airtable_updated = False
                 log_exception(logger, f"Updating Airtable records")

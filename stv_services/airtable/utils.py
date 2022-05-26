@@ -30,6 +30,30 @@ from ..data_store import model
 from ..data_store.persisted_dict import PersistedDict
 
 
+def find_person_records_to_update():
+    pic = model.person_info.columns
+    is_v, v_id, v_ud = pic.is_volunteer, pic.volunteer_record_id, pic.volunteer_updated
+    is_c, c_id, c_ud = pic.is_contact, pic.contact_record_id, pic.contact_updated
+    is_f, f_id, f_ud = pic.is_funder, pic.funder_record_id, pic.funder_updated
+    query = sa.select(model.person_info).where(
+        sa.or_(
+            sa.and_(is_v, sa.or_(v_id == "", pic.updated_date > v_ud)),
+            sa.and_(is_c, sa.or_(c_id == "", pic.updated_date > c_ud)),
+            sa.and_(is_f, sa.or_(f_id == "", pic.updated_date > f_ud)),
+        )
+    )
+    return query
+
+
+def find_donation_records_to_update():
+    pic = model.donation_info.columns
+    is_d, d_id, d_ud = pic.is_donation, pic.donation_record_id, pic.donation_updated
+    query = sa.select(model.donation_info).where(
+        sa.and_(is_d, sa.or_(d_id == "", pic.updated_date > d_ud)),
+    )
+    return query
+
+
 def find_records_to_update(dict_type: str, force: bool = False):
     table, is_col, id_col, date_col = table_columns(dict_type)
     if force:
