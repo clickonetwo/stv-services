@@ -64,29 +64,7 @@ class ActionNetworkPerson(PersistedDict):
     def __init__(self, **fields):
         if not fields.get("email") and not fields.get("phone"):
             raise ValueError(f"Person record must have either email or phone: {fields}")
-        initial_values = dict(
-            updated_date=model.epoch,
-            has_submission=False,
-            last_donation=model.epoch,
-            recur_start=model.epoch,
-            recur_end=model.epoch,
-            team_lead="",
-            is_contact=False,
-            contact_record_id="",
-            contact_updated=model.epoch,
-            contact_assignments={},
-            is_volunteer=False,
-            volunteer_record_id="",
-            volunteer_updated=model.epoch,
-            is_funder=False,
-            funder_record_id="",
-            funder_updated=model.epoch,
-            funder_has_page=False,
-            funder_refcode="",
-        )
-        value_fields = {k: v for k, v in fields.items() if v is not None}
-        initial_values.update(value_fields)
-        super().__init__(model.person_info, **initial_values)
+        super().__init__(model.person_info, **fields)
 
     def compute_status(self, conn: Connection, force: bool = False):
         """
@@ -105,7 +83,7 @@ class ActionNetworkPerson(PersistedDict):
             self["recur_end"] = model.epoch
             self["last_donation"] = model.epoch
             self["has_submission"] = False
-        cutoff_lo = self["updated_date"]
+        cutoff_lo = self.get("updated_date", model.epoch)
         self.compute_submission_status(conn, cutoff_lo)
         # because of Action Network data issues, we have to compute
         # cancellation status *before* we compute donor status
@@ -118,7 +96,7 @@ class ActionNetworkPerson(PersistedDict):
         become a funder.  Always updates the source person so that the
         checkboxes get updated in various records showing the person."""
         self["is_contact"] = True
-        if source == "contact" or self["last_donation"] > model.epoch:
+        if source == "contact" or self.get("last_donation", model.epoch) > model.epoch:
             self["is_funder"] = True
         self["updated_date"] = datetime.now(tz=timezone.utc)
 
@@ -140,7 +118,7 @@ class ActionNetworkPerson(PersistedDict):
     def notice_submission(self, _conn: Connection, submission: dict = None):
         # if they have checked any of the 2022 form fields, they are contacts
         # and possibly funders (if it's a form field on the fundraising form)
-        custom_fields = self["custom_fields"]
+        custom_fields = self.get("custom_fields", {})
         for key in custom_fields:
             if table := interest_table_map.get(key):
                 self["has_submission"] = True
@@ -149,7 +127,7 @@ class ActionNetworkPerson(PersistedDict):
                     self["is_funder"] = True
                 break
         else:
-            if submission and not self["has_submission"]:
+            if submission and not self.get("has_submission"):
                 is_recent = submission["created_date"] > self.contact_cutoff_lo
                 is_signup = submission["form_id"] == self.signup_form_2022
                 if is_signup or is_recent:
@@ -159,7 +137,10 @@ class ActionNetworkPerson(PersistedDict):
 
     def compute_donor_status(self, conn: Connection, cutoff_lo: datetime):
         # first make sure we take into account a contact status change
-        if self["is_contact"] and self["last_donation"] > model.epoch:
+        if (
+            self.get("is_contact")
+            and self.get("last_donation", model.epoch) > model.epoch
+        ):
             self["is_funder"] = True
             self["updated_date"] = datetime.now(tz=timezone.utc)
         # then look for any new donations
@@ -203,9 +184,9 @@ class ActionNetworkPerson(PersistedDict):
             self["summary_2020"] = ", ".join(entries_2020)
             # if we haven't seen any recurrences this year,
             # then they must have been a lapsed older donor
-            recur_start = self["recur_start"]
+            recur_start = self.get("recur_start", model.epoch)
             if model.epoch < recur_start < max_2021:
-                if self["recur_end"] <= max_2021:
+                if self.get("recur_end", model.epoch) <= max_2021:
                     self["recur_end"] = max_2021
 
     def notice_donation(self, _conn: Connection, donation: dict = None):
@@ -214,7 +195,7 @@ class ActionNetworkPerson(PersistedDict):
         if not donation:
             return
         donation_date = donation["created_date"]
-        if donation_date >= self["last_donation"]:
+        if donation_date >= self.get("last_donation", model.epoch):
             self["last_donation"] = donation_date
         else:
             logger.warning(f"Donation '{self['uuid']}' arrived out of order")
@@ -222,7 +203,7 @@ class ActionNetworkPerson(PersistedDict):
             # donations on or after 11/1/2021 make them a contact and a funder
             self["is_contact"] = True
             self["is_funder"] = True
-        elif self["is_contact"]:
+        elif self.get("is_contact"):
             # contacts who donate are funders
             self["is_funder"] = True
         # if this is a recurring donation, update their recurring start date
@@ -230,7 +211,7 @@ class ActionNetworkPerson(PersistedDict):
         if recurrence_data.get("recurring"):
             if recurrence_data.get("period") == "Yearly":
                 logger.warning(f"Yearly donor '{self['uuid']}' will show as lapsed")
-            if donation_date > self["recur_start"]:
+            if donation_date > self.get("recur_start", model.epoch):
                 self["recur_start"] = donation_date
         # Data problem: Action Network doesn't mark recurring donations after
         # the first one as being recurring.  So if this donation comes within
@@ -240,8 +221,8 @@ class ActionNetworkPerson(PersistedDict):
         # so we could also check on the fundraising page origin system,
         # but that would require yet another database lookup, so we don't.
         # Testing shows this code works well enough for our purposes.
-        elif self["recur_end"] == model.epoch:
-            delta = donation_date - self["recur_start"]
+        elif self.get("recur_end", model.epoch) == model.epoch:
+            delta = donation_date - self.get("recur_start", model.epoch)
             # why do we allow 64 days rather than 32 between recurring
             # monthly donations?  Because sometimes your credit card expires,
             # you miss a month, and then you fix it, so it resumes in
@@ -272,7 +253,7 @@ class ActionNetworkPerson(PersistedDict):
         if not metadata:
             return
         cancel_date = metadata["create_date"]
-        if cancel_date > self["recur_end"]:
+        if cancel_date > self.get("recur_end", model.epoch):
             self["recur_end"] = cancel_date
         self["updated_date"] = datetime.now(tz=timezone.utc)
 
@@ -291,7 +272,7 @@ class ActionNetworkPerson(PersistedDict):
         associated at that time with a given user, changing that user's
         refcode will have no effect on past or future donations with the old
         code."""
-        current = self["funder_refcode"]
+        current = self.get("funder_refcode", "")
         if current == new:
             # this person already has this refcode, so nothing changes
             return

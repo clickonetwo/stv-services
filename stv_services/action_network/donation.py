@@ -40,21 +40,11 @@ class ActionNetworkDonation(PersistedDict):
         for key in ["amount", "recurrence_data", "donor_id", "fundraising_page_id"]:
             if not fields.get(key):
                 raise ValueError(f"Donation must have field '{key}': {fields}")
-        initial_values = dict(
-            updated_date=model.epoch,
-            metadata_id="",
-            attribution_id="",
-            is_donation=False,
-            donation_record_id="",
-            donation_updated=model.epoch,
-        )
-        value_fields = {k: v for k, v in fields.items() if v is not None}
-        initial_values.update(value_fields)
-        super().__init__(model.donation_info, **initial_values)
+        super().__init__(model.donation_info, **fields)
 
     def compute_status(self, conn: Connection, force: bool = False):
         """Try to attribute this donation based on latest data."""
-        if not force and self["attribution_id"]:
+        if not force and self.get("attribution_id"):
             return
         # get attribution from fundraising page, if any
         query = sa.select(model.fundraising_page_info.c.attribution_id).where(
@@ -63,7 +53,7 @@ class ActionNetworkDonation(PersistedDict):
         if page := conn.execute(query).mappings().first():
             self.notice_attribution(conn, page["attribution_id"])
         # if we still need an attribution, look for a refcode
-        if force or not self["attribution_id"]:
+        if force or not self.get("attribution_id"):
             if metadata_id := self["metadata_id"]:
                 query = sa.select(model.donation_metadata).where(
                     model.donation_metadata.c.uuid == metadata_id

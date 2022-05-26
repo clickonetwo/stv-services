@@ -38,10 +38,7 @@ class ActionNetworkSubmission(PersistedDict):
         for key in ["form_id", "person_id"]:
             if not fields.get(key):
                 raise ValueError(f"Submission must have field '{key}': {fields}")
-        initial_values = dict()
-        value_fields = {k: v for k, v in fields.items() if v is not None}
-        initial_values.update(value_fields)
-        super().__init__(model.submission_info, **initial_values)
+        super().__init__(model.submission_info, **fields)
 
     @classmethod
     def from_webhook(cls, data: dict) -> "ActionNetworkSubmission":
