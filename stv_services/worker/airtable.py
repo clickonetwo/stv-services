@@ -20,16 +20,43 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 #
+import json
+
 import sqlalchemy as sa
+from requests import HTTPError
 from sqlalchemy.future import Connection
 
 from ..act_blue.metadata import ActBlueDonationMetadata
 from ..action_network.person import ActionNetworkPerson
+from ..airtable.bulk import update_changed_records
 from ..airtable.webhook import fetch_hook_payloads
-from ..core import logging, Configuration
-from ..data_store import model
+from ..core import Configuration
+from ..core.logging import log_exception, get_logger
+from ..data_store import model, RedisSync
 
-logger = logging.get_logger(__name__)
+logger = get_logger(__name__)
+
+
+def update_airtable_records(is_retry: bool = False):
+    try:
+        logger.info(f"Finding Airtable records that need update")
+        did_update = False
+        results = update_changed_records()
+        for type_, (i, u) in results.items():
+            if i + u > 0:
+                did_update = True
+                logger.info(f"Inserted {i} and updated {u} {type_} record(s)")
+        if not did_update:
+            logger.info(f"No records needed update")
+    except (HTTPError, KeyboardInterrupt, Exception):
+        log_exception(logger, f"Updating Airtable records")
+        logger.critical("Inserted records may not have been committed to database")
+        if is_retry:
+            raise
+        logger.info("Queueing a match-and-repair of all record types")
+        request = {"match-and-repair": {"types": "all", "repair": True}}
+        db = RedisSync.connect()
+        db.lpush("control", json.dumps(request, separators=(",", ":")))
 
 
 def process_webhook_notification(conn: Connection, name: str):

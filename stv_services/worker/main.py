@@ -24,18 +24,14 @@ import hashlib
 import json
 from datetime import datetime, timezone, timedelta
 
+from redis.client import Redis
 from requests import HTTPError
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.future import Connection
 
 from . import airtable, act_blue, action_network, control
 from ..act_blue.metadata import ActBlueDonationMetadata
-from ..airtable.bulk import (
-    update_all_records,
-    verify_schemas,
-    register_webhooks,
-    update_changed_records,
-)
+from ..airtable.bulk import verify_schemas, register_webhooks
 from ..core import Configuration
 from ..core.logging import get_logger, log_exception
 from ..core.utilities import local_timestamp
@@ -45,7 +41,7 @@ from ..data_store.redis_db import LockingQueue, RedisSync
 logger = get_logger(__name__)
 queues = ("act_blue", "action_network", "airtable", "control")
 locking_queues = {}
-db: RedisSync.Redis
+db: Redis
 
 
 def main():
@@ -74,41 +70,43 @@ def shutdown():
     logger.info(f"Stopping worker at {local_timestamp()}.")
 
 
-def do_housekeeping(_scheduled: datetime):
+def do_housekeeping(scheduled: datetime = None):
     """Do routine housekeeping, such as processing hooks that have
     to be retried, or importing data from external systems that
     don't have webhook capabilities.  The argument is the time
     the housekeeping was scheduled to run.  The return value is
     the time that housekeeping should next be scheduled to run."""
     logger.info("Doing housekeeping...")
+    if not scheduled or scheduled.minute in (5, 25, 45):
+        # when first run, or every 20 minutes on the 5-minute mark,
+        # verify that the key tables have not gotten out of sync
+        request = {"match-and-repair": {"types": ["contact", "funder"], "repair": True}}
+        db.lpush("control", json.dumps(request, separators=(",", ":")))
     target_total, completed_total = 0, 0
-    need_airtable_update = False
     for queue in queues:
-        target, completed, airtable_updated = process_queue(queue)
+        target, completed = process_queue(queue)
         target_total += target
         completed_total += completed
-        if not airtable_updated:
-            need_airtable_update = True
         if completed < 0:
             # assume another worker has this queue
             logger.info(f"Skipping locked queue '{queue}'")
     if target_total > 0:
         logger.info(f"Processed {completed_total}/{target_total} queued items")
-    if need_airtable_update:
-        try:
-            logger.info(f"Finding Airtable records that need update")
-            i, u = update_changed_records()
-            logger.info(f"Inserted {i} and updated {u} Airtable record(s)")
-        except HTTPError:
-            log_exception(logger, f"Updating Airtable records")
-    return datetime.now(tz=timezone.utc) + timedelta(minutes=5)
+    return next_housekeeping()
+
+
+def next_housekeeping() -> datetime:
+    next_5 = datetime.now(tz=timezone.utc) + timedelta(minutes=5)
+    if next_5.minute % 5 != 0:
+        next_5.replace(minute=next_5.minute - next_5.minute % 5)
+    return next_5
 
 
 def process_incoming_items():
     """Process items that are posted to published queue names"""
     pubsub = db.pubsub(ignore_subscribe_messages=True)
     pubsub.subscribe("webhooks")
-    next_housekeeping = do_housekeeping(datetime.now(tz=timezone.utc))
+    next_housekeeping = do_housekeeping()
     try:
         while True:
             delta = next_housekeeping - datetime.now(tz=timezone.utc)
@@ -140,7 +138,7 @@ def process_incoming_items():
         pubsub.reset()
 
 
-def process_queue(queue: str) -> (int, int, bool):
+def process_queue(queue: str) -> (int, int):
     """Try locking and processing all items on the queue.
     Returns the number of items found and the number processed.
 
@@ -149,11 +147,10 @@ def process_queue(queue: str) -> (int, int, bool):
 
     As a special case, if the second number is negative, that
     means that we failed to lock the queue."""
-    airtable_updated = True
     if target := db.llen(queue):
         processed = 0
     else:
-        return 0, 0, airtable_updated
+        return 0, 0
     locking_queue = locking_queues[queue]
     try:
         logger.info(f"Locking queue '{queue}'...")
@@ -161,7 +158,7 @@ def process_queue(queue: str) -> (int, int, bool):
     except LockingQueue.LockedByOther:
         # some other worker got it, move on
         logger.info(f"Failed to lock '{queue}'")
-        return target, -1, airtable_updated
+        return target, -1
     try:
         logger.info(f"Starting to process {target} items on queue '{queue}'")
         while result := db.lrange(queue, -1, -1):
@@ -201,14 +198,8 @@ def process_queue(queue: str) -> (int, int, bool):
                 pass
         if processed > 0:
             # update all the records touched by the processing
-            try:
-                logger.info(f"Finding Airtable records that need update")
-                i, u = update_changed_records()
-                logger.info(f"Inserted {i} and updated {u} Airtable record(s)")
-            except HTTPError:
-                airtable_updated = False
-                log_exception(logger, f"Updating Airtable records")
-    return target, processed, airtable_updated
+            airtable.update_airtable_records()
+    return target, processed
 
 
 def process_item(queue: str, item: dict, item_id: str) -> bool:

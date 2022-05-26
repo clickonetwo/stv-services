@@ -33,7 +33,7 @@ from click_shell import shell
 
 from stv_services.act_blue import bulk as ab_bulk
 from stv_services.action_network import bulk as an_bulk
-from stv_services.airtable import bulk as at_bulk
+from stv_services.airtable import bulk as at_bulk, sync
 from stv_services.core import Configuration
 from stv_services.data_store import Postgres
 from stv_services.external.spreadsheet import import_spreadsheet
@@ -346,6 +346,26 @@ def resubmit_failed_webhooks(ctx: click.Context, queue: str = None):
         control.resubmit_all_failed([queue])
         if verbose:
             print(f"Failed webhooks on '{queue}' re-submitted")
+
+
+@stv.command()
+@click.option(
+    "--type", default="all", help="volunteer, contact, funder, donation, or all"
+)
+@click.option(
+    "--remove-extra/--no-remove-extra",
+    default=False,
+    help="Remove unmatched records from Airtable",
+)
+def verify_match(type: str, remove_extra: bool = False):
+    sync.verify_match(type, remove_extra=remove_extra)
+
+
+@stv.command()
+@click.option("--type", default="contact", help="volunteer, contact, or funder")
+def analyze_match(type: str):
+    report = sync.match_records(type)
+    sync.analyze_report(report)
 
 
 if __name__ == "__main__":

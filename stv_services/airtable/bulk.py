@@ -90,28 +90,28 @@ def update_all_records(verbose: bool = True, force: bool = False) -> int:
     return total
 
 
-def update_changed_records() -> (int, int):
-    pi, pu = update_changed_person_records()
-    di, du = update_changed_donation_records()
-    return pi + di, pu + du
+def update_changed_records() -> dict:
+    results = update_changed_person_records()
+    results.update(update_changed_donation_records())
+    return results
 
 
-def update_changed_person_records() -> (int, int):
+def update_changed_person_records() -> dict:
     with Postgres.get_global_engine().connect() as conn:  # type: Connection
         people = ActionNetworkPerson.from_query(conn, find_person_records_to_update())
-        inserts, updates = bulk_upsert_person_records(conn, people)
+        results = bulk_upsert_person_records(conn, people)
         conn.commit()
-    return inserts, updates
+    return results
 
 
-def update_changed_donation_records() -> (int, int):
+def update_changed_donation_records() -> dict:
     with Postgres.get_global_engine().connect() as conn:  # type: Connection
         donations = ActionNetworkDonation.from_query(
             conn, find_donation_records_to_update()
         )
-        inserts, updates = bulk_upsert_donation_records(conn, donations)
+        results = bulk_upsert_donation_records(conn, donations)
         conn.commit()
-    return inserts, updates
+    return results
 
 
 def update_contact_records(verbose: bool = True, force: bool = False) -> int:
@@ -160,30 +160,31 @@ def update_donation_records(verbose: bool = True, force: bool = False) -> int:
 
 def bulk_upsert_person_records(
     conn: Connection, people: list[ActionNetworkPerson]
-) -> (int, int):
+) -> dict:
     volunteers, contacts, funders = [], [], []
     for person in people:
-        if person["is_volunteer"]:
+        if person.get("is_volunteer"):
             volunteers.append((person, create_volunteer_record(conn, person)))
-        if person["is_contact"]:
+        if person.get("is_contact"):
             contacts.append((person, create_contact_record(conn, person)))
-        if person["is_funder"]:
+        if person.get("is_funder"):
             funders.append((person, create_funder_record(conn, person)))
-    vi, vu = upsert_records(conn, "volunteer", volunteers)
-    ci, cu = upsert_records(conn, "contact", contacts)
-    fi, fu = upsert_records(conn, "funder", funders)
-    return vi + ci + fi, vu + cu + fu
+    pairs = dict(volunteer=volunteers, contact=contacts, funder=funders)
+    results = {}
+    for type_ in ("volunteer", "contact", "funder"):
+        results[type_] = upsert_records(conn, type_, pairs[type_])
+    return results
 
 
 def bulk_upsert_donation_records(
     conn: Connection, donations: list[ActionNetworkDonation]
-) -> (int, int):
+) -> dict:
     pairs = []
     for donation in donations:
         if donation["is_donation"]:
             pairs.append((donation, create_donation_record(conn, donation)))
-    di, du = upsert_records(conn, "donation", pairs)
-    return di, du
+    results = {"donation": upsert_records(conn, "donation", pairs)}
+    return results
 
 
 def bulk_upsert_records(

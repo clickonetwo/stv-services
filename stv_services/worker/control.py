@@ -24,8 +24,10 @@ import json
 
 from sqlalchemy.future import Connection
 
+from stv_services.airtable.sync import verify_match
 from stv_services.core.logging import get_logger
 from stv_services.data_store import RedisSync
+from stv_services.worker.airtable import update_airtable_records
 
 logger = get_logger(__name__)
 
@@ -34,6 +36,8 @@ def process_webhook_notification(_conn: Connection, body: dict):
     for key, val in body.items():
         if key == "resubmit-failed":
             resubmit_failed(val)
+        elif key == "match-and-repair":
+            match_and_repair(val)
         else:
             raise NotImplementedError(f"Don't know how to '{key}'")
 
@@ -71,3 +75,10 @@ def resubmit_failed(requests: list[dict]):
         if item_map:
             logger.info(f"Resubmitted {len(item_map)} items to '{queue}'")
             db.publish("webhooks", queue)
+
+
+def match_and_repair(params: dict):
+    types = params.get("types")
+    remove_extra = params.get("repair", False)
+    verify_match(types=types, remove_extra=remove_extra)
+    update_airtable_records(is_retry=True)

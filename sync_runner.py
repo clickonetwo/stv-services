@@ -22,18 +22,19 @@
 #
 from stv_services.airtable import sync
 
-print("Preparing volunteer report:")
-volunteer_report = sync.sync_report("volunteer")
+# print("Preparing volunteer report:")
+# volunteer_report = sync.sync_report("volunteer")
 print("Preparing contact report:")
 contact_report = sync.sync_report("contact")
 print("Preparing fundraising report:")
 funder_report = sync.sync_report("funder")
 
-print("Volunteer report:")
-sync.analyze_report(volunteer_report)
+# print("Volunteer report:")
+# sync.analyze_report(volunteer_report)
 print("Contact report:")
 sync.analyze_report(contact_report)
 print("Fundraising report:")
 sync.analyze_report(funder_report)
 
-# matches, extras = sync.match_records("contact")
+print("Verifying matches:")
+sync.verify_match(types=["contact", "funder", "donation"], remove_extra=True)
