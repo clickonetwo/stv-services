@@ -20,138 +20,138 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 #
+from collections import namedtuple
 from typing import Callable
 
 import sqlalchemy as sa
+from dateutil.parser import parse
 from sqlalchemy.future import Connection
 
 from stv_services.action_network.person import ActionNetworkPerson
 from stv_services.core import Session, Configuration
 from stv_services.data_store import model, Postgres
 
+SyncReport = namedtuple(
+    "SyncReport",
+    [
+        "matched_records",
+        "extra_records",
+        "adoptable_records",
+        "unmatched_records",
+        "empty_records",
+    ],
+)
 
-def sync_contacts(_conn: Connection, people: list[ActionNetworkPerson]) -> (dict, dict):
-    emails = {person["email"]: person for person in people}
-    extras = {}
-    unmatched = {}
-    empties = []
 
+def analyze_report(report: SyncReport):
+    match = True
+    if count := len(report.empty_records):
+        match = False
+        print(f"There are {count} records with no email.")
+    if len(report.unmatched_records):
+        match = False
+        count = sum([len(val) for val in report.unmatched_records.values()])
+        print(f"There are {count} records with emails that don't match people.")
+    if len(report.adoptable_records) > 0:
+        match = False
+        count = sum([len(val) for val in report.adoptable_records.values()])
+        print(f"There are {count} records with emails for people with no record.")
+    if len(report.extra_records) > 0:
+        match = False
+        deltas = []
+        for email, extras in report.extra_records.items():
+            if len(extras) > 1:
+                print(f"There are {len(extras)} extra records for '{email}'")
+            actual = report.matched_records[email]
+            actual_created = parse(actual["createdTime"])
+            for extra in extras:
+                extra_created = parse(extra["createdTime"])
+                deltas.append((actual_created - extra_created).total_seconds() / 3600)
+        count = len(deltas)
+        average = sum(deltas) / count
+        min_delta, max_delta = min(deltas), max(deltas)
+        print(f"There are {count} extra records with matching emails.")
+        print(f"On average, the extra was created {average} hours before the actual.")
+        print(f"The differences range from {min_delta} to {max_delta} hours.")
+    if match:
+        print(f"The records match the people completely.")
+
+
+def match_records(type_: str) -> (bool, list):
+    def page_processor(page: list[dict]):
+        nonlocal matches
+        for record in page:
+            record_id = record["id"]
+            if record_id not in record_ids:
+                extra_ids.append(record)
+            else:
+                matches += 1
+
+    schema = Configuration.get_global_config()[f"airtable_stv_{type_}_schema"]
+    matches = 0
+    record_ids = set()
+    extra_ids = []
+    with Postgres.get_global_engine().connect() as conn:  # type: Connection
+        if type_ == "volunteer":
+            is_col = model.person_info.columns.is_volunteer
+            id_col = model.person_info.columns.volunteer_record_id
+        elif type_ == "contact":
+            is_col = model.person_info.columns.is_contact
+            id_col = model.person_info.columns.contact_record_id
+        elif type_ == "funder":
+            is_col = model.person_info.columns.is_funder
+            id_col = model.person_info.columns.funder_record_id
+        else:
+            raise ValueError(f"Unknown record type: {type_}")
+        rows = conn.execute(sa.select(id_col).where(is_col)).all()
+    record_ids = {row[0] for row in rows}
+    process_airtable_records(schema, page_processor, fields="Email*")
+    return matches == len(rows), extra_ids
+
+
+def sync_report(type_: str) -> SyncReport:
     def page_processor(page: list[dict]):
         for record in page:
             record_id = record["id"]
-            record_email = record["fields"].get("email")
+            if type_ == "funder":
+                # looked-up email field is a list of one email
+                record_email = record["fields"].get("Email*")[0]
+            else:
+                record_email = record["fields"].get("Email*")
             if not record_email:
                 # records with no email shouldn't exist in Airtable
-                empties.append(record_id)
+                empties.append(record)
             elif match := emails.get(record_email):
                 # we have an existing person record for this email
-                contact_record_id = match.get("contact_record_id")
-                if contact_record_id is None:
-                    # adopt this as the record for this email
-                    match["contact_record_id"] = record_id
-                    match["contact_updated"] = model.epoch
-                elif contact_record_id != record_id:
-                    # remember this as an extra email
-                    extras[record_email] = record_id
+                type_record_id = match.get(type_record_id_field)
+                if type_record_id is None:
+                    # this record can be adopted by this person
+                    existing = adoptable.setdefault(record_email, [])
+                    existing.append(record)
+                elif type_record_id != record_id:
+                    # remember this as an extra record for this email
+                    existing = extras.setdefault(record_email, [])
+                    existing.append(record)
+                else:
+                    # normal situation: record id and email match!
+                    matches[record_email] = record
             else:
-                # this is an extra record because we don't have a person with it
-                unmatched[record_email] = record_id
+                # we don't have a person with this email
+                existing = unmatched.setdefault(record_email, [])
+                existing.append(record)
 
-    _ = page_processor
-    pass
-
-
-def ensure_empty_assignments(verbose=True) -> int:
-    config = Configuration.get_global_config()
-    schema = config["airtable_stv_assignment_schema"]
-    column_ids = schema["column_ids"]
-    if verbose:
-        print(f"Fetching contact record ids...", flush=True)
-    with Postgres.get_global_engine().connect() as conn:
-        query = sa.select(model.person_info.c.contact_record_id).where(
-            model.person_info.c.contact_record_id != ""
-        )
-        record_ids = [row[0] for row in conn.execute(query).all()]
-    if verbose:
-        print(f"({len(record_ids)})")
-    all_record_ids = set(record_ids)
-    seen_record_ids = set()
-    processed = 0
-
-    def process_page(records: list[dict]):
-        nonlocal processed, seen_record_ids
-        if verbose and processed > 0:
-            print(f"(({processed})...", flush=True)
-        for record in records:
-            links = next(iter(record["fields"].values()))
-            if not links or len(links) > 1:
-                print(f"Warning: invalid assignment record: {record.get('id')}")
-            elif (record_id := links[0]) in all_record_ids:
-                seen_record_ids.add(record_id)
-            else:
-                print(f"Warning: unknown contact record: {record_id}")
-        processed += len(records)
-
-    if verbose:
-        print(f"Looking for matching assignment records...", flush=True)
-    process_airtable_records(
-        schema=schema, processor=process_page, fields=[column_ids["contact_record_id"]]
-    )
-    if verbose:
-        print(f"({processed})")
-    needed = list(all_record_ids - seen_record_ids)
-    total, inserts = len(needed), 0
-    if verbose:
-        if total == 0:
-            print("All contacts have assignments.")
-        else:
-            print(f"There are {total} contacts who don't have assignments.")
-    if total == 0:
-        return 0
-    if verbose:
-        print(f"Inserting {total} empty assignment records...", flush=True)
-    for start in range(0, total, 50):
-        if verbose and inserts > 0:
-            print(f"({inserts})...", flush=True)
-        # inserts += insert_assignments(needed[start : min(start + 50, total)])
-    if verbose:
-        print(f"({inserts})")
-        print(f"Inserted {inserts} records.")
-    return inserts
-
-
-def remove_empty_assignments(verbose: bool = True, remove_all: bool = False):
-    config = Configuration.get_global_config()
-    schema = config["airtable_stv_assignment_schema"]
-    column_ids = schema["column_ids"]
-    processed, empty_ids = 0, []
-
-    def process_page(records: list[dict]):
-        nonlocal processed, empty_ids
-        if verbose and processed > 0:
-            print(f"({processed})...", flush=True)
-        for record in records:
-            summary: str = next(iter(record["fields"].values()))
-            if remove_all or summary == "NONE YET":
-                empty_ids.append(record["id"])
-        processed += len(records)
-
-    if verbose:
-        modifier = "any" if remove_all else "empty"
-        print(f"Looking for {modifier} assignment records...", flush=True)
-    process_airtable_records(
-        schema=schema, processor=process_page, fields=[column_ids["summary"]]
-    )
-    if verbose:
-        print(f"({processed})")
-        modifier = "" if remove_all else "empty "
-        print(f"Found {len(empty_ids)} {modifier}assignment records.")
-    if len(empty_ids) > 0:
-        return delete_airtable_records(
-            schema=schema, record_ids=empty_ids, verbose=verbose
-        )
-    else:
-        return 0
+    schema = Configuration.get_global_config()[f"airtable_stv_{type_}_schema"]
+    type_record_id_field = f"{type_}_record_id"
+    matches = {}
+    extras = {}
+    adoptable = {}
+    unmatched = {}
+    empties = []
+    with Postgres.get_global_engine().connect() as conn:  # type: Connection
+        people = ActionNetworkPerson.from_query(conn, sa.select(model.person_info))
+    emails = {person["email"]: person for person in people}
+    process_airtable_records(schema, page_processor)
+    return SyncReport(matches, extras, adoptable, unmatched, empties)
 
 
 def process_airtable_records(
