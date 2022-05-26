@@ -22,7 +22,7 @@
 #
 import json
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Response
 
 from .utilities import request_error
 from ..airtable.webhook import validate_notification
@@ -37,6 +37,7 @@ airtable = APIRouter()
     "/notifications",
     status_code=204,
     summary="Receiver for Airtable webhook notifications.",
+    response_class=Response,
 )
 async def receive_notification(request: Request):
     """
