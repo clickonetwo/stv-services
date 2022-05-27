@@ -77,6 +77,8 @@ def do_housekeeping(scheduled: datetime = None):
     the housekeeping was scheduled to run.  The return value is
     the time that housekeeping should next be scheduled to run."""
     logger.info("Doing housekeeping...")
+    # update all records touched by out-of-band (manual) processing
+    airtable.update_airtable_records()
     if not scheduled or scheduled.minute in (5, 25, 45):
         # when first run, or every 20 minutes on the 5-minute mark,
         # verify that the key tables have not gotten out of sync
@@ -92,10 +94,10 @@ def do_housekeeping(scheduled: datetime = None):
             logger.info(f"Skipping locked queue '{queue}'")
     if target_total > 0:
         logger.info(f"Processed {completed_total}/{target_total} queued items")
-    return next_housekeeping()
+    return schedule_next_housekeeping()
 
 
-def next_housekeeping() -> datetime:
+def schedule_next_housekeeping() -> datetime:
     next_5 = datetime.now(tz=timezone.utc) + timedelta(minutes=5)
     if next_5.minute % 5 != 0:
         next_5.replace(minute=next_5.minute - next_5.minute % 5)

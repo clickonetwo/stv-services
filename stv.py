@@ -38,6 +38,7 @@ from stv_services.core import Configuration
 from stv_services.data_store import Postgres
 from stv_services.external.spreadsheet import import_spreadsheet
 from stv_services.worker import control
+from stv_services.worker.airtable import update_airtable_records
 
 
 @shell(prompt="stv> ")
@@ -366,6 +367,11 @@ def verify_match(type: str, remove_extra: bool = False):
 def analyze_match(type: str):
     report = sync.match_records(type)
     sync.analyze_report(report)
+
+
+@stv.command()
+def update_airtable():
+    update_airtable_records()
 
 
 if __name__ == "__main__":

@@ -161,18 +161,25 @@ def update_donation_records(verbose: bool = True, force: bool = False) -> int:
 def bulk_upsert_person_records(
     conn: Connection, people: list[ActionNetworkPerson]
 ) -> dict:
-    volunteers, contacts, funders = [], [], []
-    for person in people:
-        if person.get("is_volunteer"):
-            volunteers.append((person, create_volunteer_record(conn, person)))
-        if person.get("is_contact"):
-            contacts.append((person, create_contact_record(conn, person)))
-        if person.get("is_funder"):
-            funders.append((person, create_funder_record(conn, person)))
-    pairs = dict(volunteer=volunteers, contact=contacts, funder=funders)
+    """Upsert all the airtable records for each person in a given list of people.
+    This code, as opposed to the update_all_records code, uses a single commit
+    (and connection) for the entire update, which is faster because we don't do
+    multiple queries and multiple connections.  But we have to do the updates of
+    Airtable in a specific order - the same as we do with update_all_records,
+    because construction of Airtable funder records requires that someone
+    already has a contact record on file that we can link to."""
+    record_makers = {
+        "volunteer": create_volunteer_record,
+        "contact": create_contact_record,
+        "funder": create_funder_record,
+    }
     results = {}
     for type_ in ("volunteer", "contact", "funder"):
-        results[type_] = upsert_records(conn, type_, pairs[type_])
+        pairs = []
+        is_field = f"is_{type_}"
+        maker = record_makers[type_]
+        pairs = [(p, maker(conn, p)) for p in people if p.get(is_field)]
+        results[type_] = upsert_records(conn, type_, pairs)
     return results
 
 
