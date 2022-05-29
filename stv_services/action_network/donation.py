@@ -54,7 +54,7 @@ class ActionNetworkDonation(PersistedDict):
             self.notice_attribution(conn, page["attribution_id"])
         # if we still need an attribution, look for a refcode
         if force or not self.get("attribution_id"):
-            if metadata_id := self["metadata_id"]:
+            if metadata_id := self.get("metadata_id", ""):
                 query = sa.select(model.donation_metadata).where(
                     model.donation_metadata.c.uuid == metadata_id
                 )
