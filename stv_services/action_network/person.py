@@ -323,6 +323,10 @@ class ActionNetworkPerson(PersistedDict):
         self["custom_fields"].update(custom_fields)
         self["updated_date"] = datetime.now(tz=timezone.utc)
 
+    def notice_external_data(self):
+        """Update due to external data change"""
+        self["updated_date"] = datetime.now(tz=timezone.utc)
+
     @staticmethod
     def _parse_hash(data: dict) -> dict:
         uuid, created_date, modified_date = validate_hash(data)

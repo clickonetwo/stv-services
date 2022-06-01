@@ -36,7 +36,7 @@ from stv_services.action_network import bulk as an_bulk
 from stv_services.airtable import bulk as at_bulk, sync
 from stv_services.core import Configuration
 from stv_services.data_store import Postgres
-from stv_services.external.spreadsheet import import_spreadsheet
+from stv_services.external import spreadsheet
 from stv_services.worker import control
 from stv_services.worker.airtable import update_airtable_records
 
@@ -157,14 +157,38 @@ def import_donation_metadata(ctx: click.Context, path: str = None):
 def import_external_data(ctx: click.Context, path: str = None):
     verbose = ctx.obj["verbose"]
     if not path:
-        path = "./local/Cleaned Up Data Spreadsheet for Integration.csv"
+        path = "./local/external_data.csv"
     if not os.path.isfile(path):
         raise ValueError(f"Can't find spreadsheet at path '{path}'")
     if verbose:
         print(f"Importing from spreadsheet at '{path}'...")
-    success, total = import_spreadsheet(path, verbose=verbose)
+    success, total = spreadsheet.import_spreadsheet(path, verbose=verbose)
     if verbose:
         print(f"Imported {success} of {total} rows successfully.")
+        print(f"See error messages above for details of any errors.")
+
+
+@stv.command()
+@click.option("--path", help="Update from this path")
+@click.pass_context
+def update_external_data(ctx: click.Context, path: str = None):
+    verbose = ctx.obj["verbose"]
+    if not path:
+        path = "./local/external_data_update.csv"
+    existing_path = "./local/external_data.csv"
+    new_path = "./local/updated_external_data.csv"
+    email_path = "./local/updated_emails.txt"
+    if not os.path.isfile(path):
+        raise ValueError(f"Can't find update data file: {path}")
+    if not os.path.isfile(existing_path):
+        raise ValueError(f"Can't find existing data file: {existing_path}")
+    if verbose:
+        print(f"Updating from '{path}'...")
+    success, total = spreadsheet.update_spreadsheet(
+        path, existing_path, new_path, email_path, verbose=verbose
+    )
+    if verbose:
+        print(f"Updated data for {success} of {total} emails successfully.")
         print(f"See error messages above for details of any errors.")
 
 
@@ -372,6 +396,16 @@ def analyze_match(type: str):
 @stv.command()
 def update_airtable():
     update_airtable_records()
+
+
+@stv.command()
+@click.option("--email-file", help="file with one email per line")
+def notice_external_data_change(email_file: str = None):
+    email_file = email_file or "local/updated_emails.txt"
+    if os.path.isfile(email_file):
+        control.notice_external_data_change(email_file)
+    else:
+        print(f"No such file: {email_file}")
 
 
 if __name__ == "__main__":

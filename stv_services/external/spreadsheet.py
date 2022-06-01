@@ -50,7 +50,7 @@ field_map = {
 
 
 def import_spreadsheet(file_path: str, verbose: bool = False) -> (int, int):
-    with open(file_path, newline="") as csv_file:
+    with open(file_path, newline="", encoding="utf-8") as csv_file:
         reader = csv.DictReader(csv_file)
         vals = {}
         for i, row in enumerate(reader, start=2):  # type: int, dict
@@ -67,7 +67,7 @@ def import_spreadsheet(file_path: str, verbose: bool = False) -> (int, int):
                         raise ValueError(
                             f"Unknown database type '{info.db_type}' for field '{key}'"
                         )
-            email = row_vals.get("email")
+            email = row_vals.get("email", "").strip().lower()
             if not email:
                 if verbose:
                     print(f"Skipping row {i} because it has no email.")
@@ -76,7 +76,8 @@ def import_spreadsheet(file_path: str, verbose: bool = False) -> (int, int):
             if prior := vals.get(email):
                 if verbose:
                     print(
-                        f"Discarding row {prior['input row']} because '{email}' is also on row {i}."
+                        f"Discarding row {prior['input row']} "
+                        f"because '{email}' is also on row {i}."
                     )
             vals[email] = row_vals
     with Postgres.get_global_engine().connect() as conn:  # type: Connection
@@ -86,3 +87,76 @@ def import_spreadsheet(file_path: str, verbose: bool = False) -> (int, int):
         conn.execute(sa.insert(model.external_info), list(vals.values()))
         conn.commit()
     return len(vals), i - 1
+
+
+def update_spreadsheet(
+    update_file_path: str = "local/external_data_update.csv",
+    existing_file_path: str = "local/external_data.csv",
+    new_file_path: str = "local/updated_external_data.csv",
+    updated_emails_path: str = "local/updated_emails.txt",
+    verbose: bool = True,
+) -> (int, int):
+    reverse_field_map = {v.db_field: k for k, v in field_map.items()}
+    with open(update_file_path, newline="", encoding="utf-8") as update_file:
+        reader = csv.DictReader(update_file)
+        updates = {}
+        for i, row in enumerate(reader, start=2):  # type: int, dict
+            row["input row"] = i
+            email: str = row.get("Email*", "").strip().lower()
+            if not email:
+                if verbose:
+                    print(f"Skipping update row {i} because it has no email")
+                continue
+            if updates.get(email):
+                if verbose:
+                    print(
+                        f"Discarding update row {updates[email]['input row']} "
+                        f"because '{email}' is also on row {i}."
+                    )
+            updates[email] = row
+    if verbose:
+        print(f"Found {len(updates)} email(s) with updated data.")
+    with open(existing_file_path, newline="", encoding="utf-8") as in_file:
+        reader = csv.DictReader(in_file)
+        with open(new_file_path, mode="w", newline="", encoding="utf-8") as out_file:
+            writer = csv.DictWriter(out_file, reader.fieldnames)
+            writer.writeheader()
+            updated = []
+            for i, row in enumerate(reader, start=2):
+                email = row.get("Email*", "").strip().lower()
+                if vals := updates.get(email):
+                    updated.append(email)
+                    if verbose:
+                        print(f"Updating row #{i+2} for '{email}'.")
+                    del vals["Email*"]  # don't update the match key
+                    vals = {k: v for k, v in vals.items() if k in reader.fieldnames}
+                    row.update(vals)
+                    del updates[email]
+                writer.writerow(row)
+        with open(updated_emails_path, "w", encoding="utf-8") as email_file:
+            for email in updated:
+                print(email, file=email_file)
+    if verbose:
+        print(f"Updated {len(updated)} row(s).")
+    if verbose and len(updates) > 0:
+        print(f"The following emails were not found to update: {list(updates.keys())}")
+    return len(updated), len(updated) + len(updates)
+
+
+def parse_row_vals(row: dict, preserve_input=False) -> dict:
+    row_vals = {}
+    for key, val in row.items():
+        if info := field_map.get(key):
+            if preserve_input or info.db_type == "Text":
+                row_vals[info.db_field] = val
+            elif info.db_type == "Integer":
+                row_vals[info.db_field] = int(val) if val else 0
+            elif info.db_type == "Boolean":
+                row_vals[info.db_field] = not (not val)
+            else:
+                raise ValueError(
+                    f"Unknown database type '{info.db_type}' for field '{key}'"
+                )
+        elif preserve_input:
+            row_vals[key] = val
+    return row_vals

@@ -22,11 +22,13 @@
 #
 import json
 
+import sqlalchemy as sa
 from sqlalchemy.future import Connection
 
+from stv_services.action_network.person import ActionNetworkPerson
 from stv_services.airtable.sync import verify_match
 from stv_services.core.logging import get_logger
-from stv_services.data_store import RedisSync
+from stv_services.data_store import RedisSync, model, Postgres
 from stv_services.worker.airtable import update_airtable_records
 
 logger = get_logger(__name__)
@@ -38,6 +40,8 @@ def process_webhook_notification(_conn: Connection, body: dict):
             resubmit_failed(val)
         elif key == "match-and-repair":
             match_and_repair(val)
+        elif key == "external-data-change":
+            external_data_change(val)
         else:
             raise NotImplementedError(f"Don't know how to '{key}'")
 
@@ -82,3 +86,27 @@ def match_and_repair(params: dict):
     remove_extra = params.get("repair", False)
     verify_match(types=types, remove_extra=remove_extra)
     update_airtable_records(is_retry=True)
+
+
+def notice_external_data_change(email_file: str):
+    emails = []
+    with open(email_file, encoding="utf-8") as in_file:
+        while email := in_file.readline():
+            if email := email.strip():
+                emails.append(email)
+    if emails:
+        db = RedisSync.connect()
+        hook = {"external-data-change": emails}
+        db.lpush("control", json.dumps(hook, separators=(",", ":")))
+        db.publish("webhooks", "control")
+
+
+def external_data_change(emails: list[str]):
+    query = sa.select(model.person_info).where(model.person_info.c.email.in_(emails))
+    with Postgres.get_global_engine().connect() as conn:  # type: Connection
+        people = ActionNetworkPerson.from_query(conn, query)
+        logger.info(f"Noticing external data change on {len(people)} people")
+        for person in people:
+            person.notice_external_data()
+            person.persist(conn)
+        conn.commit()
