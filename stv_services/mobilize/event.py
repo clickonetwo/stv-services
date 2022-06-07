@@ -33,24 +33,11 @@ from stv_services.mobilize.utilities import fetch_all_hashes
 class MobilizeEvent(PersistedDict):
     our_org_id = 3073
 
-    class Timeslot(PersistedDict):
-        def __init__(self, **fields):
-            super().__init__(model.timeslot_info, **fields)
-
-        @classmethod
-        def from_timeslot(cls, event_id: int, body: dict):
-            return cls(
-                uuid=body["id"],
-                start_date=datetime.fromtimestamp(body["start_date"], tz=timezone.utc),
-                end_date=datetime.fromtimestamp(body["end_date"], tz=timezone.utc),
-                event_id=event_id,
-            )
-
     def __init__(self, **fields):
         super().__init__(model.event_info, **fields)
 
     @classmethod
-    def from_hash(cls, body: dict):
+    def from_hash(cls, body: dict) -> "MobilizeEvent":
         uuid = body["id"]
         created_date = datetime.fromtimestamp(body["created_date"], tz=timezone.utc)
         modified_date = datetime.fromtimestamp(body["modified_date"], tz=timezone.utc)
@@ -88,6 +75,20 @@ class MobilizeEvent(PersistedDict):
         return body["email_address"]
 
 
+class MobilizeTimeslot(PersistedDict):
+    def __init__(self, **fields):
+        super().__init__(model.timeslot_info, **fields)
+
+    @classmethod
+    def from_hash(cls, event_id: int, body: dict) -> "MobilizeTimeslot":
+        return cls(
+            uuid=body["id"],
+            start_date=datetime.fromtimestamp(body["start_date"], tz=timezone.utc),
+            end_date=datetime.fromtimestamp(body["end_date"], tz=timezone.utc),
+            event_id=event_id,
+        )
+
+
 def import_events(
     verbose: bool = True, force: bool = False, skip_pages: int = 0, max_pages: int = 0
 ):
@@ -119,6 +120,6 @@ def import_event_data(data: list[dict]):
             event_id = event["uuid"]
             event.persist(conn)
             for timeslot_dict in timeslot_dicts:
-                timeslot = MobilizeEvent.Timeslot.from_timeslot(event_id, timeslot_dict)
+                timeslot = MobilizeTimeslot.from_hash(event_id, timeslot_dict)
                 timeslot.persist(conn)
         conn.commit()

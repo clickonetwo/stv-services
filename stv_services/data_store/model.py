@@ -206,27 +206,29 @@ timeslot_info = sa.Table(
     sa.Column("end_date", Timestamp, index=True, nullable=False),
     sa.Column("event_id", sa.Integer, index=True, nullable=False),
 )
-#
-# # Attendance data from Mobilize
-# attendance_info = sa.Table(
-#     "attendance_info",
-#     metadata,
-#     sa.Column("uuid", sa.Integer, primary_key=True, nullable=False),
-#     sa.Column("created_date", Timestamp, index=True, nullable=False),
-#     sa.Column("modified_date", Timestamp, index=True, nullable=False),
-#     sa.Column("updated_date", Timestamp, index=True, default=epoch),
-#     sa.Column("event_id", sa.Integer, index=True, nullable=False),
-#     sa.Column("timeslot_id", sa.Integer, index=True, nullable=False),
-#     sa.Column("attendee_id", sa.Integer, index=True, nullable=False),
-#     sa.Column("status", sa.Text, nullable=False),
-# )
-#
-# # Attendee data from Mobilize
-# attendee_info = sa.Table(
-#     sa.Column("uuid", sa.Integer, primary_key=True, nullable=False),
-#     sa.Column("created_date", Timestamp, index=True, nullable=False),
-#     sa.Column("modified_date", Timestamp, index=True, nullable=False),
-#     sa.Column("updated_date", Timestamp, index=True, default=epoch),
-#     sa.Column("email", sa.Text, index=True, nullable=False),
-#     sa.Column("person_id", sa.Text, default=""),
-# )
+
+# Attendance data from Mobilize
+attendance_info = sa.Table(
+    "attendance_info",
+    metadata,
+    sa.Column("uuid", sa.Integer, primary_key=True, nullable=False),
+    sa.Column("created_date", Timestamp, index=True, nullable=False),
+    sa.Column("modified_date", Timestamp, index=True, nullable=False),
+    sa.Column("updated_date", Timestamp, index=True, default=epoch),
+    sa.Column("event_id", sa.Integer, index=True, nullable=False),
+    sa.Column("timeslot_id", sa.Integer, index=True, nullable=False),
+    sa.Column("attendee_id", sa.Integer, index=True, nullable=False),
+    sa.Column("status", sa.Text, nullable=False),
+)
+
+# Attendee data from Mobilize
+attendee_info = sa.Table(
+    "attendee_info",
+    metadata,
+    sa.Column("uuid", sa.Integer, primary_key=True, nullable=False),
+    sa.Column("created_date", Timestamp, index=True, nullable=False),
+    sa.Column("modified_date", Timestamp, index=True, nullable=False),
+    sa.Column("updated_date", Timestamp, index=True, default=epoch),
+    sa.Column("email", sa.Text, index=True, nullable=False),
+    sa.Column("person_id", sa.Text, default=""),
+)
