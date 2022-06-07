@@ -43,14 +43,12 @@ class PersistedDict(dict):
             **fields: standard dict key/value pairs for the fields
         """
         self.table = table
-        if (
-            not fields.get("uuid")
-            or not fields.get("created_date")
-            or not fields.get("modified_date")
-        ):
-            raise ValueError(
-                f"uuid, created_date, and modified_date must be present: {fields}"
-            )
+        if not fields.get("uuid"):
+            raise ValueError("uuid is required")
+        if not (fields.get("created_date") or fields.get("start_date")):
+            raise ValueError("created_date or start_date is required")
+        if not (fields.get("modified_date") or fields.get("end_date")):
+            raise ValueError("modified_date or end_date is required")
         fields = {key: value for key, value in fields.items() if value is not None}
         super().__init__(**fields)
 

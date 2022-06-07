@@ -54,6 +54,10 @@ class Session:
                 session = requests.session()
                 session.headers["Authorization"] = f"Bearer {api_key}"
                 cls.sessions[service] = session
+            elif service == "mobilize":
+                api_key = cls.config["mobilize_api_key"]
+                session = requests.session()
+                session.headers["Authorization"] = f"Bearer {api_key}"
             else:
                 raise ValueError(
                     f"no session available because '{service}' is not a known service"

@@ -172,3 +172,61 @@ donation_metadata = sa.Table(
     sa.Column("attribution_id", sa.Text, index=True, default=""),
     sa.Index("ix_donation_metadata_uuid_hash", "uuid", postgresql_using="hash"),
 )
+
+# Event data from Mobilize
+event_info = sa.Table(
+    "event_info",
+    metadata,
+    sa.Column("uuid", sa.Integer, primary_key=True, nullable=False),
+    sa.Column("created_date", Timestamp, index=True, nullable=False),
+    sa.Column("modified_date", Timestamp, index=True, nullable=False),
+    sa.Column("updated_date", Timestamp, index=True, default=epoch),
+    sa.Column("title", sa.Text, nullable=False),
+    sa.Column("description", sa.Text, default=""),
+    sa.Column("sponsor_id", sa.Integer, index=True, nullable=False),
+    sa.Column("partner_name", sa.Text, index=True, default=""),
+    sa.Column("event_type", sa.Text, index=True, nullable=False),
+    sa.Column("event_url", sa.Text, nullable=False),
+    sa.Column("contact_email", sa.Text, index=True, default=""),
+    sa.Column("contact_id", sa.Text, index=True, default=""),
+    sa.Column("shift_summary", sa.Text, default=""),
+    sa.Column("is_featured", sa.Boolean, index=True, default=False),
+    sa.Column("featured_name", sa.Text, default=""),
+    sa.Column("featured_description", sa.Text, default=""),
+    sa.Column("feature_start", Timestamp, default=epoch),
+    sa.Column("feature_end", Timestamp, default=epoch),
+)
+
+# Timeslot data from Mobilize
+timeslot_info = sa.Table(
+    "timeslot_info",
+    metadata,
+    sa.Column("uuid", sa.Integer, primary_key=True, nullable=False),
+    sa.Column("start_date", Timestamp, index=True, nullable=False),
+    sa.Column("end_date", Timestamp, index=True, nullable=False),
+    sa.Column("event_id", sa.Integer, index=True, nullable=False),
+)
+#
+# # Attendance data from Mobilize
+# attendance_info = sa.Table(
+#     "attendance_info",
+#     metadata,
+#     sa.Column("uuid", sa.Integer, primary_key=True, nullable=False),
+#     sa.Column("created_date", Timestamp, index=True, nullable=False),
+#     sa.Column("modified_date", Timestamp, index=True, nullable=False),
+#     sa.Column("updated_date", Timestamp, index=True, default=epoch),
+#     sa.Column("event_id", sa.Integer, index=True, nullable=False),
+#     sa.Column("timeslot_id", sa.Integer, index=True, nullable=False),
+#     sa.Column("attendee_id", sa.Integer, index=True, nullable=False),
+#     sa.Column("status", sa.Text, nullable=False),
+# )
+#
+# # Attendee data from Mobilize
+# attendee_info = sa.Table(
+#     sa.Column("uuid", sa.Integer, primary_key=True, nullable=False),
+#     sa.Column("created_date", Timestamp, index=True, nullable=False),
+#     sa.Column("modified_date", Timestamp, index=True, nullable=False),
+#     sa.Column("updated_date", Timestamp, index=True, default=epoch),
+#     sa.Column("email", sa.Text, index=True, nullable=False),
+#     sa.Column("person_id", sa.Text, default=""),
+# )

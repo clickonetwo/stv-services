@@ -37,6 +37,7 @@ from stv_services.airtable import bulk as at_bulk, sync
 from stv_services.core import Configuration
 from stv_services.data_store import Postgres
 from stv_services.external import spreadsheet
+from stv_services.mobilize import event
 from stv_services.worker import control
 from stv_services.worker.airtable import update_airtable_records
 
@@ -149,6 +150,18 @@ def import_donation_metadata(ctx: click.Context, path: str = None):
     if not os.path.isfile(path):
         raise ValueError(f"Can't find ActBlue webhooks at path '{path}'")
     ab_bulk.import_donation_metadata(path, verbose=verbose)
+
+
+@stv.command()
+@click.option("--force/--no-force", default=False, help="Force re-import of all")
+@click.option("--skip-pages", default=0, help="Skip this many pages")
+@click.option("--max-pages", default=0, help="Import at most this many pages")
+@click.pass_context
+def import_events(ctx: click.Context, force: bool, skip_pages: int, max_pages: int):
+    verbose = ctx.obj["verbose"]
+    event.import_events(
+        verbose=verbose, force=force, skip_pages=skip_pages, max_pages=max_pages
+    )
 
 
 @stv.command()
