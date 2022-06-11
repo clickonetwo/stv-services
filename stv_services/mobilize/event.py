@@ -21,12 +21,17 @@
 #  SOFTWARE.
 #
 from datetime import datetime, timezone
+from typing import Any
+from zoneinfo import ZoneInfo
+
+import sqlalchemy as sa
 
 from sqlalchemy.future import Connection
 
+from stv_services.action_network.person import ActionNetworkPerson
 from stv_services.core import Configuration
 from stv_services.data_store import model, Postgres
-from stv_services.data_store.persisted_dict import PersistedDict
+from stv_services.data_store.persisted_dict import PersistedDict, lookup_objects
 from stv_services.mobilize.utilities import fetch_all_hashes
 
 
@@ -35,6 +40,47 @@ class MobilizeEvent(PersistedDict):
 
     def __init__(self, **fields):
         super().__init__(model.event_info, **fields)
+
+    def compute_status(self, conn: Connection, force: bool = False):
+        pass
+
+    def create_shift_summary(self, conn: Connection) -> str:
+        """Summarize signups by STV folks by timeslot for this event."""
+        query = sa.select(model.attendance_info).where(
+            sa.and_(
+                model.attendance_info.c.event_id == self["uuid"],
+                model.attendance_info.c.person_id != "",
+            )
+        )
+        attendance_list = conn.execute(query).mappings().all()
+        attendances_by_timeslot = {}
+        for attendance in attendance_list:
+            timeslot_id = attendance["timeslot_id"]
+            count = attendances_by_timeslot.setdefault(timeslot_id, [0])
+            if attendance["status"] != "CANCELLED":
+                count[0] += 1
+        query = (
+            sa.select(model.timeslot_info)
+            .where(model.timeslot_info.c.event_id == self["uuid"])
+            .order_by(model.timeslot_info.c.start_date.desc())
+        )
+        timeslots = conn.execute(query).mappings().all()
+        entries = []
+        for timeslot in timeslots:
+            utc_start: datetime = timeslot["start_date"]
+            pt_start = utc_start.astimezone(tz=ZoneInfo("America/Los_Angeles"))
+            date_string = pt_start.strftime("%m/%d/%y %I:%M%p")
+            count = attendances_by_timeslot[timeslot["uuid"]]
+            entries.append(f"{date_string} Signups: {count}")
+        return "\n".join(entries)
+
+    def notice_contact(self, conn: Connection, contact: dict):
+        if contact and contact["email"] == self["contact_email"]:
+            self["contact_id"] = contact["uuid"]
+
+    def notice_attendance(self, conn: Connection, attendance: dict):
+        """Update due to new attendance"""
+        self["updated_date"] = datetime.now(tz=timezone.utc)
 
     @classmethod
     def from_hash(cls, body: dict) -> "MobilizeEvent":
@@ -58,6 +104,7 @@ class MobilizeEvent(PersistedDict):
             event_type=event_type,
             event_url=event_url,
             contact_email=contact_email,
+            is_event=True,
         )
 
     @classmethod
@@ -74,6 +121,21 @@ class MobilizeEvent(PersistedDict):
             return ""
         return body["email_address"]
 
+    @classmethod
+    def from_lookup(cls, conn: Connection, uuid: str) -> "MobilizeEvent":
+        query = sa.select(model.event_info).where(model.event_info.c.uuid == uuid)
+        result = lookup_objects(conn, query, lambda d: cls(**d))
+        if not result:
+            raise KeyError(f"No donation identified by '{uuid}'")
+        return result[0]
+
+    @classmethod
+    def from_query(cls, conn: Connection, query: Any) -> list["MobilizeEvent"]:
+        """
+        See `PersistedDict.lookup_objects` for details.
+        """
+        return lookup_objects(conn, query, lambda d: cls(**d))
+
 
 class MobilizeTimeslot(PersistedDict):
     def __init__(self, **fields):
@@ -87,6 +149,21 @@ class MobilizeTimeslot(PersistedDict):
             end_date=datetime.fromtimestamp(body["end_date"], tz=timezone.utc),
             event_id=event_id,
         )
+
+    @classmethod
+    def from_lookup(cls, conn: Connection, uuid: str) -> "MobilizeTimeslot":
+        query = sa.select(model.event_info).where(model.event_info.c.uuid == uuid)
+        result = lookup_objects(conn, query, lambda d: cls(**d))
+        if not result:
+            raise KeyError(f"No donation identified by '{uuid}'")
+        return result[0]
+
+    @classmethod
+    def from_query(cls, conn: Connection, query: Any) -> list["MobilizeTimeslot"]:
+        """
+        See `PersistedDict.lookup_objects` for details.
+        """
+        return lookup_objects(conn, query, lambda d: cls(**d))
 
 
 def import_events(

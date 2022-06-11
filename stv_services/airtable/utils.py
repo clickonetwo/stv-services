@@ -156,13 +156,19 @@ def table_fields(dict_type: str) -> (sa.Table, str, str, str, str):
 
 def table_columns(dict_type: str) -> (sa.Table, sa.Column, sa.Column, sa.Column):
     if Configuration.get_env() == "DEV" and dict_type not in {
+        "event",
         "donation",
         "contact",
         "volunteer",
         "funder",
     }:
         raise ValueError(f"Unknown persisted dict type: {dict_type}")
-    table = model.donation_info if dict_type == "donation" else model.person_info
+    if dict_type == "event":
+        table = model.event_info
+    elif dict_type == "donation":
+        table = model.donation_info
+    else:
+        table = model.person_info
     is_col, record_col, updated_col = None, None, None
     for column in table.columns:  # type: sa.Column
         if column.key == f"is_{dict_type}":

@@ -21,12 +21,17 @@
 #  SOFTWARE.
 #
 from datetime import datetime, timezone
+from typing import Any
+
+import sqlalchemy as sa
 
 from sqlalchemy.future import Connection
 
+from stv_services.action_network.person import ActionNetworkPerson
 from stv_services.core import Configuration
 from stv_services.data_store import model, Postgres
-from stv_services.data_store.persisted_dict import PersistedDict
+from stv_services.data_store.persisted_dict import PersistedDict, lookup_objects
+from stv_services.mobilize.event import MobilizeEvent
 from stv_services.mobilize.utilities import fetch_all_hashes
 
 
@@ -39,6 +44,17 @@ class MobilizeAttendance(PersistedDict):
                 raise ValueError(f"Attendances must have field '{field}'")
         super().__init__(model.attendance_info, **fields)
 
+    def notice_person(self, conn: Connection, person: dict):
+        person_id = person["uuid"]
+        self["person_id"] = person_id
+        self["updated_date"] = datetime.now(tz=timezone.utc)
+        person = ActionNetworkPerson.from_lookup(conn, uuid=person_id)
+        person.notice_attendance(conn, self)
+        person.persist(conn)
+        event = MobilizeEvent.from_lookup(conn, person_id)
+        event.notice_attendance(conn, self)
+        event.persist(conn)
+
     @classmethod
     def from_hash(cls, body: dict) -> "MobilizeAttendance":
         uuid = body["id"]
@@ -46,7 +62,9 @@ class MobilizeAttendance(PersistedDict):
         modified_date = datetime.fromtimestamp(body["modified_date"], tz=timezone.utc)
         event_id = body["event"]["id"]
         timeslot_id = body["timeslot"]["id"]
-        attendee_id = body["person"]["user_id"]
+        emails: list[dict] = body["email_addresses"]
+        if len(emails) != 1:
+            raise ValueError("No email in attendee")
         status = body["status"]
         return cls(
             uuid=uuid,
@@ -54,14 +72,42 @@ class MobilizeAttendance(PersistedDict):
             modified_date=modified_date,
             event_id=event_id,
             timeslot_id=timeslot_id,
-            attendee_id=attendee_id,
+            email=emails[0]["address"],
             status=status,
         )
+
+    @classmethod
+    def from_query(cls, conn: Connection, query: Any) -> list["MobilizeAttendance"]:
+        """
+        See `PersistedDict.lookup_objects` for details.
+        """
+        return lookup_objects(conn, query, lambda d: cls(**d))
 
 
 class MobilizeAttendee(PersistedDict):
     def __init__(self, **fields):
         super().__init__(model.attendee_info, **fields)
+
+    def compute_status(self, conn: Connection, force: bool = False):
+        if not force and self.get("person_id"):
+            return
+        query = sa.select(model.person_info).where(
+            model.person_info.c.email == self["email"]
+        )
+        match = conn.execute(query).mappings().first()
+        if match:
+            self.notice_person(conn, match)
+
+    def notice_person(self, conn: Connection, person: dict):
+        self["person_id"] = person["uuid"]
+        self["updated_date"] = datetime.now(tz=timezone.utc)
+        query = sa.select(model.attendance_info).where(
+            model.attendance_info.c.attendee_id == self["uuid"]
+        )
+        attendances = MobilizeAttendance.from_query(conn, query)
+        for attendance in attendances:
+            attendance.notice_person(person)
+            attendance.persist(conn)
 
     @classmethod
     def from_hash(cls, body: dict) -> "MobilizeAttendee":

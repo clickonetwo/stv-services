@@ -29,21 +29,13 @@ def upgrade():
         sa.Column("modified_date", Timestamp, index=True, nullable=False),
         sa.Column("updated_date", Timestamp, index=True, default=epoch),
         sa.Column("event_id", sa.Integer, index=True, nullable=False),
+        sa.Column("event_type", sa.Text, index=True, nullable=False),
         sa.Column("timeslot_id", sa.Integer, index=True, nullable=False),
-        sa.Column("attendee_id", sa.Integer, index=True, nullable=False),
-        sa.Column("status", sa.Text, nullable=False),
-    )
-    op.create_table(
-        "attendee_info",
-        sa.Column("uuid", sa.Integer, primary_key=True, nullable=False),
-        sa.Column("created_date", Timestamp, index=True, nullable=False),
-        sa.Column("modified_date", Timestamp, index=True, nullable=False),
-        sa.Column("updated_date", Timestamp, index=True, default=epoch),
         sa.Column("email", sa.Text, index=True, nullable=False),
-        sa.Column("person_id", sa.Text, default=""),
+        sa.Column("person_id", sa.Text, index=True, default=""),
+        sa.Column("status", sa.Text, nullable=False),
     )
 
 
 def downgrade():
-    op.drop_table("attendee_info")
     op.drop_table("attendance_info")

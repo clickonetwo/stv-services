@@ -41,6 +41,7 @@ from stv_services.airtable.donation import (
     create_donation_record,
     verify_donation_schema,
 )
+from stv_services.airtable.event import verify_event_schema
 from stv_services.airtable.funder import verify_funder_schema, create_funder_record
 from stv_services.airtable.utils import (
     find_records_to_update,
@@ -57,6 +58,7 @@ from stv_services.airtable.volunteer import (
 from stv_services.core import Configuration
 from stv_services.data_store import Postgres
 from stv_services.data_store.persisted_dict import PersistedDict
+from stv_services.mobilize.event import MobilizeEvent
 
 
 def verify_schemas(verbose: bool = True):
@@ -77,6 +79,9 @@ def verify_schemas(verbose: bool = True):
         print("Verifying assignment schema...")
     verify_assignment_schema()
     if verbose:
+        print("Verifying event schema...")
+    verify_event_schema()
+    if verbose:
         print("Saving verified schemas...")
     config.save_to_data_store()
 
@@ -87,6 +92,7 @@ def update_all_records(verbose: bool = True, force: bool = False) -> int:
     total += update_contact_records(verbose, force)
     total += update_funder_records(verbose, force)
     total += update_donation_records(verbose, force)
+    total += update_event_records(verbose, force)
     return total
 
 
@@ -153,6 +159,17 @@ def update_donation_records(verbose: bool = True, force: bool = False) -> int:
             print(f"Loading donation data...")
         donations = ActionNetworkDonation.from_query(
             conn, find_records_to_update("donation", force)
+        )
+    bulk_upsert_records("donation", create_donation_record, donations, verbose)
+    return len(donations)
+
+
+def update_event_records(verbose: bool = True, force: bool = False) -> int:
+    with Postgres.get_global_engine().connect() as conn:  # type: Connection
+        if verbose:
+            print(f"Loading event data...")
+        donations = MobilizeEvent.from_query(
+            conn, find_records_to_update("event", force)
         )
     bulk_upsert_records("donation", create_donation_record, donations, verbose)
     return len(donations)

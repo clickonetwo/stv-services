@@ -60,6 +60,8 @@ class ActionNetworkPerson(PersistedDict):
     contact_cutoff_lo = datetime(2022, 1, 1, tzinfo=timezone.utc)
     # we care specially about specific forms
     signup_form_2022 = "action_network:b399bd2b-b9a9-4916-9550-5a8a47e045fb"
+    # we keep a table of all uuids by email to save database queries
+    known_emails = {}
 
     def __init__(self, **fields):
         if not fields.get("email") and not fields.get("phone"):
@@ -329,6 +331,16 @@ class ActionNetworkPerson(PersistedDict):
         if modified_date > self["modified_date"]:
             self["modified_date"] = modified_date
         self["custom_fields"].update(custom_fields)
+
+    def notice_attendance(self, conn: Connection, attendance: dict):
+        """Update due to signing up for an event"""
+        self.notice_promotion(conn, "attendance")
+        self["updated_date"] = datetime.now(tz=timezone.utc)
+
+    def notice_event(self, conn: Connection, event: dict):
+        """Update due to organizing an event"""
+        self.notice_promotion(conn, "event")
+        self["updated_date"] = datetime.now(tz=timezone.utc)
 
     @staticmethod
     def _parse_hash(data: dict) -> dict:

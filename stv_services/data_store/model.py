@@ -189,12 +189,14 @@ event_info = sa.Table(
     sa.Column("event_url", sa.Text, nullable=False),
     sa.Column("contact_email", sa.Text, index=True, default=""),
     sa.Column("contact_id", sa.Text, index=True, default=""),
-    sa.Column("shift_summary", sa.Text, default=""),
     sa.Column("is_featured", sa.Boolean, index=True, default=False),
     sa.Column("featured_name", sa.Text, default=""),
     sa.Column("featured_description", sa.Text, default=""),
     sa.Column("feature_start", Timestamp, default=epoch),
     sa.Column("feature_end", Timestamp, default=epoch),
+    sa.Column("is_event", sa.Boolean, index=True, default=False),
+    sa.Column("event_record_id", sa.Text, index=True, default=""),
+    sa.Column("event_updated", Timestamp, index=True, default=epoch),
 )
 
 # Timeslot data from Mobilize
@@ -216,19 +218,9 @@ attendance_info = sa.Table(
     sa.Column("modified_date", Timestamp, index=True, nullable=False),
     sa.Column("updated_date", Timestamp, index=True, default=epoch),
     sa.Column("event_id", sa.Integer, index=True, nullable=False),
+    sa.Column("event_type", sa.Text, index=True, nullable=False),
     sa.Column("timeslot_id", sa.Integer, index=True, nullable=False),
-    sa.Column("attendee_id", sa.Integer, index=True, nullable=False),
-    sa.Column("status", sa.Text, nullable=False),
-)
-
-# Attendee data from Mobilize
-attendee_info = sa.Table(
-    "attendee_info",
-    metadata,
-    sa.Column("uuid", sa.Integer, primary_key=True, nullable=False),
-    sa.Column("created_date", Timestamp, index=True, nullable=False),
-    sa.Column("modified_date", Timestamp, index=True, nullable=False),
-    sa.Column("updated_date", Timestamp, index=True, default=epoch),
     sa.Column("email", sa.Text, index=True, nullable=False),
-    sa.Column("person_id", sa.Text, default=""),
+    sa.Column("person_id", sa.Text, index=True, default=""),
+    sa.Column("status", sa.Text, nullable=False),
 )
