@@ -21,7 +21,7 @@
 #  SOFTWARE.
 #
 from datetime import datetime, timezone
-from typing import Optional, Any
+from typing import Optional, Any, ClassVar
 
 import sqlalchemy as sa
 from sqlalchemy.future import Connection
@@ -36,6 +36,8 @@ from ..data_store.persisted_dict import PersistedDict, lookup_objects
 
 
 class ActionNetworkDonation(PersistedDict):
+    donation_cutoff_lo: ClassVar[datetime] = datetime(2021, 11, 1, tzinfo=timezone.utc)
+
     def __init__(self, **fields):
         for key in ["amount", "recurrence_data", "donor_id", "fundraising_page_id"]:
             if not fields.get(key):
@@ -44,6 +46,11 @@ class ActionNetworkDonation(PersistedDict):
 
     def compute_status(self, conn: Connection, force: bool = False):
         """Try to attribute this donation based on latest data."""
+        if self["created_date"] > self.donation_cutoff_lo:
+            self["is_donation"] = True
+        else:
+            # attribution status not needed for non-Airtable donations
+            return
         if not force and self.get("attribution_id"):
             return
         # get attribution from fundraising page, if any
@@ -84,7 +91,7 @@ class ActionNetworkDonation(PersistedDict):
     def from_webhook(cls, data: dict) -> "ActionNetworkDonation":
         uuid, created_date, modified_date = validate_hash(data)
         # we are in 2022, so this is a donation
-        is_donation = True
+        is_donation = created_date >= cls.donation_cutoff_lo
         # amount is typically specified, but not if this is a return
         amount = data.get("amount") or "0.00"
         # recurrence data is in the embedded data
@@ -116,8 +123,8 @@ class ActionNetworkDonation(PersistedDict):
     @classmethod
     def from_hash(cls, data: dict) -> "ActionNetworkDonation":
         uuid, created_date, modified_date = validate_hash(data)
-        # only donations made in 2022 go to Airtable
-        is_donation = created_date >= datetime(2022, 1, 1, tzinfo=timezone.utc)
+        # only donations newer than the cutoff go to Airtable
+        is_donation = created_date >= cls.donation_cutoff_lo
         # donations sometimes get later updates in which the amount is removed,
         # so we treat missing (or explicitly null) amounts as 0.00 in order to
         # update a prior fetch with the new value
