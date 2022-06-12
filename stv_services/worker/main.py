@@ -171,7 +171,7 @@ def process_queue(queue: str) -> (int, int):
                     processed += 1
                     logger.info(f"Logging item '{hook_id}' in '{queue}:success'")
                     db.lpush(f"{queue}:success", json.dumps({hook_id: hook}))
-                    db.ltrim(f"{queue}:success", 0, 99)
+                    db.ltrim(f"{queue}:success", 0, 2000)
                     db.rpop(queue)
                     locking_queue.renew_lock()
                 else:
