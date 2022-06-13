@@ -64,13 +64,12 @@ class Configuration(dict):
         return config
 
     def load_from_connection(self, conn: Connection):
-        # out with the old
-        self.clear()
-        # in with the new
-        for key, val in conn.execute(sa.select(model.configuration)):
-            self[key] = val
+        """Load from database, replacing values for existing keys"""
+        update = {key: val for key, val in conn.execute(sa.select(model.configuration))}
+        self.update(update)
 
     def save_to_connection(self, conn: Connection):
+        """Save current state of keys and values"""
         # out with the old
         conn.execute(sa.delete(model.configuration))
         # in with the new

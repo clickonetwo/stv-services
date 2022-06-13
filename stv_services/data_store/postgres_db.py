@@ -54,10 +54,14 @@ class Postgres:
         return cls._singleton
 
     @classmethod
-    def clear_all_action_network_data(cls):
+    def clear_importable_data(cls):
         with cls.get_global_engine().connect() as conn:  # type: Connection
             conn.execute(sa.delete(model.person_info))
             conn.execute(sa.delete(model.donation_info))
             conn.execute(sa.delete(model.submission_info))
             conn.execute(sa.delete(model.fundraising_page_info))
+            # conn.execute(sa.delete(model.donation_metadata))
+            conn.execute(sa.delete(model.event_info))
+            conn.execute(sa.delete(model.timeslot_info))
+            conn.execute(sa.delete(model.attendance_info))
             conn.commit()

@@ -58,7 +58,7 @@ def test_get_action_network_session():
 
 
 def test_clear_database():
-    Postgres.clear_all_action_network_data()
+    Postgres.clear_importable_data()
     with Postgres.get_global_engine().connect() as conn:
         for table in [
             model.person_info,

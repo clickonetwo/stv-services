@@ -21,7 +21,6 @@
 #  SOFTWARE.
 #
 
-import sqlalchemy as sa
 from sqlalchemy.future import Connection
 
 from .schema import fetch_and_validate_table_schema, FieldInfo
@@ -29,11 +28,10 @@ from .utils import (
     upsert_records,
     delete_records,
 )
-from ..mobilize.event import MobilizeEvent
+from ..action_network.person import ActionNetworkPerson
 from ..core import Configuration
 from ..core.logging import get_logger
-from ..core.utilities import airtable_timestamp
-from ..data_store import model
+from ..mobilize.event import MobilizeEvent
 
 logger = get_logger(__name__)
 event_table_name = "Mobilize Events"
@@ -63,24 +61,8 @@ def verify_event_schema() -> dict:
     return access_info
 
 
-def create_event_record(conn: Connection, event: ActionNetworkDonation) -> dict:
+def create_event_record(conn: Connection, event: MobilizeEvent) -> dict:
     config = Configuration.get_global_config()
-    table = model.person_info
-    # find the matching donor record, if there is one
-    query = sa.select(table).where(table.c.uuid == event["donor_id"])
-    donor: dict = conn.execute(query).mappings().first()
-    if not donor:
-        raise KeyError("Donation '{event['uuid']}' has no donor")
-    if not donor["contact_record_id"]:
-        raise KeyError(f"Donor '{donor['uuid']}' is not a contact")
-    attribution_record_id = None
-    if attribution_id := event["attribution_id"]:
-        # find the matching fundraising page record, if there is one
-        query = sa.select(table).where(table.c.uuid == attribution_id)
-        if attribution := conn.execute(query).mappings().first():
-            attribution_record_id = attribution["funder_record_id"]
-            if not attribution_record_id:
-                logger.warning(f"Attributor {attribution['uuid']} is not a funder")
     column_ids = config["airtable_stv_event_schema"]["column_ids"]
     record = dict()
     for field_name, info in event_table_schema.items():
@@ -88,25 +70,22 @@ def create_event_record(conn: Connection, event: ActionNetworkDonation) -> dict:
             # all fields should have values, but we are cautious
             if value := event.get(field_name):
                 record[column_ids[field_name]] = value
-    # created date must be an airtable date
-    value = airtable_timestamp(event["created_date"])
-    record[column_ids["created_date"]] = value
-    # recurrence data requires parsing the recurrence object
-    value = event["recurrence_data"].get("recurring", False)
-    record[column_ids["recurrence_data"]] = value
-    # this is a link to the Donor's record ID in the Contacts table
-    record[column_ids["donor_id"]] = [donor["contact_record_id"]]
-    # set the attribution, if any
-    if attribution_record_id:
-        record[column_ids["attribution_id"]] = attribution_record_id
-        record[column_ids["override_attribution_id"]] = attribution_record_id
+    # compute the shift summary
+    record[column_ids["shift_summary"]] = event.create_shift_summary(conn)
+    # insert the event organizer, if there is one
+    if uuid := event.get("contact_id"):
+        person = ActionNetworkPerson.from_lookup(conn, uuid=uuid)
+        contact_record_id = person["contact_record_id"]
+        if not contact_record_id:
+            raise KeyError(f"Event organizer {uuid} is not a contact")
+        record[column_ids["contact"]] = [contact_record_id]
     return record
 
 
-def upsert_events(conn: Connection, events: list[ActionNetworkDonation]) -> (int, int):
+def upsert_events(conn: Connection, events: list[MobilizeEvent]) -> (int, int):
     pairs = [(event, create_event_record(conn, event)) for event in events]
     return upsert_records(conn, "event", pairs)
 
 
-def delete_events(conn: Connection, events: list[ActionNetworkDonation]) -> int:
+def delete_events(conn: Connection, events: list[MobilizeEvent]) -> int:
     return delete_records(conn, "event", events)

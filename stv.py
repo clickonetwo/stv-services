@@ -79,6 +79,8 @@ def import_all(ctx: click.Context):
     an_bulk.import_fundraising_pages(verbose)
     an_bulk.import_donations(verbose)
     an_bulk.import_people(verbose)
+    event.import_events(verbose)
+    attendance.import_attendances(verbose)
 
 
 @stv.command()
@@ -225,17 +227,28 @@ def update_external_data(ctx: click.Context, path: str = None):
 def compute_status_all(ctx: click.Context, force: bool = False):
     verbose = ctx.obj["verbose"]
     an_bulk.compute_status_all(verbose, force)
+    event.compute_event_status(verbose, force)
+    attendance.compute_attendance_status(verbose, force)
 
 
 @stv.command()
 @click.option("--force/--no-force", default=False, help="Force compute of all")
 @click.option(
-    "--type", default="people", help="metadata, fundraising pages, donations, or people"
+    "--type",
+    default="people",
+    help="metadata, fundraising_pages, donations, people, events, or attendances",
 )
 @click.pass_context
 def compute_status_for_type(ctx: click.Context, type: str, force: bool = False):
     verbose = ctx.obj["verbose"]
-    an_bulk.compute_status_for_type(type, verbose, force)
+    if type == "events":
+        event.compute_event_status(verbose, force)
+    elif type == "attendances":
+        attendance.compute_attendance_status(verbose, force)
+    elif type in ("metadata", "fundraising_pages", "donations", "people"):
+        an_bulk.compute_status_for_type(type, verbose, force)
+    else:
+        raise ValueError(f"No such object type: {type}")
 
 
 @stv.command()
@@ -282,6 +295,14 @@ def update_donation_records(ctx: click.Context, force: bool = False):
 
 
 @stv.command()
+@click.option("--force/--no-force", default=False, help="Force update of all")
+@click.pass_context
+def update_event_records(ctx: click.Context, force: bool = False):
+    verbose = ctx.obj["verbose"]
+    at_bulk.update_event_records(verbose, force)
+
+
+@stv.command()
 @click.pass_context
 def remove_contacts(ctx: click.Context):
     verbose = ctx.obj["verbose"]
@@ -310,16 +331,23 @@ def remove_donation_records(ctx: click.Context):
 
 
 @stv.command()
+@click.pass_context
+def remove_event_records(ctx: click.Context):
+    verbose = ctx.obj["verbose"]
+    at_bulk.remove_event_records(verbose)
+
+
+@stv.command()
 @click.option("--confirm/--no-confirm", default=False, help="Yes, do it")
 @click.pass_context
-def delete_action_network_data(ctx: click.Context, confirm: bool = False):
+def delete_importable_data(ctx: click.Context, confirm: bool = False):
     verbose = ctx.obj["verbose"]
     if not confirm:
-        print("You must specify the '--confirm' flag to delete data")
+        print("You must specify the '--confirm' flag to delete importable data")
         return
     if verbose:
-        print("Deleting all Action Network data...")
-    Postgres.clear_all_action_network_data()
+        print("Deleting all importable data...")
+    Postgres.clear_importable_data()
     if verbose:
         print("Deleting last-update timestamps...")
     config = Configuration.get_global_config()

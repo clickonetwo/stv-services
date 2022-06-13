@@ -41,7 +41,7 @@ from stv_services.airtable.donation import (
     create_donation_record,
     verify_donation_schema,
 )
-from stv_services.airtable.event import verify_event_schema
+from stv_services.airtable.event import verify_event_schema, create_event_record
 from stv_services.airtable.funder import verify_funder_schema, create_funder_record
 from stv_services.airtable.utils import (
     find_records_to_update,
@@ -168,11 +168,9 @@ def update_event_records(verbose: bool = True, force: bool = False) -> int:
     with Postgres.get_global_engine().connect() as conn:  # type: Connection
         if verbose:
             print(f"Loading event data...")
-        donations = MobilizeEvent.from_query(
-            conn, find_records_to_update("event", force)
-        )
-    bulk_upsert_records("donation", create_donation_record, donations, verbose)
-    return len(donations)
+        events = MobilizeEvent.from_query(conn, find_records_to_update("event", force))
+    bulk_upsert_records("event", create_event_record, events, verbose)
+    return len(events)
 
 
 def bulk_upsert_person_records(
@@ -267,6 +265,12 @@ def remove_donation_records(verbose: bool = True):
             conn, find_records_to_update("donation", True)
         )
     bulk_remove_records("donation", donations, verbose)
+
+
+def remove_event_records(verbose: bool = True):
+    with Postgres.get_global_engine().connect() as conn:  # type: Connection
+        events = MobilizeEvent.from_query(conn, find_records_to_update("event", True))
+    bulk_remove_records("event", events, verbose)
 
 
 def bulk_remove_records(

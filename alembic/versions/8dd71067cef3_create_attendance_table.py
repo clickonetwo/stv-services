@@ -1,4 +1,4 @@
-"""Create attendance and attendee tables
+"""Create attendance table
 
 Revision ID: 8dd71067cef3
 Revises: ba114bfc4f08

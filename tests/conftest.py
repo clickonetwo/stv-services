@@ -56,7 +56,7 @@ def clean_db():
     """Empty all Action Network data from the database"""
     from stv_services.data_store import Postgres
 
-    Postgres.clear_all_action_network_data()
+    Postgres.clear_importable_data()
 
 
 @pytest.fixture()

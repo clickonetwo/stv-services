@@ -139,6 +139,7 @@ def delete_records(
 
 def table_fields(dict_type: str) -> (sa.Table, str, str, str, str):
     if Configuration.get_env() == "DEV" and dict_type not in {
+        "event",
         "donation",
         "contact",
         "volunteer",

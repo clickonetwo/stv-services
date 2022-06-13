@@ -21,11 +21,10 @@
 #  SOFTWARE.
 #
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, ClassVar
 from zoneinfo import ZoneInfo
 
 import sqlalchemy as sa
-
 from sqlalchemy.future import Connection
 
 from stv_services.action_network.person import ActionNetworkPerson
@@ -36,16 +35,39 @@ from stv_services.mobilize.utilities import fetch_all_hashes
 
 
 class MobilizeEvent(PersistedDict):
+    _sentinel: ClassVar[dict] = dict(none=None)
+    contacts: ClassVar[dict[str, ActionNetworkPerson]] = _sentinel
+    contact_counts: ClassVar[list[int]] = [0, 0, 0, 0]  # hit, miss, unknown, suppressed
     our_org_id = 3073
 
     def __init__(self, **fields):
         super().__init__(model.event_info, **fields)
 
     def compute_status(self, conn: Connection, force: bool = False):
-        pass
+        if force or not self.get("contact_id"):
+            email = self.get("email", "")
+            if not email or self.suppress_contact(email):
+                # contact info is suppressed
+                self["updated_date"] = datetime.now(tz=timezone.utc)
+                self.contact_counts[3] += 1
+            elif person := self.contacts.get(self["contact_email"]):
+                self.contact_counts[0] += 1
+                self.notice_contact(conn, person)
+            else:
+                try:
+                    person = ActionNetworkPerson.from_lookup(
+                        conn, email=self["contact_email"]
+                    )
+                    self.contact_counts[1] += 1
+                    self.notice_contact(conn, person)
+                except KeyError:
+                    # no such person
+                    self["updated_date"] = datetime.now(tz=timezone.utc)
+                    self.contact_counts[2] += 1
 
     def create_shift_summary(self, conn: Connection) -> str:
         """Summarize signups by STV folks by timeslot for this event."""
+        # first find all the attendances for this event that are for contacts
         query = sa.select(model.attendance_info).where(
             sa.and_(
                 model.attendance_info.c.event_id == self["uuid"],
@@ -70,17 +92,39 @@ class MobilizeEvent(PersistedDict):
             utc_start: datetime = timeslot["start_date"]
             pt_start = utc_start.astimezone(tz=ZoneInfo("America/Los_Angeles"))
             date_string = pt_start.strftime("%m/%d/%y %I:%M%p")
-            count = attendances_by_timeslot[timeslot["uuid"]]
+            count = attendances_by_timeslot.get(timeslot["uuid"], 0)
             entries.append(f"{date_string} Signups: {count}")
         return "\n".join(entries)
 
-    def notice_contact(self, conn: Connection, contact: dict):
-        if contact and contact["email"] == self["contact_email"]:
+    def notice_contact(self, conn: Connection, contact: ActionNetworkPerson):
+        if contact:
             self["contact_id"] = contact["uuid"]
+            self["updated_date"] = datetime.now(tz=timezone.utc)
+            contact.notice_attendance(conn, self)
+            contact.persist(conn)
 
-    def notice_attendance(self, conn: Connection, attendance: dict):
+    def notice_attendance(self, _conn: Connection, _attendance: dict):
         """Update due to new attendance"""
         self["updated_date"] = datetime.now(tz=timezone.utc)
+
+    def suppress_contact(self, email: str) -> bool:
+        for domain in ("@clickonetwo.io", "@seedthevote.org", "@everydaypeoplepac.org"):
+            if email.endswith(domain):
+                return True
+
+    @classmethod
+    def initialize_caches(cls):
+        cls.contact_counts = [0, 0, 0, 0]
+        if cls.contacts is not cls._sentinel:
+            return
+        with Postgres.get_global_engine().connect() as conn:  # type: Connection
+            cls.contacts = {}
+            for row in conn.execute(sa.select(model.event_info)):
+                if not cls.contacts.get(row.contact_email):
+                    if uuid := row.contact_id:
+                        person = ActionNetworkPerson.from_lookup(conn, uuid=uuid)
+                        cls.contacts[row.contact_email] = person
+        pass
 
     @classmethod
     def from_hash(cls, body: dict) -> "MobilizeEvent":
@@ -111,6 +155,9 @@ class MobilizeEvent(PersistedDict):
     def org_info(cls, body: dict) -> (int, str):
         org_id = body["id"]
         org_name = body["name"]
+        if body.get("is_coordinated"):
+            # we are an independent org, we can't get data from coordinated events
+            raise ValueError(f"Event organization '{org_name}' is coordinated")
         if org_id == cls.our_org_id:
             org_name = ""
         return org_id, org_name
@@ -119,7 +166,7 @@ class MobilizeEvent(PersistedDict):
     def contact_info(cls, body: dict) -> str:
         if not body:
             return ""
-        return body["email_address"]
+        return body["email_address"].lower()
 
     @classmethod
     def from_lookup(cls, conn: Connection, uuid: str) -> "MobilizeEvent":
@@ -182,21 +229,63 @@ def event_query(timestamp: float = None, force: bool = False) -> dict:
     query = {}
     if timestamp and not force:
         query["updated_since"] = int(timestamp)
-    query["timeslot_start"] = "gte_now"
+    if force:
+        cutoff_lo = datetime(2022, 1, 1, tzinfo=timezone.utc)
+        query["timeslot_start"] = f"gte_{int(cutoff_lo.timestamp())}"
+    else:
+        query["timeslot_start"] = "gte_now"
     return query
 
 
-def import_event_data(data: list[dict]):
+def import_event_data(data: list[dict]) -> int:
+    """Import a page of event data, returning the number of events imported."""
+    count = 0
     with Postgres.get_global_engine().connect() as conn:  # type: Connection
         for event_dict in data:
             timeslot_dicts = event_dict.get("timeslots", [])
             if not timeslot_dicts:
                 # no timeslots are relevant, so no point to import the event
                 continue
-            event = MobilizeEvent.from_hash(event_dict)
+            try:
+                event = MobilizeEvent.from_hash(event_dict)
+            except ValueError:
+                # a coordinated event, skip it
+                continue
             event_id = event["uuid"]
+            count += 1
             event.persist(conn)
             for timeslot_dict in timeslot_dicts:
                 timeslot = MobilizeTimeslot.from_hash(event_id, timeslot_dict)
                 timeslot.persist(conn)
         conn.commit()
+    return count
+
+
+def compute_event_status(verbose: bool = True, force: bool = False):
+    """Update the status for Mobilize events modified since last update"""
+    MobilizeEvent.initialize_caches()
+    table = model.event_info
+    if force:
+        query = sa.select(table)
+    else:
+        query = sa.select(table).where(table.c.modified_date >= table.c.updated_date)
+    with Postgres.get_global_engine().connect() as conn:  # type: Connection
+        events = MobilizeEvent.from_query(conn, query)
+        total, count, start_time = len(events), 0, datetime.now(tz=timezone.utc)
+        if verbose:
+            print(f"Updating status for {total} events...")
+            progress_time = start_time
+        for event in events:
+            count += 1
+            event.compute_status(conn, force)
+            now = datetime.now(tz=timezone.utc)
+            event.persist(conn)
+            if verbose and (now - progress_time).seconds > 5:
+                print(f"({count})...", flush=True)
+                progress_time = now
+        conn.commit()
+    if verbose:
+        now = datetime.now(tz=timezone.utc)
+        print(f"({count}) done (in {(now - start_time).total_seconds()} secs).")
+        counts = MobilizeEvent.contact_counts
+        print(f"Contact cache lookups [hit/miss/no-person/suppressed]: {counts}")

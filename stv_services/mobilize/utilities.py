@@ -30,7 +30,7 @@ from ..core import Configuration, Session
 
 def fetch_all_hashes(
     hash_type: str,
-    page_processor: Callable[[list[dict]], None],
+    page_processor: Callable[[list[dict]], int],
     query: dict = None,
     verbose: bool = True,
     skip_pages: int = 0,
@@ -61,14 +61,14 @@ def fetch_all_hashes(
 def fetch_hash_pages(
     hash_type: str,
     url: str,
-    page_processor: Callable[[list[dict]], None],
+    page_processor: Callable[[list[dict]], int],
     verbose: bool = True,
     max_pages: int = 0,
 ) -> int:
     start_time = datetime.now()
     start_process_time = process_time()
     session = Session.get_global_session("mobilize")
-    page_number, total_count, last_page = 0, 0, None
+    page_number, total_count, import_count = 0, 0, 0
     while url:
         response = session.get(url)
         response.raise_for_status()
@@ -85,10 +85,10 @@ def fetch_hash_pages(
                 end="",
                 flush=True,
             )
-        page_processor(data)
+        import_count += page_processor(data)
         total_count += page_count
         if verbose:
-            print(f"({total_count})")
+            print(f"({import_count}/{total_count})")
         if max_pages and page_number >= max_pages:
             if verbose:
                 print(f"(Stopped after importing {max_pages} pages)")
@@ -96,7 +96,11 @@ def fetch_hash_pages(
     elapsed_process_time = process_time() - start_process_time
     elapsed_time = datetime.now() - start_time
     if verbose:
-        print(f"Fetched {total_count} {hash_type} on {page_number} page(s).")
+        print(
+            f"Imported {import_count} "
+            f"of {total_count} {hash_type} "
+            f"fetched on {page_number} page(s)."
+        )
         print(
             f"Fetch time was {elapsed_time} (processor time: {elapsed_process_time} seconds)."
         )
