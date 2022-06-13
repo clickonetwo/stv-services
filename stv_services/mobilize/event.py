@@ -92,8 +92,8 @@ class MobilizeEvent(PersistedDict):
             utc_start: datetime = timeslot["start_date"]
             pt_start = utc_start.astimezone(tz=ZoneInfo("America/Los_Angeles"))
             date_string = pt_start.strftime("%m/%d/%y %I:%M%p")
-            count = attendances_by_timeslot.get(timeslot["uuid"], 0)
-            entries.append(f"{date_string} Signups: {count}")
+            count = attendances_by_timeslot.get(timeslot["uuid"], [0])
+            entries.append(f"{date_string} Signups: {count[0]}")
         return "\n".join(entries)
 
     def notice_contact(self, conn: Connection, contact: ActionNetworkPerson):

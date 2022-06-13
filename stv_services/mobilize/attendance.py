@@ -43,7 +43,7 @@ class MobilizeAttendance(PersistedDict):
     our_org_id = 3073
 
     def __init__(self, **fields):
-        for field in ("event_id", "timeslot_id", "attendee_id"):
+        for field in ("uuid", "event_id", "timeslot_id", "email"):
             if not fields.get(field):
                 raise ValueError(f"Attendances must have field '{field}'")
         super().__init__(model.attendance_info, **fields)
@@ -109,19 +109,22 @@ class MobilizeAttendance(PersistedDict):
         uuid = body["id"]
         created_date = datetime.fromtimestamp(body["created_date"], tz=timezone.utc)
         modified_date = datetime.fromtimestamp(body["modified_date"], tz=timezone.utc)
-        event_id = body["event"]["id"]
+        event = body["event"]
+        event_id = event["id"]
+        event_type = event["event_type"]
         timeslot_id = body["timeslot"]["id"]
-        emails: list[dict] = body["person"]["email_addresses"]
-        if len(emails) != 1:
-            raise ValueError("No email in attendee")
+        email = None
+        if emails := body["person"]["email_addresses"]:
+            email = emails[0].get("address")
         status = body["status"]
         return cls(
             uuid=uuid,
             created_date=created_date,
             modified_date=modified_date,
             event_id=event_id,
+            event_type=event_type,
             timeslot_id=timeslot_id,
-            email=emails[0]["address"],
+            email=email,
             status=status,
         )
 
@@ -148,10 +151,10 @@ def import_attendances(
 
 
 def attendance_query(timestamp: float = None, force: bool = False) -> dict:
-    # we never return attendances created/modified before 6/1/2022
     if timestamp and not force:
         return dict(updated_since=int(timestamp))
     else:
+        # we never return attendances created/modified before 6/1/2022
         cutoff_lo = datetime(2022, 1, 1, tzinfo=timezone.utc)
         return dict(updated_since=int(cutoff_lo.timestamp()))
 
