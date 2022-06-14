@@ -39,6 +39,7 @@ event_table_schema = {
     "uuid": FieldInfo("Mobilize Event ID*", "number", "event"),
     "sponsor_id": FieldInfo("Mobilize Partner ID*", "number", "event"),
     "title": FieldInfo("Mobilize Event Name*", "singleLineText", "event"),
+    "event_type": FieldInfo("Mobilize Event Type*", "singleSelect", "event"),
     "partner_name": FieldInfo("Mobilize Partner Name*", "singleLineText", "event"),
     "shift_summary": FieldInfo("Shift Signup Summary*", "multilineText", "compute"),
     "contact": FieldInfo("Event Organizer*", "multipleRecordLinks", "compute"),

@@ -36,6 +36,7 @@ from stv_services.mobilize.utilities import fetch_all_hashes
 
 class MobilizeEvent(PersistedDict):
     _sentinel: ClassVar[dict] = dict(none=None)
+    event_ids: ClassVar[set[int]] = set()
     contacts: ClassVar[dict[str, ActionNetworkPerson]] = _sentinel
     contact_counts: ClassVar[list[int]] = [0, 0, 0, 0]  # hit, miss, unknown, suppressed
     our_org_id = 3073
@@ -114,6 +115,11 @@ class MobilizeEvent(PersistedDict):
 
     @classmethod
     def initialize_caches(cls):
+        if not cls.event_ids:
+            with Postgres.get_global_engine().connect() as conn:  # type: Connection
+                cls.event_ids = {
+                    row.uuid for row in conn.execute(sa.select(model.event_info.c.uuid))
+                }
         cls.contact_counts = [0, 0, 0, 0]
         if cls.contacts is not cls._sentinel:
             return
@@ -173,7 +179,7 @@ class MobilizeEvent(PersistedDict):
         query = sa.select(model.event_info).where(model.event_info.c.uuid == uuid)
         result = lookup_objects(conn, query, lambda d: cls(**d))
         if not result:
-            raise KeyError(f"No donation identified by '{uuid}'")
+            raise KeyError(f"No event identified by '{uuid}'")
         return result[0]
 
     @classmethod
@@ -251,9 +257,10 @@ def import_event_data(data: list[dict]) -> int:
             except ValueError:
                 # a coordinated event, skip it
                 continue
-            event_id = event["uuid"]
-            count += 1
             event.persist(conn)
+            count += 1
+            event_id = event["uuid"]
+            MobilizeEvent.event_ids.add(event_id)
             for timeslot_dict in timeslot_dicts:
                 timeslot = MobilizeTimeslot.from_hash(event_id, timeslot_dict)
                 timeslot.persist(conn)

@@ -57,6 +57,7 @@ class MobilizeAttendance(PersistedDict):
                 try:
                     person = ActionNetworkPerson.from_lookup(conn, email=self["email"])
                     self.attendee_counts[1] += 1
+                    self.attendees[self["email"]] = person
                     self.notice_person(conn, person)
                 except KeyError:
                     # no such person
@@ -111,6 +112,8 @@ class MobilizeAttendance(PersistedDict):
         modified_date = datetime.fromtimestamp(body["modified_date"], tz=timezone.utc)
         event = body["event"]
         event_id = event["id"]
+        if event_id not in MobilizeEvent.event_ids:
+            raise ValueError(f"Attendance is for unknown event {event_id}")
         event_type = event["event_type"]
         timeslot_id = body["timeslot"]["id"]
         email = None
@@ -139,6 +142,9 @@ class MobilizeAttendance(PersistedDict):
 def import_attendances(
     verbose: bool = True, force: bool = False, skip_pages: int = 0, max_pages: int = 0
 ):
+    # first make sure the events are cached, so attendance import can find them
+    MobilizeEvent.initialize_caches()
+    # now do the import
     config = Configuration.get_global_config()
     start_timestamp = datetime.now(tz=timezone.utc)
     query = attendance_query(config.get("attendances_last_update_timestamp"), force)
