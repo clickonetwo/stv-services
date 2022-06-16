@@ -148,7 +148,7 @@ def verify_match(
         types = list(all_types)
     elif isinstance(types, str):
         if types in all_types:
-            types = list(types)
+            types = [types]
         else:
             raise ValueError(f"Unknown record type: '{types}'")
     elif not all_types.issuperset(set(types)):

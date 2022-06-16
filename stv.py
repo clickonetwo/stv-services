@@ -430,13 +430,38 @@ def resubmit_failed_webhooks(ctx: click.Context, queue: str = None):
             print("Resubmitting all failed webhooks for re-processing")
         control.resubmit_all_failed_requests(None)
         if verbose:
-            print("All Failed webhooks re-submitted")
+            print("All failed webhooks re-submitted")
     else:
         if verbose:
             print(f"Resubmitting failed webhooks on '{queue}' for re-processing")
         control.resubmit_all_failed_requests([queue])
         if verbose:
             print(f"Failed webhooks on '{queue}' re-submitted")
+
+
+@stv.command()
+@click.option("--source", help="data source for update: mobilize or action_network")
+@click.option("--queue/--no-queue", default=True, help="whether to queue the update")
+@click.option("--force/--no-force", default=False, help="whether to re-import all data")
+@click.pass_context
+def update_from(
+    ctx: click.Context, source: str = None, queue: bool = True, force: bool = False
+):
+    verbose = ctx.obj["verbose"]
+    if not source:
+        raise ValueError("You must specify a source")
+    if verbose:
+        data_word = "all" if force else "new or updated"
+        action_word = "Queueing fetch of" if queue else "Fetching"
+        print(f"{action_word} {data_word} data from {source}...")
+    if queue:
+        control.submit_update_request(source, verbose, force)
+    else:
+        control.execute_update_request(source, verbose, force)
+    if verbose:
+        data_word = "Import" if force else "Update"
+        action_word = "queued" if queue else "completed"
+        print(f"{data_word} {action_word}")
 
 
 @stv.command()
@@ -455,7 +480,7 @@ def verify_match(type: str, remove_extra: bool = False):
 @stv.command()
 @click.option("--type", default="contact", help="volunteer, contact, or funder")
 def analyze_match(type: str):
-    report = sync.match_records(type)
+    report = sync.sync_report(type)
     sync.analyze_report(report)
 
 

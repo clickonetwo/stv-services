@@ -22,6 +22,7 @@
 #
 import sqlalchemy as sa
 from sqlalchemy.future import Connection
+from sqlalchemy.sql.expression import func
 
 from .assignment import insert_needed_assignments
 from .schema import fetch_and_validate_table_schema, FieldInfo
@@ -60,6 +61,11 @@ contact_table_schema = {
     "fundraise_notes": FieldInfo("2022 Fundraising Notes*", "multilineText", "compute"),
     "team_lead": FieldInfo("Pod Leader", "multipleRecordLinks", "observe"),
     "team": FieldInfo("Pod Members*", "multipleRecordLinks", "compute"),
+    "events": FieldInfo("Events Signed Up For*", "multipleRecordLinks", "compute"),
+    "event_contacts": FieldInfo("Connections*", "multipleRecordLinks", "compute"),
+    "pb_shifts": FieldInfo("Total Phone Bank Shift Signups*", "number", "compute"),
+    "tb_shifts": FieldInfo("Total Text Banking Shift Signups*", "number", "compute"),
+    "dk_shifts": FieldInfo("Total Door Knocking Shift Signups*", "number", "compute"),
 }
 signup_interest_map = {
     "2022_calls": "Phone Bank",
@@ -119,6 +125,8 @@ def create_contact_record(conn: Connection, person: ActionNetworkPerson) -> dict
         record[column_ids["team"]] = [r["contact_record_id"] for r in rows]
     else:
         record[column_ids["team"]] = []
+    for key, value in gather_events_contacts_shifts(conn, person).items():
+        record[column_ids[key]] = value
     return record
 
 
@@ -141,3 +149,44 @@ def register_contact_hook():
     column_ids = schema["column_ids"]
     field_ids = [column_ids[name] for name in ["is_funder", "team_lead"]]
     register_hook("contact", base_id, table_id, field_ids)
+
+
+def gather_events_contacts_shifts(
+    conn: Connection, person: ActionNetworkPerson
+) -> dict:
+    cols = model.attendance_info.columns
+    query = (
+        sa.select(
+            cols.event_id, cols.event_type, func.count(cols.timeslot_id).label("count")
+        )
+        .where(cols.person_id == person["uuid"])
+        .group_by(cols.event_id, cols.event_type)
+    )
+    event_ids = []
+    pb_shifts, tb_shifts, dk_shifts = 0, 0, 0
+    for row in conn.execute(query):
+        event_ids.append(row.event_id)
+        if row.event_type == "PHONE_BANK":
+            pb_shifts += row.count
+        elif row.event_type == "CANVASS":
+            dk_shifts += row.count
+        elif row.event_type == "TEXT_BANK":
+            tb_shifts += row.count
+    cols = model.event_info.columns
+    query = sa.select(cols.event_record_id, cols.contact_id).where(
+        cols.uuid.in_(event_ids)
+    )
+    events, contacts = [], []
+    for row in conn.execute(query):
+        if row.event_record_id != "":
+            events.append(row.event_record_id)
+        if row.contact_id != "" and row.contact_id != "pending":
+            contacts.append(row.contact_id)
+    result = {
+        "events": events,
+        "event_contacts": contacts,
+        "pb_shifts": pb_shifts,
+        "tb_shifts": tb_shifts,
+        "dk_shifts": dk_shifts,
+    }
+    return result

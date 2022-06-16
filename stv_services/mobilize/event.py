@@ -31,35 +31,41 @@ from stv_services.action_network.person import ActionNetworkPerson
 from stv_services.core import Configuration
 from stv_services.data_store import model, Postgres
 from stv_services.data_store.persisted_dict import PersistedDict, lookup_objects
-from stv_services.mobilize.utilities import fetch_all_hashes
+from stv_services.mobilize.utilities import fetch_all_hashes, compute_status
 
 
 class MobilizeEvent(PersistedDict):
-    _sentinel: ClassVar[dict] = dict(none=None)
     event_ids: ClassVar[set[int]] = set()
+    _sentinel: ClassVar[dict] = dict(none=None)
     contacts: ClassVar[dict[str, ActionNetworkPerson]] = _sentinel
     contact_counts: ClassVar[list[int]] = [0, 0, 0, 0]  # hit, miss, unknown, suppressed
-    our_org_id = 3073
+    our_org_id: ClassVar = 3073
+    suppressed_domains: ClassVar = (
+        "@clickonetwo.io",
+        "@seedthevote.org",
+        "@everydaypeoplepac.org",
+    )
+    suppressed_users: ClassVar = set()
 
     def __init__(self, **fields):
         super().__init__(model.event_info, **fields)
 
     def compute_status(self, conn: Connection, force: bool = False):
-        if force or not self.get("contact_id"):
-            email = self.get("email", "")
+        contact_id = self.get("contact_id", "")
+        if force or not contact_id or contact_id == "pending":
+            email = self.get("contact_email", "")
             if not email or self.suppress_contact(email):
                 # contact info is suppressed
                 self["updated_date"] = datetime.now(tz=timezone.utc)
                 self.contact_counts[3] += 1
-            elif person := self.contacts.get(self["contact_email"]):
+            elif person := self.contacts.get(email):
                 self.contact_counts[0] += 1
                 self.notice_contact(conn, person)
             else:
                 try:
-                    person = ActionNetworkPerson.from_lookup(
-                        conn, email=self["contact_email"]
-                    )
+                    person = ActionNetworkPerson.from_lookup(conn, email=email)
                     self.contact_counts[1] += 1
+                    self.contacts[email] = person
                     self.notice_contact(conn, person)
                 except KeyError:
                     # no such person
@@ -99,9 +105,12 @@ class MobilizeEvent(PersistedDict):
 
     def notice_contact(self, conn: Connection, contact: ActionNetworkPerson):
         if contact:
-            self["contact_id"] = contact["uuid"]
+            if record_id := contact["contact_record_id"]:
+                self["contact_id"] = record_id
+            else:
+                self["contact_id"] = "pending"
             self["updated_date"] = datetime.now(tz=timezone.utc)
-            contact.notice_attendance(conn, self)
+            contact.notice_event(conn, self)
             contact.persist(conn)
 
     def notice_attendance(self, _conn: Connection, _attendance: dict):
@@ -109,9 +118,13 @@ class MobilizeEvent(PersistedDict):
         self["updated_date"] = datetime.now(tz=timezone.utc)
 
     def suppress_contact(self, email: str) -> bool:
-        for domain in ("@clickonetwo.io", "@seedthevote.org", "@everydaypeoplepac.org"):
+        for domain in self.suppressed_domains:
             if email.endswith(domain):
                 return True
+        if email in self.suppressed_users:
+            return True
+        else:
+            return False
 
     @classmethod
     def initialize_caches(cls):
@@ -126,9 +139,10 @@ class MobilizeEvent(PersistedDict):
         with Postgres.get_global_engine().connect() as conn:  # type: Connection
             cls.contacts = {}
             for row in conn.execute(sa.select(model.event_info)):
-                if not cls.contacts.get(row.contact_email):
-                    if uuid := row.contact_id:
-                        person = ActionNetworkPerson.from_lookup(conn, uuid=uuid)
+                email = row.contact_email
+                if not cls.contacts.get(email):
+                    if row.contact_id:
+                        person = ActionNetworkPerson.from_lookup(conn, email=email)
                         cls.contacts[row.contact_email] = person
         pass
 
@@ -236,7 +250,7 @@ def event_query(timestamp: float = None, force: bool = False) -> dict:
     if timestamp and not force:
         query["updated_since"] = int(timestamp)
     if force:
-        cutoff_lo = datetime(2022, 1, 1, tzinfo=timezone.utc)
+        cutoff_lo = datetime(2021, 1, 1, tzinfo=timezone.utc)
         query["timeslot_start"] = f"gte_{int(cutoff_lo.timestamp())}"
     else:
         query["timeslot_start"] = "gte_now"
@@ -271,28 +285,21 @@ def import_event_data(data: list[dict]) -> int:
 def compute_event_status(verbose: bool = True, force: bool = False):
     """Update the status for Mobilize events modified since last update"""
     MobilizeEvent.initialize_caches()
-    table = model.event_info
     if force:
-        query = sa.select(table)
+        query = sa.select(model.event_info)
     else:
-        query = sa.select(table).where(table.c.modified_date >= table.c.updated_date)
+        cols = model.event_info.columns
+        query = sa.select(model.event_info).where(
+            sa.or_(
+                cols.modified_date >= cols.updated_date, cols.contact_id == "pending"
+            )
+        )
     with Postgres.get_global_engine().connect() as conn:  # type: Connection
         events = MobilizeEvent.from_query(conn, query)
-        total, count, start_time = len(events), 0, datetime.now(tz=timezone.utc)
         if verbose:
-            print(f"Updating status for {total} events...")
-            progress_time = start_time
-        for event in events:
-            count += 1
-            event.compute_status(conn, force)
-            now = datetime.now(tz=timezone.utc)
-            event.persist(conn)
-            if verbose and (now - progress_time).seconds > 5:
-                print(f"({count})...", flush=True)
-                progress_time = now
+            print(f"Updating status for {len(events)} events...")
+        compute_status(conn, events, verbose, force)
         conn.commit()
     if verbose:
-        now = datetime.now(tz=timezone.utc)
-        print(f"({count}) done (in {(now - start_time).total_seconds()} secs).")
         counts = MobilizeEvent.contact_counts
         print(f"Contact cache lookups [hit/miss/no-person/suppressed]: {counts}")

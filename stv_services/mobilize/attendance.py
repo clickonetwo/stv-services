@@ -32,7 +32,7 @@ from stv_services.core import Configuration
 from stv_services.data_store import model, Postgres
 from stv_services.data_store.persisted_dict import PersistedDict, lookup_objects
 from stv_services.mobilize.event import MobilizeEvent
-from stv_services.mobilize.utilities import fetch_all_hashes
+from stv_services.mobilize.utilities import fetch_all_hashes, compute_status
 
 
 class MobilizeAttendance(PersistedDict):
@@ -161,7 +161,7 @@ def attendance_query(timestamp: float = None, force: bool = False) -> dict:
         return dict(updated_since=int(timestamp))
     else:
         # we never return attendances created/modified before 6/1/2022
-        cutoff_lo = datetime(2022, 1, 1, tzinfo=timezone.utc)
+        cutoff_lo = datetime(2021, 1, 1, tzinfo=timezone.utc)
         return dict(updated_since=int(cutoff_lo.timestamp()))
 
 
@@ -191,21 +191,10 @@ def compute_attendance_status(verbose: bool = True, force: bool = False):
         query = sa.select(table).where(table.c.modified_date >= table.c.updated_date)
     with Postgres.get_global_engine().connect() as conn:  # type: Connection
         attendances = MobilizeAttendance.from_query(conn, query)
-        total, count, start_time = len(attendances), 0, datetime.now(tz=timezone.utc)
         if verbose:
-            print(f"Updating status for {total} attendances...")
-            progress_time = start_time
-        for attendance in attendances:
-            count += 1
-            attendance.compute_status(conn, force)
-            now = datetime.now(tz=timezone.utc)
-            attendance.persist(conn)
-            if verbose and (now - progress_time).seconds > 5:
-                print(f"({count})...", flush=True)
-                progress_time = now
+            print(f"Updating status for {len(attendances)} attendances...")
+        compute_status(conn, attendances, verbose, force)
         conn.commit()
     if verbose:
-        now = datetime.now(tz=timezone.utc)
-        print(f"({count}) done (in {(now - start_time).total_seconds()} secs).")
         counts = MobilizeAttendance.attendee_counts
         print(f"Attendee cache lookups [hit/miss/no-person]: {counts}")

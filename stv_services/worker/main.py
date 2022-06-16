@@ -79,11 +79,13 @@ def do_housekeeping(scheduled: datetime = None):
     logger.info("Doing housekeeping...")
     # update all records touched by out-of-band (manual) processing
     airtable.update_airtable_records()
-    if not scheduled or scheduled.minute in (5, 25, 45):
-        # when first run, or every 20 minutes on the 5-minute mark,
+    if not scheduled or scheduled.minute in (5,):
+        # when first run, or every hour on the 5-minute mark,
         # verify that the key tables have not gotten out of sync
-        request = {"match-and-repair": {"types": ["contact", "funder"], "repair": True}}
-        db.lpush("control", json.dumps(request, separators=(",", ":")))
+        control.submit_match_request(["contact", "funder"], do_repair=True)
+    if not scheduled or scheduled.minute in (10,):
+        # when first run, or every hour on the 10-minute mark, update event data
+        control.submit_update_request("mobilize", verbose=False, force=False)
     target_total, completed_total = 0, 0
     for queue in queues:
         target, completed = process_queue(queue)

@@ -31,25 +31,35 @@ from ..data_store.persisted_dict import PersistedDict
 
 
 def find_person_records_to_update():
-    pic = model.person_info.columns
-    is_v, v_id, v_ud = pic.is_volunteer, pic.volunteer_record_id, pic.volunteer_updated
-    is_c, c_id, c_ud = pic.is_contact, pic.contact_record_id, pic.contact_updated
-    is_f, f_id, f_ud = pic.is_funder, pic.funder_record_id, pic.funder_updated
+    pc = model.person_info.columns
+    is_v, v_id, v_ud = pc.is_volunteer, pc.volunteer_record_id, pc.volunteer_updated
+    is_c, c_id, c_ud = pc.is_contact, pc.contact_record_id, pc.contact_updated
+    is_f, f_id, f_ud = pc.is_funder, pc.funder_record_id, pc.funder_updated
     query = sa.select(model.person_info).where(
         sa.or_(
-            sa.and_(is_v, sa.or_(v_id == "", pic.updated_date > v_ud)),
-            sa.and_(is_c, sa.or_(c_id == "", pic.updated_date > c_ud)),
-            sa.and_(is_f, sa.or_(f_id == "", pic.updated_date > f_ud)),
+            sa.and_(is_v, sa.or_(v_id == "", pc.updated_date > v_ud)),
+            sa.and_(is_c, sa.or_(c_id == "", pc.updated_date > c_ud)),
+            sa.and_(is_f, sa.or_(f_id == "", pc.updated_date > f_ud)),
         )
     )
     return query
 
 
 def find_donation_records_to_update():
-    pic = model.donation_info.columns
-    is_d, d_id, d_ud = pic.is_donation, pic.donation_record_id, pic.donation_updated
+    dc = model.donation_info.columns
+    is_d, d_id, d_ud = dc.is_donation, dc.donation_record_id, dc.donation_updated
     query = sa.select(model.donation_info).where(
-        sa.and_(is_d, sa.or_(d_id == "", pic.updated_date > d_ud)),
+        sa.and_(is_d, sa.or_(d_id == "", dc.updated_date > d_ud)),
+    )
+    return query
+
+
+def find_event_records_to_update():
+    ec = model.event_info.columns
+    is_d, e_id, e_ud = ec.is_event, ec.event_record_id, ec.event_updated
+    e_ci = ec.contact_id
+    query = sa.select(model.event_info).where(
+        sa.and_(is_d, sa.or_(e_id == "", ec.updated_date > e_ud, e_ci == "pending")),
     )
     return query
 
@@ -58,6 +68,10 @@ def find_records_to_update(dict_type: str, force: bool = False):
     table, is_col, id_col, date_col = table_columns(dict_type)
     if force:
         query = sa.select(table).where(is_col)
+    elif dict_type == "donation":
+        query = find_donation_records_to_update()
+    elif dict_type == "event":
+        query = find_event_records_to_update()
     else:
         query = sa.select(table).where(
             sa.and_(is_col, sa.or_(id_col == "", table.c.updated_date > date_col))

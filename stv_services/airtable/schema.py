@@ -54,7 +54,7 @@ def fetch_and_validate_table_schema(
     else:
         raise KeyError(f"Base schema has no table named '{table_name}'")
     if missing := set(schema.keys()) - set(column_ids.keys()):
-        raise KeyError(f"Table schema is missing fields for: {missing}")
+        raise KeyError(f"Table '{table_name}' is missing fields for: {missing}")
     return dict(base_id=base_id, table_id=table_id, column_ids=column_ids)
 
 

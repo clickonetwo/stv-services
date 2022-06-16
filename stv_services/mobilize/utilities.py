@@ -20,10 +20,12 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 #
-from datetime import datetime
+from datetime import datetime, timezone
 from time import process_time
 from typing import Callable
 from urllib.parse import urlencode
+
+from sqlalchemy.future import Connection
 
 from ..core import Configuration, Session
 
@@ -105,3 +107,19 @@ def fetch_hash_pages(
             f"Fetch time was {elapsed_time} (processor time: {elapsed_process_time} seconds)."
         )
     return total_count
+
+
+def compute_status(conn: Connection, objects: list, verbose: bool, force: bool):
+    total, count, start_time = len(objects), 0, datetime.now(tz=timezone.utc)
+    progress_time = start_time
+    for obj in objects:
+        count += 1
+        obj.compute_status(conn, force)
+        now = datetime.now(tz=timezone.utc)
+        obj.persist(conn)
+        if verbose and (now - progress_time).seconds > 5:
+            print(f"({count})...", flush=True)
+            progress_time = now
+    if verbose:
+        now = datetime.now(tz=timezone.utc)
+        print(f"({count}) done (in {(now - start_time).total_seconds()} secs).")

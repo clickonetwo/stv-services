@@ -96,7 +96,6 @@ def update_spreadsheet(
     updated_emails_path: str = "local/updated_emails.txt",
     verbose: bool = True,
 ) -> (int, int):
-    reverse_field_map = {v.db_field: k for k, v in field_map.items()}
     with open(update_file_path, newline="", encoding="utf-8") as update_file:
         reader = csv.DictReader(update_file)
         updates = {}

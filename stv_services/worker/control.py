@@ -26,9 +26,11 @@ import sqlalchemy as sa
 from sqlalchemy.future import Connection
 
 from stv_services.action_network.person import ActionNetworkPerson
+from stv_services.airtable import bulk
 from stv_services.airtable.sync import verify_match
 from stv_services.core.logging import get_logger
 from stv_services.data_store import RedisSync, model, Postgres
+from stv_services.worker import mobilize
 from stv_services.worker.airtable import update_airtable_records
 
 logger = get_logger(__name__)
@@ -42,6 +44,8 @@ def process_webhook_notification(_conn: Connection, body: dict):
             match_and_repair(val)
         elif key == "external-data-change":
             external_data_change(val)
+        elif key == "update-from-mobilize":
+            update_from_mobilize(val)
         else:
             raise NotImplementedError(f"Don't know how to '{key}'")
 
@@ -101,6 +105,12 @@ def match_and_repair(params: dict):
     update_airtable_records(is_retry=True)
 
 
+def submit_match_request(types: list, do_repair: bool):
+    db = RedisSync.connect()
+    request = {"match-and-repair": {"types": types, "repair": do_repair}}
+    db.lpush("control", json.dumps(request, separators=(",", ":")))
+
+
 def notice_external_data_change(email_file: str):
     emails = []
     with open(email_file, encoding="utf-8") as in_file:
@@ -123,3 +133,30 @@ def external_data_change(emails: list[str]):
             person.notice_external_data()
             person.persist(conn)
         conn.commit()
+
+
+def update_from_mobilize(params: dict):
+    verbose = params.get("verbose", True)
+    force = params.get("force", False)
+    logger.info(f"Update from mobilize (verbose={verbose}, force={force}) starting")
+    execute_update_request("mobilize", verbose, force)
+    logger.info(f"Update from mobilize complete")
+
+
+def submit_update_request(source: str, verbose: bool = True, force: bool = False):
+    db = RedisSync.connect()
+    if source.lower() == "mobilize":
+        hook = {"update-from-mobilize": dict(verbose=verbose, force=force)}
+    else:
+        raise ValueError(f"Unknown source for update: '{source}'")
+    db.lpush("control", json.dumps(hook, separators=(",", ":")))
+    db.publish("webhooks", "control")
+
+
+def execute_update_request(source: str, verbose: bool = True, force: bool = False):
+    if source.lower() == "mobilize":
+        mobilize.import_and_update_all(verbose, force)
+        bulk.update_contact_records(verbose, force)
+        bulk.update_event_records(verbose, force)
+    else:
+        raise ValueError(f"Unknown source for update: '{source}'")

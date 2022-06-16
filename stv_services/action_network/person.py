@@ -332,12 +332,12 @@ class ActionNetworkPerson(PersistedDict):
             self["modified_date"] = modified_date
         self["custom_fields"].update(custom_fields)
 
-    def notice_attendance(self, conn: Connection, attendance: dict):
+    def notice_attendance(self, conn: Connection, _attendance_: dict):
         """Update due to signing up for an event"""
         self.notice_promotion(conn, "attendance")
         self["updated_date"] = datetime.now(tz=timezone.utc)
 
-    def notice_event(self, conn: Connection, event: dict):
+    def notice_event(self, conn: Connection, _event: dict):
         """Update due to organizing an event"""
         self.notice_promotion(conn, "event")
         self["updated_date"] = datetime.now(tz=timezone.utc)

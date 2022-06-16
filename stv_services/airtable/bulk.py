@@ -49,6 +49,7 @@ from stv_services.airtable.utils import (
     upsert_records,
     find_person_records_to_update,
     find_donation_records_to_update,
+    find_event_records_to_update,
 )
 from stv_services.airtable.volunteer import (
     verify_volunteer_schema,
@@ -87,6 +88,18 @@ def verify_schemas(verbose: bool = True):
 
 
 def update_all_records(verbose: bool = True, force: bool = False) -> int:
+    """Update all records that need it (or are forced).
+
+    This has to happen in a specific order, because event records have
+    to exist in order for contact records to be made, and contact records
+    have to exist in order for funder records to be made.
+
+    Notice event records update last, even though they are linked to by
+    person records.  This is because there's actually a circular dependency
+    between the event records and the contact records, so we break it by
+    inserting new event records without the link to the contact and then
+    updating them after the contact has been updated.  This double-update of
+    event records costs very little because new events are rarely created."""
     total = 0
     total += update_volunteer_records(verbose, force)
     total += update_contact_records(verbose, force)
@@ -97,8 +110,12 @@ def update_all_records(verbose: bool = True, force: bool = False) -> int:
 
 
 def update_changed_records() -> dict:
+    """Update records that need it.  See the commentary on `update_all_records`
+    to understand why event records are updated last, even though contact
+    records may have links to them."""
     results = update_changed_person_records()
     results.update(update_changed_donation_records())
+    results.update(update_changed_event_records())
     return results
 
 
@@ -116,6 +133,14 @@ def update_changed_donation_records() -> dict:
             conn, find_donation_records_to_update()
         )
         results = bulk_upsert_donation_records(conn, donations)
+        conn.commit()
+    return results
+
+
+def update_changed_event_records() -> dict:
+    with Postgres.get_global_engine().connect() as conn:  # type: Connection
+        events = MobilizeEvent.from_query(conn, find_event_records_to_update())
+        results = bulk_upsert_event_records(conn, events)
         conn.commit()
     return results
 
@@ -190,7 +215,6 @@ def bulk_upsert_person_records(
     }
     results = {}
     for type_ in ("volunteer", "contact", "funder"):
-        pairs = []
         is_field = f"is_{type_}"
         maker = record_makers[type_]
         pairs = [(p, maker(conn, p)) for p in people if p.get(is_field)]
@@ -206,6 +230,15 @@ def bulk_upsert_donation_records(
         if donation["is_donation"]:
             pairs.append((donation, create_donation_record(conn, donation)))
     results = {"donation": upsert_records(conn, "donation", pairs)}
+    return results
+
+
+def bulk_upsert_event_records(conn: Connection, events: list[MobilizeEvent]) -> dict:
+    pairs = []
+    for event in events:
+        if event["is_event"]:
+            pairs.append((event, create_event_record(conn, event)))
+    results = {"events": upsert_records(conn, "event", pairs)}
     return results
 
 

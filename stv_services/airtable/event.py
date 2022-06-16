@@ -45,10 +45,10 @@ event_table_schema = {
     "contact": FieldInfo("Event Organizer*", "multipleRecordLinks", "compute"),
     "event_url": FieldInfo("Mobilize Event Link*", "url", "event"),
     "is_featured": FieldInfo("Featured on calendar?", "checkbox", "event"),
-    "featured_name": FieldInfo("STV Event Name", "singleLineText", "readonly"),
-    "featured_description": FieldInfo("Event Description", "multilineText", "readonly"),
-    "featured_start_date": FieldInfo("Featured Start Date", "date", "readonly"),
-    "featured_end_date": FieldInfo("Featured End Date", "date", "readonly"),
+    "featured_name": FieldInfo("STV Event Name", "singleLineText", "observe"),
+    "featured_description": FieldInfo("Event Description", "multilineText", "observe"),
+    "featured_start_date": FieldInfo("Featured Start Date", "date", "observe"),
+    "featured_end_date": FieldInfo("Featured End Date", "date", "observe"),
 }
 
 
@@ -74,12 +74,22 @@ def create_event_record(conn: Connection, event: MobilizeEvent) -> dict:
     # compute the shift summary
     record[column_ids["shift_summary"]] = event.create_shift_summary(conn)
     # insert the event organizer, if there is one
-    if uuid := event.get("contact_id"):
-        person = ActionNetworkPerson.from_lookup(conn, uuid=uuid)
-        contact_record_id = person["contact_record_id"]
-        if not contact_record_id:
-            raise KeyError(f"Event organizer {uuid} is not a contact")
-        record[column_ids["contact"]] = [contact_record_id]
+    contact_id = event.get("contact_id", "")
+    if contact_id == "pending":
+        # handling of pending contacts is subtle :).  The contact being
+        # pending means that there is a person record for the event organizer,
+        # but there was not yet a contact record for the event organizer.  So
+        # before we skip filling this field we check to see if the contact
+        # record for this person has appeared and, if so, we both notify the
+        # person of the event they organized and we put them in this event.
+        person = ActionNetworkPerson.from_lookup(conn, email=event["contact_email"])
+        contact_id = person["contact_record_id"]
+        if contact_id:
+            event["contact_id"] = contact_id
+            person.notice_event(conn, event)
+            person.persist(conn)
+    if contact_id:
+        record[column_ids["contact"]] = [contact_id]
     return record
 
 
