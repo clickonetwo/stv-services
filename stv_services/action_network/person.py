@@ -306,8 +306,16 @@ class ActionNetworkPerson(PersistedDict):
             self["team_lead"] = ""
         self["updated_date"] = datetime.now(tz=timezone.utc)
 
-    def notice_webhook(self, data: dict):
-        """Update data from the info in a webhook"""
+    def notice_external_data(self):
+        """Update due to external data change"""
+        self["updated_date"] = datetime.now(tz=timezone.utc)
+
+    def update_from_webhook(self, data: dict):
+        """Update data from the info in a webhook.
+
+        This doesn't compute status so it doesn't change the updated date.
+        Anyone who calls this should compute status afterwards, exactly as
+        if they had imported the data directly from Action Network."""
         new = self._parse_hash(data)
         new = {key: val for key, val in new.items() if val is not None}
         # preserve the two fields we want to update manually
@@ -321,11 +329,6 @@ class ActionNetworkPerson(PersistedDict):
         if modified_date > self["modified_date"]:
             self["modified_date"] = modified_date
         self["custom_fields"].update(custom_fields)
-        self["updated_date"] = datetime.now(tz=timezone.utc)
-
-    def notice_external_data(self):
-        """Update due to external data change"""
-        self["updated_date"] = datetime.now(tz=timezone.utc)
 
     @staticmethod
     def _parse_hash(data: dict) -> dict:

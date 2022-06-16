@@ -355,6 +355,17 @@ def sync_webhooks(ctx: click.Context, force_remove: bool = False):
 
 
 @stv.command()
+@click.option("--queue", help="action_network, act_blue, airtable, or control")
+@click.option("--id", help="md5 webhook ID of the request")
+@click.pass_context
+def resubmit_successful_webhook(ctx: click.Context, queue: str = None, id: str = None):
+    verbose = ctx.obj["verbose"]
+    if not queue or not id:
+        raise ValueError("You must specify both the queue and hook id")
+    control.resubmit_successful_request(queue, id)
+
+
+@stv.command()
 @click.option("--queue", help="Queue to resubmit (omit for all)")
 @click.pass_context
 def resubmit_failed_webhooks(ctx: click.Context, queue: str = None):
@@ -362,13 +373,13 @@ def resubmit_failed_webhooks(ctx: click.Context, queue: str = None):
     if not queue:
         if verbose:
             print("Resubmitting all failed webhooks for re-processing")
-        control.resubmit_all_failed(None)
+        control.resubmit_all_failed_requests(None)
         if verbose:
             print("All Failed webhooks re-submitted")
     else:
         if verbose:
             print(f"Resubmitting failed webhooks on '{queue}' for re-processing")
-        control.resubmit_all_failed([queue])
+        control.resubmit_all_failed_requests([queue])
         if verbose:
             print(f"Failed webhooks on '{queue}' re-submitted")
 

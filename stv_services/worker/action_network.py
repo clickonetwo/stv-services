@@ -91,7 +91,7 @@ def process_webhook_person_data(conn: Connection, person_id: str, body: dict):
         person = ActionNetworkPerson.from_lookup(conn, uuid=person_id)
         if person_data := body.get("person"):
             person_data["identifiers"] = [person_id]
-            person.notice_webhook(person_data)
+            person.update_from_webhook(person_data)
     except KeyError:
         person = ActionNetworkPerson.from_action_network(conn, person_id)
     # now update the person status given the donation

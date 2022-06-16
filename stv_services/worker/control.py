@@ -37,7 +37,7 @@ logger = get_logger(__name__)
 def process_webhook_notification(_conn: Connection, body: dict):
     for key, val in body.items():
         if key == "resubmit-failed":
-            resubmit_failed(val)
+            resubmit_failed_requests(val)
         elif key == "match-and-repair":
             match_and_repair(val)
         elif key == "external-data-change":
@@ -46,7 +46,20 @@ def process_webhook_notification(_conn: Connection, body: dict):
             raise NotImplementedError(f"Don't know how to '{key}'")
 
 
-def resubmit_all_failed(queues: list = None):
+def resubmit_successful_request(queue: str, request_id: str):
+    db = RedisSync.connect()
+    requests = db.lrange(f"{queue}:success", 0, -1)
+    for request in requests:  # type: bytes
+        hook = json.loads(request)
+        for r_id, r_body in hook.items():
+            if r_id == request_id:
+                logger.info(f"Resubmitting {queue} request id {r_id}")
+                db.lpush(queue, json.dumps(r_body, separators=(",", ":")))
+                return
+    logger.warning(f"Can't find request '{request_id}' on queue '{queue}' to resubmit")
+
+
+def resubmit_all_failed_requests(queues: list = None):
     if queues is None:
         queues = ("act_blue", "action_network", "airtable")
     db = RedisSync.connect()
@@ -58,7 +71,7 @@ def resubmit_all_failed(queues: list = None):
     db.publish("webhooks", "control")
 
 
-def resubmit_failed(requests: list[dict]):
+def resubmit_failed_requests(requests: list[dict]):
     db = RedisSync.connect()
     for request in requests:
         queue = request["queue"]
