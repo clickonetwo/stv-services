@@ -85,6 +85,12 @@ class ActionNetworkPerson(PersistedDict):
             self["recur_end"] = model.epoch
             self["last_donation"] = model.epoch
             self["has_submission"] = False
+        # this should always be computed on import, but in case not
+        if self["created_date"] >= self.contact_cutoff_lo:
+            self["is_contact"] = True
+        else:
+            self["is_volunteer"] = True
+        # now look back at history since last update
         cutoff_lo = self.get("updated_date", model.epoch)
         self.compute_submission_status(conn, cutoff_lo)
         # because of Action Network data issues, we have to compute
@@ -117,16 +123,14 @@ class ActionNetworkPerson(PersistedDict):
         signup = conn.execute(query).mappings().first()
         self.notice_submission(conn, signup)
 
-    def notice_submission(self, _conn: Connection, submission: dict = None):
+    def notice_submission(self, conn: Connection, submission: dict = None):
         # if they have checked any of the 2022 form fields, they are contacts
         # and possibly funders (if it's a form field on the fundraising form)
         custom_fields = self.get("custom_fields", {})
         for key in custom_fields:
             if table := interest_table_map.get(key):
                 self["has_submission"] = True
-                self["is_contact"] = True
-                if table == "funder":
-                    self["is_funder"] = True
+                self.notice_promotion(conn, "submission")
                 break
         else:
             if submission and not self.get("has_submission"):
@@ -134,7 +138,7 @@ class ActionNetworkPerson(PersistedDict):
                 is_signup = submission["form_id"] == self.signup_form_2022
                 if is_signup or is_recent:
                     self["has_submission"] = True
-                    self["is_contact"] = True
+                    self.notice_promotion(conn, "submission")
         self["updated_date"] = datetime.now(tz=timezone.utc)
 
     def compute_donor_status(self, conn: Connection, cutoff_lo: datetime):

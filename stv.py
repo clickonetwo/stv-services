@@ -30,14 +30,20 @@ import os.path
 
 import click
 from click_shell import shell
+from sqlalchemy.future import Connection
 
 from stv_services.act_blue import bulk as ab_bulk
+from stv_services.act_blue.metadata import ActBlueDonationMetadata
 from stv_services.action_network import bulk as an_bulk
+from stv_services.action_network.donation import ActionNetworkDonation
+from stv_services.action_network.person import ActionNetworkPerson
+from stv_services.action_network.submission import ActionNetworkSubmission
 from stv_services.airtable import bulk as at_bulk, sync
 from stv_services.core import Configuration
 from stv_services.data_store import Postgres
 from stv_services.external import spreadsheet
 from stv_services.mobilize import event, attendance
+from stv_services.mobilize.event import MobilizeEvent
 from stv_services.worker import control
 from stv_services.worker.airtable import update_airtable_records
 
@@ -81,13 +87,6 @@ def import_all(ctx: click.Context):
     an_bulk.import_people(verbose)
     event.import_events(verbose)
     attendance.import_attendances(verbose)
-
-
-@stv.command()
-@click.pass_context
-def compute_status_all(ctx: click.Context):
-    verbose = ctx.obj["verbose"]
-    an_bulk.compute_status_all(verbose)
 
 
 @stv.command()
@@ -249,6 +248,34 @@ def compute_status_for_type(ctx: click.Context, type: str, force: bool = False):
         an_bulk.compute_status_for_type(type, verbose, force)
     else:
         raise ValueError(f"No such object type: {type}")
+
+
+@stv.command()
+@click.option("--force/--no-force", default=True, help="Force compute")
+@click.option("--id", help="uuid of donation, submission, metadata, or event")
+@click.option("--email", help="email of person")
+@click.pass_context
+def compute_status_of(
+    ctx: click.Context, id: str = None, email: str = None, force: bool = True
+):
+    verbose = ctx.obj["verbose"]
+    with Postgres.get_global_engine().connect() as conn:  # type: Connection
+        if email:
+            obj = ActionNetworkPerson.from_lookup(conn, email=email.lower())
+        elif id.startswith("action_network"):
+            try:
+                obj = ActionNetworkDonation.from_lookup(conn, uuid=id)
+            except KeyError:
+                obj = ActionNetworkSubmission.from_lookup(conn, uuid=id)
+        elif id.startswith("act_blue"):
+            obj = ActBlueDonationMetadata.from_lookup(conn, uuid=id)
+        elif id.isdigit():
+            obj = MobilizeEvent.from_lookup(conn, uuid=int(id))
+        else:
+            raise ValueError(f"Can't parse object id: {id}")
+        obj.compute_status(conn, force)
+        obj.persist(conn)
+        conn.commit()
 
 
 @stv.command()
@@ -417,7 +444,7 @@ def resubmit_successful_webhook(ctx: click.Context, queue: str = None, id: str =
     verbose = ctx.obj["verbose"]
     if not queue or not id:
         raise ValueError("You must specify both the queue and hook id")
-    control.resubmit_successful_request(queue, id)
+    control.resubmit_successful_requests(queue, [id])
 
 
 @stv.command()

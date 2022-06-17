@@ -38,6 +38,8 @@ logger = get_logger(__name__)
 
 def process_webhook_notification(_conn: Connection, body: dict):
     for key, val in body.items():
+        if key == "resubmit-success":
+            resubmit_successful_requests(val)
         if key == "resubmit-failed":
             resubmit_failed_requests(val)
         elif key == "match-and-repair":
@@ -50,17 +52,27 @@ def process_webhook_notification(_conn: Connection, body: dict):
             raise NotImplementedError(f"Don't know how to '{key}'")
 
 
-def resubmit_successful_request(queue: str, request_id: str):
+def resubmit_success_requests(hook: dict):
+    for queue, ids in hook.items():
+        resubmit_successful_requests(queue, ids)
+
+
+def resubmit_successful_requests(queue: str, ids: list[str]):
     db = RedisSync.connect()
     requests = db.lrange(f"{queue}:success", 0, -1)
+    requested, completed = set(ids), set()
     for request in requests:  # type: bytes
         hook = json.loads(request)
         for r_id, r_body in hook.items():
-            if r_id == request_id:
+            if r_id in requested:
                 logger.info(f"Resubmitting {queue} request id {r_id}")
                 db.lpush(queue, json.dumps(r_body, separators=(",", ":")))
-                return
-    logger.warning(f"Can't find request '{request_id}' on queue '{queue}' to resubmit")
+                requested.remove(r_id)
+                completed.add(r_id)
+    if requested:
+        logger.warning(f"Couldn't find these request ids on '{queue}': {requested}")
+    if completed:
+        db.publish("webhooks", queue)
 
 
 def resubmit_all_failed_requests(queues: list = None):
