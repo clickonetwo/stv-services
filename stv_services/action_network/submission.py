@@ -20,25 +20,37 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 #
-from typing import Optional, Any
+from typing import Optional, Any, ClassVar
 
 import sqlalchemy as sa
 from sqlalchemy.future import Connection
 
-from .utils import (
-    validate_hash,
-    fetch_all_child_hashes,
-)
-from ..data_store.persisted_dict import PersistedDict, lookup_objects
-from ..data_store import model, Postgres
+from .utils import validate_hash, fetch_all_child_hashes, ActionNetworkObject
+from ..core.logging import get_logger
+from ..data_store import model
+from ..data_store.persisted_dict import lookup_objects
+
+logger = get_logger(__name__)
 
 
-class ActionNetworkSubmission(PersistedDict):
+class ActionNetworkSubmission(ActionNetworkObject):
+    # the database table for this class
+    table: ClassVar[sa.Table] = model.submission_info
+    # the cache for this class
+    cache: ClassVar[dict] = {}
+
     def __init__(self, **fields):
         for key in ["form_id", "person_id"]:
             if not fields.get(key):
                 raise ValueError(f"Submission must have field '{key}': {fields}")
-        super().__init__(model.submission_info, **fields)
+        super().__init__(**fields)
+
+    def update_from_hash(self, data: dict):
+        # Nothing can change about a submission, so really we should never see
+        # an updated submission.  In case we do, we report it.
+        uuid, _, mod_date = validate_hash(data)
+        self["modified_date"] = mod_date
+        logger.warning(f"Ignoring update of submission '{uuid}' dated {mod_date}")
 
     @classmethod
     def from_webhook(cls, data: dict) -> "ActionNetworkSubmission":
@@ -109,21 +121,11 @@ def import_submissions(
     query: Optional[str] = None,
     verbose: bool = True,
 ) -> int:
+    ActionNetworkSubmission.initialize_cache()
     return fetch_all_child_hashes(
         parent_hash_type="forms",
         child_hash_type="submissions",
-        page_processor=insert_submissions_from_hashes,
+        cls=ActionNetworkSubmission,
         query=query,
         verbose=verbose,
     )
-
-
-def insert_submissions_from_hashes(hashes: [dict]):
-    with Postgres.get_global_engine().connect() as conn:  # type: Connection
-        for data in hashes:
-            try:
-                submission = ActionNetworkSubmission.from_hash(data)
-                submission.persist(conn)
-            except ValueError as err:
-                print(f"Skipping invalid submission: {err}")
-        conn.commit()

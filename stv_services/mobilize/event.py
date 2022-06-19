@@ -189,7 +189,7 @@ class MobilizeEvent(PersistedDict):
         return body["email_address"].lower()
 
     @classmethod
-    def from_lookup(cls, conn: Connection, uuid: str) -> "MobilizeEvent":
+    def from_lookup(cls, conn: Connection, uuid: int) -> "MobilizeEvent":
         query = sa.select(model.event_info).where(model.event_info.c.uuid == uuid)
         result = lookup_objects(conn, query, lambda d: cls(**d))
         if not result:

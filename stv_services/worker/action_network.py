@@ -20,9 +20,9 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 #
-
 from sqlalchemy.future import Connection
 
+from ..action_network.bulk import import_all, compute_status_all
 from ..action_network.donation import ActionNetworkDonation
 from ..action_network.person import ActionNetworkPerson
 from ..action_network.submission import ActionNetworkSubmission
@@ -45,16 +45,12 @@ def process_webhook_notification(conn: Connection, body: dict):
 def process_donation_webhook(conn: Connection, body: dict):
     logger.info(f"Processing incoming donation webhook")
     try:
-        uuid, created_date, modified_date = validate_hash(body)
+        uuid, _, modified_date = validate_hash(body)
         donation = ActionNetworkDonation.from_lookup(conn, uuid)
-        # we really shouldn't be getting webhook updates to donations...
-        if (amount := body.get("amount")) and amount != donation["amount"]:
-            # this is likely a return updating the existing amount
-            logger.warning(f"Received amount change to existing donation '{uuid}'")
-            donation.notice_amount_change(conn, amount)
-        else:
-            logger.warning(f"Received unknown update to existing donation '{uuid}'")
-        donation.update(dict(modified_date=modified_date))
+        if modified_date <= donation["modified_date"]:
+            # we have already seen this data
+            return
+        donation.update_from_hash(body)
     except KeyError:
         # no existing one, so build a new one
         donation = ActionNetworkDonation.from_webhook(body)
@@ -69,15 +65,16 @@ def process_donation_webhook(conn: Connection, body: dict):
 def process_submission_webhook(conn: Connection, body: dict):
     logger.info(f"Processing incoming form submission webhook")
     try:
-        uuid, created_date, modified_date = validate_hash(body)
+        uuid, _, modified_date = validate_hash(body)
         submission = ActionNetworkSubmission.from_lookup(conn, uuid)
-        # we really shouldn't be getting webhook updates to submissions...
-        logger.warning(f"Received unknown update to existing submission '{uuid}'")
-        submission.update(dict(modified_date=modified_date))
+        if modified_date <= submission["modified_date"]:
+            # we have already seen this data
+            return
+        submission.update_from_hash(body)
     except KeyError:
         # no existing one, so build a new one
         submission = ActionNetworkSubmission.from_webhook(body)
-    # make sure the donation exists in the database
+    # make sure the submission exists in the database
     submission.persist(conn)
     # now make sure we have the person in the database
     process_webhook_person_data(conn, submission["person_id"], body)
@@ -90,10 +87,20 @@ def process_webhook_person_data(conn: Connection, person_id: str, body: dict):
     try:
         person = ActionNetworkPerson.from_lookup(conn, uuid=person_id)
         if person_data := body.get("person"):
+            _, _, modified_date = validate_hash(person_data)
+            if modified_date <= person["modified_date"]:
+                # we have already seen this data
+                return
             person_data["identifiers"] = [person_id]
-            person.update_from_webhook(person_data)
+            person.update_from_hash(person_data)
     except KeyError:
-        person = ActionNetworkPerson.from_action_network(conn, person_id)
+        person = ActionNetworkPerson.from_action_network(person_id)
     # now update the person status given the donation
     person.compute_status(conn)
     person.persist(conn)
+
+
+def import_and_update_all(verbose: bool = True, force: bool = False):
+    """Get all new/updated records from Action Network"""
+    import_all(verbose, force)
+    compute_status_all(verbose, force)

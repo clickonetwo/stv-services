@@ -21,18 +21,14 @@
 #  SOFTWARE.
 #
 from datetime import datetime, timezone, timedelta
-from typing import Optional, Any
+from typing import Optional, Any, ClassVar
 
 import sqlalchemy as sa
 from sqlalchemy.future import Connection
 
-from .utils import (
-    validate_hash,
-    fetch_all_hashes,
-    fetch_hash,
-)
+from .utils import validate_hash, fetch_all_hashes, fetch_hash, ActionNetworkObject
 from ..core.logging import get_logger
-from ..data_store import model, Postgres
+from ..data_store import model
 from ..data_store.persisted_dict import PersistedDict, lookup_objects
 
 logger = get_logger(__name__)
@@ -53,20 +49,23 @@ interest_table_map = {
 }
 
 
-class ActionNetworkPerson(PersistedDict):
+class ActionNetworkPerson(ActionNetworkObject):
+    # the database table for this class
+    table: ClassVar[sa.Table] = model.person_info
+    # the cache for this class
+    cache: ClassVar[dict] = {}
+
     # if you have donated on or after this date, you are a funder
     funder_cutoff_lo = datetime(2021, 11, 1, tzinfo=timezone.utc)
     # if you have filled out a form on or after this date, you are a contact
     contact_cutoff_lo = datetime(2022, 1, 1, tzinfo=timezone.utc)
     # we care specially about specific forms
     signup_form_2022 = "action_network:b399bd2b-b9a9-4916-9550-5a8a47e045fb"
-    # we keep a table of all uuids by email to save database queries
-    known_emails = {}
 
     def __init__(self, **fields):
         if not fields.get("email") and not fields.get("phone"):
             raise ValueError(f"Person record must have either email or phone: {fields}")
-        super().__init__(model.person_info, **fields)
+        super().__init__(**fields)
 
     def compute_status(self, conn: Connection, force: bool = False):
         """
@@ -128,7 +127,7 @@ class ActionNetworkPerson(PersistedDict):
         # and possibly funders (if it's a form field on the fundraising form)
         custom_fields = self.get("custom_fields", {})
         for key in custom_fields:
-            if table := interest_table_map.get(key):
+            if interest_table_map.get(key):
                 self["has_submission"] = True
                 self.notice_promotion(conn, "submission")
                 break
@@ -316,26 +315,6 @@ class ActionNetworkPerson(PersistedDict):
         """Update due to external data change"""
         self["updated_date"] = datetime.now(tz=timezone.utc)
 
-    def update_from_webhook(self, data: dict):
-        """Update data from the info in a webhook.
-
-        This doesn't compute status so it doesn't change the updated date.
-        Anyone who calls this should compute status afterwards, exactly as
-        if they had imported the data directly from Action Network."""
-        new = self._parse_hash(data)
-        new = {key: val for key, val in new.items() if val is not None}
-        # preserve the two fields we want to update manually
-        modified_date = new["modified_date"]
-        custom_fields = new["custom_fields"]
-        # remove any fields that shouldn't be fully replaced in self
-        for key in ["uuid", "created_date", "modified_date", "custom_fields"]:
-            del new[key]
-        # update the fields that should come from the new copy
-        self.update(new)
-        if modified_date > self["modified_date"]:
-            self["modified_date"] = modified_date
-        self["custom_fields"].update(custom_fields)
-
     def notice_attendance(self, conn: Connection, _attendance_: dict):
         """Update due to signing up for an event"""
         self.notice_promotion(conn, "attendance")
@@ -345,6 +324,24 @@ class ActionNetworkPerson(PersistedDict):
         """Update due to organizing an event"""
         self.notice_promotion(conn, "event")
         self["updated_date"] = datetime.now(tz=timezone.utc)
+
+    def update_from_hash(self, data: dict):
+        """Update data from the info in a hash (either a webhook or an import).
+
+        This doesn't compute status, so it doesn't change the updated date.
+        Anyone who calls this should compute status afterwards, exactly as
+        if they had imported the data directly from Action Network."""
+        new = self._parse_hash(data)
+        new = {key: val for key, val in new.items() if val is not None}
+        # preserve the new custom fields
+        custom_fields = new["custom_fields"]
+        # remove the fields that can't replace what's in self
+        for key in ["uuid", "created_date", "custom_fields"]:
+            del new[key]
+        # replace the fields that should be replaced
+        self.update(new)
+        # merge the new custom fields with the existing ones
+        self["custom_fields"].update(custom_fields)
 
     @staticmethod
     def _parse_hash(data: dict) -> dict:
@@ -439,14 +436,9 @@ class ActionNetworkPerson(PersistedDict):
         return lookup_objects(conn, query, lambda d: cls(**d))
 
     @classmethod
-    def from_action_network(
-        cls,
-        conn: Connection,
-        hash_id: str,
-    ) -> "ActionNetworkPerson":
+    def from_action_network(cls, hash_id: str) -> "ActionNetworkPerson":
         data, _ = fetch_hash("people", hash_id)
         person = ActionNetworkPerson.from_hash(data)
-        person.persist(conn)
         return person
 
 
@@ -456,17 +448,12 @@ def import_people(
     skip_pages: int = 0,
     max_pages: int = 0,
 ) -> int:
+    ActionNetworkPerson.initialize_cache()
     return fetch_all_hashes(
-        "people", import_people_from_hashes, query, verbose, skip_pages, max_pages
+        "people",
+        cls=ActionNetworkPerson,
+        query=query,
+        verbose=verbose,
+        skip_pages=skip_pages,
+        max_pages=max_pages,
     )
-
-
-def import_people_from_hashes(hashes: [dict]):
-    with Postgres.get_global_engine().connect() as conn:  # type: Connection
-        for data in hashes:
-            try:
-                person = ActionNetworkPerson.from_hash(data)
-                person.persist(conn)
-            except ValueError as err:
-                print(f"Skipping invalid person: {err}")
-        conn.commit()

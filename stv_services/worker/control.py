@@ -30,7 +30,7 @@ from stv_services.airtable import bulk
 from stv_services.airtable.sync import verify_match
 from stv_services.core.logging import get_logger
 from stv_services.data_store import RedisSync, model, Postgres
-from stv_services.worker import mobilize
+from stv_services.worker import mobilize, action_network
 from stv_services.worker.airtable import update_airtable_records
 
 logger = get_logger(__name__)
@@ -39,7 +39,7 @@ logger = get_logger(__name__)
 def process_webhook_notification(_conn: Connection, body: dict):
     for key, val in body.items():
         if key == "resubmit-success":
-            resubmit_successful_requests(val)
+            resubmit_success_requests(val)
         if key == "resubmit-failed":
             resubmit_failed_requests(val)
         elif key == "match-and-repair":
@@ -48,6 +48,8 @@ def process_webhook_notification(_conn: Connection, body: dict):
             external_data_change(val)
         elif key == "update-from-mobilize":
             update_from_mobilize(val)
+        elif key == "update-from-action_network":
+            update_from_action_network(val)
         else:
             raise NotImplementedError(f"Don't know how to '{key}'")
 
@@ -155,10 +157,22 @@ def update_from_mobilize(params: dict):
     logger.info(f"Update from mobilize complete")
 
 
+def update_from_action_network(params: dict):
+    verbose = params.get("verbose", True)
+    force = params.get("force", False)
+    logger.info(
+        f"Update from action_network (verbose={verbose}, force={force}) starting"
+    )
+    execute_update_request("action_network", verbose, force)
+    logger.info(f"Update from action_network complete")
+
+
 def submit_update_request(source: str, verbose: bool = True, force: bool = False):
     db = RedisSync.connect()
     if source.lower() == "mobilize":
         hook = {"update-from-mobilize": dict(verbose=verbose, force=force)}
+    elif source.lower() == "action_network":
+        hook = {"update-from-action_network": dict(verbose=verbose, force=force)}
     else:
         raise ValueError(f"Unknown source for update: '{source}'")
     db.lpush("control", json.dumps(hook, separators=(",", ":")))
@@ -170,5 +184,8 @@ def execute_update_request(source: str, verbose: bool = True, force: bool = Fals
         mobilize.import_and_update_all(verbose, force)
         bulk.update_contact_records(verbose, force)
         bulk.update_event_records(verbose, force)
+    elif source.lower() == "action_network":
+        action_network.import_and_update_all(verbose, force)
+        bulk.update_all_records(verbose, force)
     else:
         raise ValueError(f"Unknown source for update: '{source}'")

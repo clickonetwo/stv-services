@@ -21,27 +21,37 @@
 #  SOFTWARE.
 #
 from datetime import datetime, timezone
-from typing import Optional, Any
+from typing import Optional, Any, ClassVar
 
 import sqlalchemy as sa
 from sqlalchemy.future import Connection
 
 from .donation import ActionNetworkDonation
-from .utils import (
-    validate_hash,
-    fetch_hash,
-    fetch_all_hashes,
-)
-from ..data_store.persisted_dict import PersistedDict, lookup_objects
-from ..data_store import model, Postgres
+from .utils import validate_hash, fetch_hash, fetch_all_hashes, ActionNetworkObject
+from ..core.logging import get_logger
+from ..data_store import model
+from ..data_store.persisted_dict import lookup_objects
+
+logger = get_logger(__name__)
 
 
-class ActionNetworkFundraisingPage(PersistedDict):
+class ActionNetworkFundraisingPage(ActionNetworkObject):
+    # the database table for this class
+    table: ClassVar[sa.Table] = model.fundraising_page_info
+    # the cache for this class
+    cache: ClassVar[dict] = {}
+
     def __init__(self, **fields):
         for key in ["title"]:
             if not fields.get(key):
                 raise ValueError(f"Fundraising page must have field '{key}': {fields}")
-        super().__init__(model.fundraising_page_info, **fields)
+        super().__init__(**fields)
+
+    def update_from_hash(self, data: dict):
+        # Fundraising pages get updated whenever a donation is made against
+        # them, but no data on the page changes with the update.
+        _, _, mod_date = validate_hash(data)
+        self["modified_date"] = mod_date
 
     @classmethod
     def from_hash(cls, data: dict) -> "ActionNetworkFundraisingPage":
@@ -124,22 +134,12 @@ def import_fundraising_pages(
     skip_pages: int = 0,
     max_pages: int = 0,
 ) -> int:
+    ActionNetworkFundraisingPage.initialize_cache()
     return fetch_all_hashes(
         hash_type="fundraising_pages",
-        page_processor=insert_fundraising_pages_from_hashes,
+        cls=ActionNetworkFundraisingPage,
         query=query,
         verbose=verbose,
         skip_pages=skip_pages,
         max_pages=max_pages,
     )
-
-
-def insert_fundraising_pages_from_hashes(hashes: [dict]):
-    with Postgres.get_global_engine().connect() as conn:  # type: Connection
-        for data in hashes:
-            try:
-                fundraising_page = ActionNetworkFundraisingPage.from_hash(data)
-                fundraising_page.persist(conn)
-            except ValueError as err:
-                print(f"Skipping invalid fundraising page: {err}")
-        conn.commit()

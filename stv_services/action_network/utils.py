@@ -22,14 +22,51 @@
 #
 from datetime import datetime
 from time import process_time
-from typing import Callable
+from typing import ClassVar, Type
 from urllib.parse import urlencode
 
 import requests
+import sqlalchemy as sa
 from dateutil.parser import parse
 from restnavigator import Navigator
+from sqlalchemy.future import Connection
 
 from ..core import Configuration, Session
+from ..data_store import Postgres
+from ..data_store.persisted_dict import PersistedDict
+
+
+class ActionNetworkObject(PersistedDict):
+    table: ClassVar[sa.Table]
+    # we keep a cache of objects by key to save database queries during import
+    cache: ClassVar[dict]
+
+    @classmethod
+    def initialize_cache(cls):
+        cls.cache.clear()
+        with Postgres.get_global_engine().connect() as conn:  # type: Connection
+            for row in conn.execute(sa.select(cls.table)):
+                cls.cache[row.uuid] = cls(**row)
+
+    def __init__(self, **fields):
+        super().__init__(self.table, **fields)
+
+    def persist(self, conn: Connection):
+        super().persist(conn)
+        self.cache[self["uuid"]] = self
+
+    def remove(self, conn: Connection):
+        del self.cache[self["uuid"]]
+        super().remove(conn)
+
+    def update_from_hash(self, _data: dict):
+        # meant to be overridden by subclasses
+        raise NotImplementedError("You must implement update_from_hash")
+
+    @classmethod
+    def from_hash(cls, _data: dict) -> "ActionNetworkObject":
+        # meant to be overridden by subclasses
+        raise NotImplementedError("You must implement from_hash")
 
 
 def validate_hash(data: dict) -> (str, datetime, datetime):
@@ -68,7 +105,7 @@ def fetch_hash(hash_type: str, hash_id: str) -> (dict, dict):
 
 def fetch_all_hashes(
     hash_type: str,
-    page_processor: Callable[[list[dict]], None],
+    cls: Type[ActionNetworkObject],
     query: str = None,
     verbose: bool = True,
     skip_pages: int = 0,
@@ -93,7 +130,7 @@ def fetch_all_hashes(
     return fetch_hash_pages(
         hash_type=hash_type,
         url=url,
-        page_processor=page_processor,
+        cls=cls,
         verbose=verbose,
         skip_pages=skip_pages,
         max_pages=max_pages,
@@ -103,7 +140,7 @@ def fetch_all_hashes(
 def fetch_all_child_hashes(
     parent_hash_type: str,
     child_hash_type: str,
-    page_processor: Callable[[list[dict]], None],
+    cls: Type[ActionNetworkObject],
     query: str = None,
     verbose: bool = True,
 ) -> int:
@@ -132,7 +169,7 @@ def fetch_all_child_hashes(
             total_count += fetch_related_hashes(
                 url=nav.uri + f"/{child_hash_type}",
                 hash_type=child_hash_type,
-                page_processor=page_processor,
+                cls=cls,
                 verbose=verbose,
             )
     return total_count
@@ -141,20 +178,18 @@ def fetch_all_child_hashes(
 def fetch_related_hashes(
     hash_type: str,
     url: str,
-    page_processor: Callable[[list[dict]], None],
+    cls: Type[ActionNetworkObject],
     verbose: bool = False,
 ) -> int:
     if verbose:
         print(f"Fetching related {hash_type}...")
-    return fetch_hash_pages(
-        hash_type=hash_type, url=url, page_processor=page_processor, verbose=verbose
-    )
+    return fetch_hash_pages(hash_type=hash_type, url=url, cls=cls, verbose=verbose)
 
 
 def fetch_hash_pages(
     hash_type: str,
     url: str,
-    page_processor: Callable[[list[dict]], None],
+    cls: Type[ActionNetworkObject],
     verbose: bool = True,
     skip_pages: int = 0,
     max_pages: int = 0,
@@ -182,10 +217,8 @@ def fetch_hash_pages(
                     end="",
                     flush=True,
                 )
-        hash_list = []
-        for navigator in navigators:
-            hash_list.append(navigator.state)
-        page_processor(hash_list)
+        hash_list = [navigator.state for navigator in navigators]
+        import_or_update_objects(cls, hash_list)
         total_count += page_count
         if verbose:
             print(f"({total_count})")
@@ -201,3 +234,22 @@ def fetch_hash_pages(
             f"Fetch time was {elapsed_time} (processor time: {elapsed_process_time} seconds)."
         )
     return total_count
+
+
+def import_or_update_objects(cls: Type[ActionNetworkObject], hashes: [dict]):
+    with Postgres.get_global_engine().connect() as conn:  # type: Connection
+        for data in hashes:
+            try:
+                uuid, created_date, modified_date = validate_hash(data)
+                if obj := cls.cache.get(uuid):
+                    # we already have this object, see if this hash is newer
+                    if modified_date > obj["modified_date"]:
+                        obj["modified_date"] = modified_date
+                        obj.update_from_hash(data)
+                        obj.persist(conn)
+                    continue
+                obj = cls.from_hash(data)
+                obj.persist(conn)
+            except ValueError as err:
+                print(f"Skipping import of invalid hash: {err}")
+        conn.commit()

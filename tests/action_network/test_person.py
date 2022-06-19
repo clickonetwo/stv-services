@@ -175,10 +175,10 @@ def test_action_network_person(clean_db):
 def test_import_person(clean_db):
     an_id = "action_network:dec233c3-bdee-457c-95ca-055b4647b907"
     with Postgres.get_global_engine().connect() as conn:
-        person = ActionNetworkPerson.from_action_network(conn, an_id)
+        person = ActionNetworkPerson.from_action_network(an_id)
         assert person["uuid"] == an_id
         with pytest.raises(KeyError):
-            ActionNetworkPerson.from_action_network(conn, fake_an_id)
+            ActionNetworkPerson.from_action_network(fake_an_id)
 
 
 def test_import_person_related(reload_db):

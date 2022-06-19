@@ -81,10 +81,7 @@ def import_and_update_all(ctx: click.Context):
 @click.pass_context
 def import_all(ctx: click.Context):
     verbose = ctx.obj["verbose"]
-    an_bulk.import_submissions(verbose)
-    an_bulk.import_fundraising_pages(verbose)
-    an_bulk.import_donations(verbose)
-    an_bulk.import_people(verbose)
+    an_bulk.import_all(verbose)
     event.import_events(verbose)
     attendance.import_attendances(verbose)
 

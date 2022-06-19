@@ -26,23 +26,27 @@ from typing import Optional, Any, ClassVar
 import sqlalchemy as sa
 from sqlalchemy.future import Connection
 
-from .utils import (
-    validate_hash,
-    fetch_hash,
-    fetch_all_hashes,
-)
-from ..data_store import model, Postgres
-from ..data_store.persisted_dict import PersistedDict, lookup_objects
+from .utils import validate_hash, fetch_hash, fetch_all_hashes, ActionNetworkObject
+from ..core.logging import get_logger
+from ..data_store import model
+from ..data_store.persisted_dict import lookup_objects
+
+logger = get_logger(__name__)
 
 
-class ActionNetworkDonation(PersistedDict):
+class ActionNetworkDonation(ActionNetworkObject):
+    # the database table for this class
+    table: ClassVar[sa.Table] = model.donation_info
+    # the cache for this class
+    cache: ClassVar[dict] = {}
+
     donation_cutoff_lo: ClassVar[datetime] = datetime(2021, 11, 1, tzinfo=timezone.utc)
 
     def __init__(self, **fields):
         for key in ["amount", "recurrence_data", "donor_id", "fundraising_page_id"]:
             if not fields.get(key):
                 raise ValueError(f"Donation must have field '{key}': {fields}")
-        super().__init__(model.donation_info, **fields)
+        super().__init__(**fields)
 
     def compute_status(self, conn: Connection, force: bool = False):
         """Try to attribute this donation based on latest data."""
@@ -77,6 +81,16 @@ class ActionNetworkDonation(PersistedDict):
     def notice_amount_change(self, _conn: Connection, amount: str):
         self["amount"] = amount
         self["updated_date"] = datetime.now(tz=timezone.utc)
+
+    def update_from_hash(self, data: dict):
+        # The only thing that can change about a donation is the amount
+        # If the amount hasn't changed, we issue a warning about the update
+        uuid, _, mod_date = validate_hash(data)
+        self["modified_date"] = mod_date
+        if (amount := data.get("amount")) and amount != self["amount"]:
+            self["amount"] = amount
+        else:
+            logger.warning(f"Ignoring update of donation '{uuid}' dated {mod_date}")
 
     @staticmethod
     def _get_metadata_id(data: dict):
@@ -179,22 +193,12 @@ def import_donations(
     skip_pages: int = 0,
     max_pages: int = 0,
 ) -> int:
+    ActionNetworkDonation.initialize_cache()
     return fetch_all_hashes(
         hash_type="donations",
-        page_processor=import_donations_from_hashes,
+        cls=ActionNetworkDonation,
         query=query,
         verbose=verbose,
         skip_pages=skip_pages,
         max_pages=max_pages,
     )
-
-
-def import_donations_from_hashes(hashes: [dict]):
-    with Postgres.get_global_engine().connect() as conn:  # type: Connection
-        for data in hashes:
-            try:
-                donation = ActionNetworkDonation.from_hash(data)
-                donation.persist(conn)
-            except ValueError as err:
-                print(f"Skipping invalid donation: {err}")
-        conn.commit()

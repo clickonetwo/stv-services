@@ -26,11 +26,7 @@ from typing import Optional, Any
 import sqlalchemy as sa
 from sqlalchemy.future import Connection
 
-from .donation import (
-    import_donations as _import_donations,
-    import_donations_from_hashes,
-    ActionNetworkDonation,
-)
+from .donation import import_donations as _import_donations, ActionNetworkDonation
 from .fundraising_page import (
     import_fundraising_pages as _import_fundraising_pages,
     ActionNetworkFundraisingPage,
@@ -38,7 +34,7 @@ from .fundraising_page import (
 from .person import import_people as _import_people, ActionNetworkPerson
 from .submission import (
     import_submissions as _import_submissions,
-    insert_submissions_from_hashes,
+    ActionNetworkSubmission,
 )
 from .utils import fetch_related_hashes, fetch_hash
 from ..act_blue.metadata import ActBlueDonationMetadata
@@ -60,17 +56,25 @@ def import_person_cluster(person_id: str, verbose: bool = False):
             fetch_related_hashes(
                 url=nav.uri,
                 hash_type="submissions",
-                page_processor=insert_submissions_from_hashes,
+                cls=ActionNetworkSubmission,
                 verbose=verbose,
             )
         elif curie == "osdi:donations":
             fetch_related_hashes(
                 url=nav.uri,
                 hash_type="donations",
-                page_processor=import_donations_from_hashes,
+                cls=ActionNetworkDonation,
                 verbose=verbose,
             )
     return person
+
+
+def import_all(verbose: bool = True, force: bool = False):
+    """Import all new/updated Action Network data"""
+    import_submissions(verbose, force)
+    import_fundraising_pages(verbose, force)
+    import_donations(verbose, force)
+    import_people(verbose, force)
 
 
 def import_people(
