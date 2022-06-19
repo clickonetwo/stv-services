@@ -199,6 +199,7 @@ def fetch_hash_pages(
     session = Session.get_global_session("action_network")
     pages = Navigator.hal(url, session=session)
     page_number, total_count, last_page = skip_pages, 0, None
+    total_created, total_updated, total_ignored = 0, 0, 0
     for page in pages:
         navigators = page.embedded()[f"osdi:{hash_type}"]
         if (page_count := len(navigators)) == 0:
@@ -218,10 +219,16 @@ def fetch_hash_pages(
                     flush=True,
                 )
         hash_list = [navigator.state for navigator in navigators]
-        import_or_update_objects(cls, hash_list)
+        created, updated, ignored = import_or_update_objects(cls, hash_list)
+        total_created += created
+        total_updated += updated
+        total_ignored += ignored
         total_count += page_count
         if verbose:
-            print(f"({total_count})")
+            print(
+                f"(+{created} created, +{updated} updated, +{ignored} ignored "
+                f"= {total_count})"
+            )
         if max_pages and page_number >= (skip_pages + max_pages):
             if verbose:
                 print(f"(Stopped after importing {max_pages} pages)")
@@ -231,12 +238,18 @@ def fetch_hash_pages(
     if verbose:
         print(f"Fetched {total_count} {hash_type}.")
         print(
+            f"Created {total_created}, updated {total_updated}, ignored {total_ignored}"
+        )
+        print(
             f"Fetch time was {elapsed_time} (processor time: {elapsed_process_time} seconds)."
         )
     return total_count
 
 
-def import_or_update_objects(cls: Type[ActionNetworkObject], hashes: [dict]):
+def import_or_update_objects(
+    cls: Type[ActionNetworkObject], hashes: [dict]
+) -> (int, int, int):
+    created, updated, ignored = 0, 0, 0
     with Postgres.get_global_engine().connect() as conn:  # type: Connection
         for data in hashes:
             try:
@@ -244,12 +257,17 @@ def import_or_update_objects(cls: Type[ActionNetworkObject], hashes: [dict]):
                 if obj := cls.cache.get(uuid):
                     # we already have this object, see if this hash is newer
                     if modified_date > obj["modified_date"]:
+                        updated += 1
                         obj["modified_date"] = modified_date
                         obj.update_from_hash(data)
                         obj.persist(conn)
+                    else:
+                        ignored += 1
                     continue
+                created += 1
                 obj = cls.from_hash(data)
                 obj.persist(conn)
             except ValueError as err:
                 print(f"Skipping import of invalid hash: {err}")
         conn.commit()
+    return created, updated, ignored

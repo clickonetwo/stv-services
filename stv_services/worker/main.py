@@ -85,10 +85,10 @@ def do_housekeeping(scheduled: datetime = None):
         control.submit_match_request(["contact", "funder"], do_repair=True)
     if not scheduled or scheduled.minute in (10,):
         # when first run, or every hour on the 10-minute mark, update people data
-        control.submit_update_request("action_network", verbose=False, force=False)
+        control.submit_update_request("action_network", verbose=True, force=False)
     if not scheduled or scheduled.minute in (40,):
         # when first run, or every hour on the 40-minute mark, update event data
-        control.submit_update_request("mobilize", verbose=False, force=False)
+        control.submit_update_request("mobilize", verbose=True, force=False)
     target_total, completed_total = 0, 0
     for queue in queues:
         target, completed = process_queue(queue)
@@ -104,8 +104,8 @@ def do_housekeeping(scheduled: datetime = None):
 
 def schedule_next_housekeeping() -> datetime:
     next_5 = datetime.now(tz=timezone.utc) + timedelta(minutes=5)
-    if next_5.minute % 5 != 0:
-        next_5.replace(minute=next_5.minute - next_5.minute % 5)
+    if (next_5.minute % 5) != 0:
+        next_5 = next_5.replace(minute=next_5.minute - (next_5.minute % 5))
     return next_5
 
 

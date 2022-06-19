@@ -21,6 +21,7 @@
 #  SOFTWARE.
 #
 import json
+import multiprocessing
 
 import sqlalchemy as sa
 from sqlalchemy.future import Connection
@@ -46,10 +47,8 @@ def process_webhook_notification(_conn: Connection, body: dict):
             match_and_repair(val)
         elif key == "external-data-change":
             external_data_change(val)
-        elif key == "update-from-mobilize":
-            update_from_mobilize(val)
-        elif key == "update-from-action_network":
-            update_from_action_network(val)
+        elif key.startswith("update-from-"):
+            update_from(key[len("update-from-") :], val)
         else:
             raise NotImplementedError(f"Don't know how to '{key}'")
 
@@ -149,22 +148,14 @@ def external_data_change(emails: list[str]):
         conn.commit()
 
 
-def update_from_mobilize(params: dict):
+def update_from(source: str, params: dict):
+    if source != "mobilize" and source != "action_network":
+        raise ValueError(f"Unknown source for update: '{source}'")
     verbose = params.get("verbose", True)
     force = params.get("force", False)
-    logger.info(f"Update from mobilize (verbose={verbose}, force={force}) starting")
-    execute_update_request("mobilize", verbose, force)
-    logger.info(f"Update from mobilize complete")
-
-
-def update_from_action_network(params: dict):
-    verbose = params.get("verbose", True)
-    force = params.get("force", False)
-    logger.info(
-        f"Update from action_network (verbose={verbose}, force={force}) starting"
-    )
-    execute_update_request("action_network", verbose, force)
-    logger.info(f"Update from action_network complete")
+    multiprocessing.Process(
+        target=execute_update_request, args=(source, verbose, force), daemon=True
+    ).start()
 
 
 def submit_update_request(source: str, verbose: bool = True, force: bool = False):
@@ -180,6 +171,7 @@ def submit_update_request(source: str, verbose: bool = True, force: bool = False
 
 
 def execute_update_request(source: str, verbose: bool = True, force: bool = False):
+    logger.info(f"Update from {source} (verbose={verbose}, force={force}) starting")
     if source.lower() == "mobilize":
         mobilize.import_and_update_all(verbose, force)
         bulk.update_contact_records(verbose, force)
@@ -188,4 +180,5 @@ def execute_update_request(source: str, verbose: bool = True, force: bool = Fals
         action_network.import_and_update_all(verbose, force)
         bulk.update_all_records(verbose, force)
     else:
-        raise ValueError(f"Unknown source for update: '{source}'")
+        logger.error(f"Unknown source for update: '{source}'")
+    logger.info(f"Update from {source} complete")
