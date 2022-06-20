@@ -83,14 +83,13 @@ class ActionNetworkDonation(ActionNetworkObject):
         self["updated_date"] = datetime.now(tz=timezone.utc)
 
     def update_from_hash(self, data: dict):
-        # The only thing that can change about a donation is the amount
-        # If the amount hasn't changed, we issue a warning about the update
-        uuid, _, mod_date = validate_hash(data)
+        # The only change in a donation we care about is the amount,
+        # but they can be updated for changes we don't care about,
+        # such as transaction confirmations, so we ignore most updates
+        _, _, mod_date = validate_hash(data)
         self["modified_date"] = mod_date
         if (amount := data.get("amount")) and amount != self["amount"]:
             self["amount"] = amount
-        else:
-            logger.warning(f"Ignoring update of donation '{uuid}' dated {mod_date}")
 
     @staticmethod
     def _get_metadata_id(data: dict):
