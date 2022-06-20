@@ -250,7 +250,12 @@ def event_query(timestamp: float = None, force: bool = False) -> dict:
     if timestamp and not force:
         query["updated_since"] = int(timestamp)
     if force:
-        cutoff_lo = datetime(2021, 1, 1, tzinfo=timezone.utc)
+        # we never return events created/modified before 1/1/2022
+        # EXCEPT in dev we test back to 2021
+        if Configuration.get_env() == "DEV":
+            cutoff_lo = datetime(2021, 1, 1, tzinfo=timezone.utc)
+        else:
+            cutoff_lo = datetime(2022, 1, 1, tzinfo=timezone.utc)
         query["timeslot_start"] = f"gte_{int(cutoff_lo.timestamp())}"
     else:
         query["timeslot_start"] = "gte_now"

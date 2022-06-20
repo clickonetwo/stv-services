@@ -160,8 +160,12 @@ def attendance_query(timestamp: float = None, force: bool = False) -> dict:
     if timestamp and not force:
         return dict(updated_since=int(timestamp))
     else:
-        # we never return attendances created/modified before 6/1/2022
-        cutoff_lo = datetime(2021, 1, 1, tzinfo=timezone.utc)
+        # we never return attendances created/modified before 1/1/2022
+        # EXCEPT in dev we test back to 2021
+        if Configuration.get_env() == "DEV":
+            cutoff_lo = datetime(2021, 1, 1, tzinfo=timezone.utc)
+        else:
+            cutoff_lo = datetime(2022, 1, 1, tzinfo=timezone.utc)
         return dict(updated_since=int(cutoff_lo.timestamp()))
 
 
