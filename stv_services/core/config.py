@@ -96,7 +96,6 @@ class Configuration(dict):
                 json_data = json.load(f)
         if not isinstance(json_data, dict):
             raise ValueError(f"No configuration dictionary in input: {repr(json_data)}")
-        self.clear()
         self.update(json_data)
 
     def save_to_file(self, path: str = None):
