@@ -20,10 +20,12 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 #
+import os
 from datetime import datetime, timezone
 from typing import Any, ClassVar
 from zoneinfo import ZoneInfo
 
+from icalendar import Calendar, Event
 import sqlalchemy as sa
 from sqlalchemy.future import Connection
 
@@ -35,6 +37,7 @@ from stv_services.data_store.persisted_dict import PersistedDict, lookup_objects
 from stv_services.mobilize.utilities import fetch_all_hashes, compute_status
 
 logger = get_logger(__name__)
+calendar_file = os.path.join("local", "stv_events.ics")
 
 
 class MobilizeEvent(PersistedDict):
@@ -311,3 +314,80 @@ def compute_event_status(verbose: bool = True, force: bool = False):
     if verbose:
         counts = MobilizeEvent.contact_counts
         logger.info(f"Contact cache lookups [hit/miss/no-person/suppressed]: {counts}")
+
+
+def make_event_calendar(verbose: bool = True, force: bool = False):
+    config = Configuration.get_global_config()
+    last_change = datetime.fromtimestamp(
+        config.get("last_calendar_change", 0), tz=timezone.utc
+    )
+    last_create = get_calendar_date()
+    if not force and last_change < last_create:
+        if verbose:
+            logger.info("Calendar file is up to date, not remaking it")
+        return
+    if verbose:
+        logger.info("Bringing calendar file up to date")
+    cal = Calendar()
+    cal.add("version", 2.0)
+    cal.add("prodid", "-//Seed the Vote Event Calendar//seedthevote.org//")
+    calendar_end = datetime(2099, 1, 1, tzinfo=timezone.utc)
+    with Postgres.get_global_engine().connect() as conn:  # type: Connection
+        query = sa.select(model.event_info).where(model.event_info.c.is_featured)
+        events = MobilizeEvent.from_query(conn, query)
+        for event in events:
+            # compute the name and description
+            event_id = event["uuid"]
+            name = event.get("featured_name") or event["title"]
+            description = event.get("featured_description") or event["description"]
+            # find the featured timeslots in start-date order
+            cutoff_lo = event.get("feature_start", model.epoch)
+            cutoff_hi = event.get("feature_end", model.epoch)
+            cutoff_hi = calendar_end if cutoff_hi == model.epoch else cutoff_hi
+            query = (
+                sa.select(model.timeslot_info)
+                .where(
+                    sa.and_(
+                        model.timeslot_info.c.event_id == event["uuid"],
+                        model.timeslot_info.c.start_date >= cutoff_lo,
+                        model.timeslot_info.c.end_date < cutoff_hi,
+                    )
+                )
+                .order_by(model.timeslot_info.c.start_date)
+            )
+            timeslots = MobilizeTimeslot.from_query(conn, query)
+            # create the calendar entries, one per timeslot
+            for timeslot in timeslots:
+                timeslot_id = timeslot["uuid"]
+                uid = f"/org.seedthevote.event/{event_id}/{timeslot_id}"
+                utc_start: datetime = timeslot["start_date"]
+                pt_start = utc_start.astimezone(tz=ZoneInfo("America/Los_Angeles"))
+                pt_string = pt_start.strftime("%I:%M%p")
+                evt = Event()
+                evt.add("dtstamp", datetime.now(tz=timezone.utc))
+                evt.add("uid", uid)
+                evt.add("summary", f"{name} (at {pt_string})")
+                evt.add("description", f"{description}")
+                evt.add("dtstart", pt_start.date())
+                evt.add("location", event["event_url"])
+                cal.add_component(evt)
+    # output the calendar
+    with open(calendar_file, mode="wb") as file:
+        # we have sorted the events in our desired order
+        file.write(cal.to_ical(sorted=False))
+    if verbose:
+        logger.info("Calendar file is up to date")
+
+
+def get_calendar_date() -> datetime:
+    calendar_directory = os.path.dirname(calendar_file)
+    if not os.path.isdir(calendar_directory):
+        os.mkdir(calendar_directory)
+    if os.path.isfile(calendar_file):
+        try:
+            result = os.stat(calendar_file)
+            local_stamp = datetime.fromtimestamp(result.st_mtime)
+            return local_stamp.astimezone(tz=timezone.utc)
+        except IOError:
+            return model.epoch
+    return model.epoch

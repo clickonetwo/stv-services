@@ -21,8 +21,10 @@
 #  SOFTWARE.
 #
 import json
+from datetime import datetime, timezone
 
 import sqlalchemy as sa
+from dateutil.parser import parse
 from requests import HTTPError
 from sqlalchemy.future import Connection
 
@@ -33,6 +35,7 @@ from ..airtable.webhook import fetch_hook_payloads
 from ..core import Configuration
 from ..core.logging import log_exception, get_logger
 from ..data_store import model, RedisSync
+from ..mobilize.event import MobilizeEvent
 
 logger = get_logger(__name__)
 
@@ -70,6 +73,9 @@ def process_webhook_notification(conn: Connection, name: str):
     elif name == "assignment":
         payloads = fetch_hook_payloads(conn, "assignment")
         process_refcode_payloads(conn, "assignment", payloads)
+    elif name == "event":
+        payloads = fetch_hook_payloads(conn, "event")
+        process_event_payloads(conn, "event", payloads)
     else:
         raise ValueError(f"Unknown webhook type: '{name}'")
 
@@ -221,3 +227,49 @@ def process_refcode_assignments(conn: Connection, refcode_map: dict):
                 metadata = ActBlueDonationMetadata.from_lookup(conn, row["uuid"])
                 metadata.notice_person(conn, person)
                 metadata.persist(conn)
+
+
+def process_event_payloads(conn: Connection, name: str, payloads: list[dict]):
+    logger.info(f"Processing Airtable '{name}' payloads...")
+    config = Configuration.get_session_config(conn)
+    schema = config[f"airtable_stv_{name}_schema"]
+    table_id = schema["table_id"]
+    column_ids = schema["column_ids"]
+    field_map = {val: key for key, val in column_ids.items()}
+    field_values: dict[str, dict] = {}
+    for payload in payloads:
+        change: dict = payload.get("changedTablesById", {}).get(table_id, {})
+        if change and (records := change.get("changedRecordsById")):
+            for record_id, change in records.items():
+                fields = field_values.setdefault(record_id, {})
+                current = change.get("current", {}).get("cellValuesByFieldId", {})
+                for key, val in current.items():
+                    if field_name := field_map[key]:
+                        fields[field_name] = val
+    process_event_feature_values(conn, field_values)
+    config["last_calendar_change"] = datetime.now(tz=timezone.utc).timestamp()
+    config.save_to_connection(conn)
+    logger.info(f"Event field processing done.")
+
+
+def process_event_feature_values(conn: Connection, field_values: dict[str, dict]):
+    for record_id, fields in field_values.items():
+        query = sa.select(model.event_info).where(
+            model.event_info.c.event_record_id == record_id
+        )
+        events = MobilizeEvent.from_query(conn, query)
+        if not events or len(events) != 1:
+            logger.warning(f"Event record '{id}' doesn't match one event")
+            continue
+        event = events[0]
+        if "is_featured" in fields:
+            event["is_featured"] = True if fields["is_featured"] else False
+        if name := fields.get("featured_name"):
+            event["featured_name"] = name
+        if description := fields.get("featured_description"):
+            event["featured_description"] = description
+        if start_date := fields.get("feature_start"):
+            event["feature_start"] = parse(start_date)
+        if end_date := fields.get("feature_end"):
+            event["feature_end"] = parse(end_date)
+        event.persist(conn)

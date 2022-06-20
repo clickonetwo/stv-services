@@ -88,7 +88,7 @@ class Configuration(dict):
             self.save_to_connection(conn)
             conn.commit()
 
-    def load_from_file(self, path: str = None):
+    def load_from_file(self, path: str = None) -> int:
         if not path:
             json_data = json.load(sys.stdin)
         else:
@@ -97,6 +97,7 @@ class Configuration(dict):
         if not isinstance(json_data, dict):
             raise ValueError(f"No configuration dictionary in input: {repr(json_data)}")
         self.update(json_data)
+        return len(json_data)
 
     def save_to_file(self, path: str = None):
         simple_dict = dict(self)

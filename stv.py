@@ -43,7 +43,7 @@ from stv_services.core import Configuration
 from stv_services.data_store import Postgres
 from stv_services.external import spreadsheet
 from stv_services.mobilize import event, attendance
-from stv_services.mobilize.event import MobilizeEvent
+from stv_services.mobilize.event import MobilizeEvent, make_event_calendar
 from stv_services.worker import control
 from stv_services.worker.airtable import update_airtable_records
 
@@ -390,10 +390,10 @@ def load_config(ctx: click.Context, path: str = None):
     if verbose:
         print(f"Loading configuration from {path or 'stdin'}...")
     config = Configuration.get_global_config()
-    config.load_from_file(path)
+    count = config.load_from_file(path)
     config.save_to_data_store()
     if verbose:
-        print(f"Loaded {len(config)} key/value pairs.")
+        print(f"Updated {count} of {len(config)} key/value pairs.")
 
 
 @stv.command()
@@ -500,6 +500,14 @@ def verify_match(type: str, remove_extra: bool = False):
 def analyze_match(type: str):
     report = sync.sync_report(type)
     sync.analyze_report(report)
+
+
+@stv.command()
+@click.option("--force/--no-force", default=True, help="force update the calendar")
+@click.pass_context
+def update_calendar(ctx: click.Context, force: bool = False):
+    verbose = ctx.obj["verbose"]
+    make_event_calendar(verbose, force)
 
 
 @stv.command()

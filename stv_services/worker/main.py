@@ -79,16 +79,17 @@ def do_housekeeping(scheduled: datetime = None):
     logger.info("Doing housekeeping...")
     # update all records touched by out-of-band (manual) processing
     airtable.update_airtable_records()
-    if not scheduled or scheduled.minute in (5,):
-        # when first run, or every hour on the 5-minute mark,
-        # verify that the key tables have not gotten out of sync
-        control.submit_match_request(["contact", "funder"], do_repair=True)
-    if not scheduled or scheduled.minute in (10,):
-        # when first run, or every hour on the 10-minute mark, update people data
-        control.submit_update_request("action_network", verbose=True, force=False)
-    if not scheduled or scheduled.minute in (40,):
-        # when first run, or every hour on the 40-minute mark, update event data
-        control.submit_update_request("mobilize", verbose=True, force=False)
+    if Configuration.get_env() != "DEV":
+        if not scheduled or scheduled.minute in (5,):
+            # when first run, or every hour on the 5-minute mark,
+            # verify that the key tables have not gotten out of sync
+            control.submit_match_request(["contact", "funder"], do_repair=True)
+        if not scheduled or scheduled.minute in (10,):
+            # when first run, or every hour on the 10-minute mark, update people data
+            control.submit_update_request("action_network", verbose=True, force=False)
+        if not scheduled or scheduled.minute in (40,):
+            # when first run, or every hour on the 40-minute mark, update event data
+            control.submit_update_request("mobilize", verbose=True, force=False)
     target_total, completed_total = 0, 0
     for queue in queues:
         target, completed = process_queue(queue)

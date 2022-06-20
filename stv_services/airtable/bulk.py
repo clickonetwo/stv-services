@@ -41,7 +41,11 @@ from stv_services.airtable.donation import (
     create_donation_record,
     verify_donation_schema,
 )
-from stv_services.airtable.event import verify_event_schema, create_event_record
+from stv_services.airtable.event import (
+    verify_event_schema,
+    create_event_record,
+    register_event_hook,
+)
 from stv_services.airtable.funder import verify_funder_schema, create_funder_record
 from stv_services.airtable.utils import (
     find_records_to_update,
@@ -343,6 +347,9 @@ def register_webhooks(verbose: bool = True, sync_first: bool = False):
     if verbose:
         logger.info(f"Registering assignment webhook...")
     register_assignment_hook()
+    if verbose:
+        logger.info(f"Registering event webhook...")
+    register_event_hook()
     if verbose:
         logger.info(f"Done.")
 

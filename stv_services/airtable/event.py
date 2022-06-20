@@ -28,6 +28,7 @@ from .utils import (
     upsert_records,
     delete_records,
 )
+from .webhook import register_hook
 from ..action_network.person import ActionNetworkPerson
 from ..core import Configuration
 from ..core.logging import get_logger
@@ -47,8 +48,8 @@ event_table_schema = {
     "is_featured": FieldInfo("Featured on calendar?", "checkbox", "event"),
     "featured_name": FieldInfo("STV Event Name", "singleLineText", "observe"),
     "featured_description": FieldInfo("Event Description", "multilineText", "observe"),
-    "featured_start_date": FieldInfo("Featured Start Date", "date", "observe"),
-    "featured_end_date": FieldInfo("Featured End Date", "date", "observe"),
+    "feature_start": FieldInfo("Featured Start Date", "date", "observe"),
+    "feature_end": FieldInfo("Featured End Date", "date", "observe"),
 }
 
 
@@ -100,3 +101,21 @@ def upsert_events(conn: Connection, events: list[MobilizeEvent]) -> (int, int):
 
 def delete_events(conn: Connection, events: list[MobilizeEvent]) -> int:
     return delete_records(conn, "event", events)
+
+
+def register_event_hook():
+    schema = verify_event_schema()
+    base_id = schema["base_id"]
+    table_id = schema["table_id"]
+    column_ids = schema["column_ids"]
+    field_ids = [
+        column_ids[name]
+        for name in [
+            "is_featured",
+            "featured_name",
+            "featured_description",
+            "feature_start",
+            "feature_end",
+        ]
+    ]
+    register_hook("event", base_id, table_id, field_ids)

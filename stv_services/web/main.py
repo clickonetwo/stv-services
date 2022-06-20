@@ -26,6 +26,7 @@ from fastapi.responses import RedirectResponse
 from .act_blue import act_blue
 from .action_network import action_network
 from .airtable import airtable
+from .mobilize import mobilize
 from ..act_blue.metadata import ActBlueDonationMetadata
 from ..airtable.bulk import register_webhooks, verify_schemas
 from ..core import Configuration
@@ -45,6 +46,7 @@ else:
 app.include_router(airtable, prefix="/airtable", tags=["airtable"])
 app.include_router(act_blue, prefix="/actblue", tags=["actblue"])
 app.include_router(action_network, prefix="/action_network", tags=["action_network"])
+app.include_router(mobilize, prefix="/mobilize", tags=["mobilize"])
 
 
 @app.get("/", response_class=RedirectResponse, status_code=303)

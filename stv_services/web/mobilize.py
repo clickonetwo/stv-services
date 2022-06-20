@@ -20,21 +20,19 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 #
-from stv_services.airtable import bulk
-from stv_services.mobilize import event, attendance
+from fastapi import APIRouter
+from fastapi.responses import FileResponse
+
+from stv_services.core.logging import get_logger
+from stv_services.mobilize.event import make_event_calendar, calendar_file
+
+logger = get_logger(__name__)
+mobilize = APIRouter()
 
 
-def import_and_update_all(verbose: bool = True, force: bool = False):
-    """Get all new and updated events and attendances from Mobilize"""
-    # events and timeslots first, because we only import attendances for those
-    event.import_events(verbose, force)
-    event.compute_event_status(verbose, force)
-    # next, make sure the organizers are contacts and re-update the events
-    # that were waiting for them to become contacts
-    bulk.update_contact_records(verbose)
-    bulk.update_event_records(verbose)
-    # now load the attendances
-    attendance.import_attendances(verbose, force)
-    attendance.compute_attendance_status(verbose, force)
-    # finally, remake the calendar
-    event.make_event_calendar(verbose, force)
+@mobilize.get("/calendar", response_class=FileResponse)
+def get_updated_calendar():
+    logger.info("Received event calendar request")
+    make_event_calendar()
+    logger.info("Returning calendar")
+    return calendar_file
