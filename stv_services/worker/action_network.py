@@ -87,11 +87,11 @@ def process_webhook_person_data(conn: Connection, person_id: str, body: dict):
     try:
         person = ActionNetworkPerson.from_lookup(conn, uuid=person_id)
         if person_data := body.get("person"):
+            person_data["identifiers"] = [person_id]
             _, _, modified_date = validate_hash(person_data)
             if modified_date <= person["modified_date"]:
                 # we have already seen this data
                 return
-            person_data["identifiers"] = [person_id]
             person.update_from_hash(person_data)
     except KeyError:
         person = ActionNetworkPerson.from_action_network(person_id)
