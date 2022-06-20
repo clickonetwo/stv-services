@@ -26,8 +26,10 @@ from collections import namedtuple
 import sqlalchemy as sa
 from sqlalchemy.future import Connection
 
+from stv_services.core.logging import get_logger
 from stv_services.data_store import Postgres, model
 
+logger = get_logger(__name__)
 FieldInfo = namedtuple("FieldInfo", ["db_field", "db_type"])
 
 field_map = {
@@ -70,12 +72,12 @@ def import_spreadsheet(file_path: str, verbose: bool = False) -> (int, int):
             email = row_vals.get("email", "").strip().lower()
             if not email:
                 if verbose:
-                    print(f"Skipping row {i} because it has no email.")
+                    logger.info(f"Skipping row {i} because it has no email.")
                 continue
             row_vals["input row"] = i
             if prior := vals.get(email):
                 if verbose:
-                    print(
+                    logger.info(
                         f"Discarding row {prior['input row']} "
                         f"because '{email}' is also on row {i}."
                     )
@@ -104,17 +106,17 @@ def update_spreadsheet(
             email: str = row.get("Email*", "").strip().lower()
             if not email:
                 if verbose:
-                    print(f"Skipping update row {i} because it has no email")
+                    logger.info(f"Skipping update row {i} because it has no email")
                 continue
             if updates.get(email):
                 if verbose:
-                    print(
+                    logger.info(
                         f"Discarding update row {updates[email]['input row']} "
                         f"because '{email}' is also on row {i}."
                     )
             updates[email] = row
     if verbose:
-        print(f"Found {len(updates)} email(s) with updated data.")
+        logger.info(f"Found {len(updates)} email(s) with updated data.")
     with open(existing_file_path, newline="", encoding="utf-8") as in_file:
         reader = csv.DictReader(in_file)
         with open(new_file_path, mode="w", newline="", encoding="utf-8") as out_file:
@@ -126,7 +128,7 @@ def update_spreadsheet(
                 if vals := updates.get(email):
                     updated.append(email)
                     if verbose:
-                        print(f"Updating row #{i+2} for '{email}'.")
+                        logger.info(f"Updating row #{i+2} for '{email}'.")
                     del vals["Email*"]  # don't update the match key
                     vals = {k: v for k, v in vals.items() if k in reader.fieldnames}
                     row.update(vals)
@@ -134,11 +136,13 @@ def update_spreadsheet(
                 writer.writerow(row)
         with open(updated_emails_path, "w", encoding="utf-8") as email_file:
             for email in updated:
-                print(email, file=email_file)
+                logger.info(email, file=email_file)
     if verbose:
-        print(f"Updated {len(updated)} row(s).")
+        logger.info(f"Updated {len(updated)} row(s).")
     if verbose and len(updates) > 0:
-        print(f"The following emails were not found to update: {list(updates.keys())}")
+        logger.info(
+            f"The following emails were not found to update: {list(updates.keys())}"
+        )
     return len(updated), len(updated) + len(updates)
 
 

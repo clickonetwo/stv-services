@@ -26,12 +26,15 @@ import sqlalchemy as sa
 from sqlalchemy.future import Connection
 
 from .metadata import import_metadata_from_webhooks, ActBlueDonationMetadata
+from ..core.logging import get_logger
 from ..data_store import Postgres, model
+
+logger = get_logger(__name__)
 
 
 def import_donation_metadata(filepath: str, verbose: bool = True):
     if verbose:
-        print(f"Importing ActBlue webhooks from '{filepath}'...")
+        logger.info(f"Importing ActBlue webhooks from '{filepath}'...")
     batch: list[dict] = []
     with open(filepath) as file:
         while line := file.readline().strip():
@@ -45,7 +48,7 @@ def import_donation_metadata(filepath: str, verbose: bool = True):
     total, imported = len(batch), 0
     for i in range(0, total, 100):
         if verbose and i > 0:
-            print(f"Processed {i}, kept {imported}...")
+            logger.info(f"Processed {i}, kept {imported}...")
         imported += import_metadata_from_webhooks(batch[i : i + 100])
     if verbose:
-        print(f"Imported {imported} metadata records from {total} webhooks.")
+        logger.info(f"Imported {imported} metadata records from {total} webhooks.")

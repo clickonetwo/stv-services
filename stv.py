@@ -144,7 +144,7 @@ def import_submissions(ctx: click.Context, force: bool):
 def import_donation_metadata(ctx: click.Context, path: str = None):
     verbose = ctx.obj["verbose"]
     if not path:
-        path = "./local/actblue-backfill-2022-05-12.json"
+        path = "./local/actblue-hooks.json"
     if not os.path.isfile(path):
         raise ValueError(f"Can't find ActBlue webhooks at path '{path}'")
     ab_bulk.import_donation_metadata(path, verbose=verbose)
@@ -249,27 +249,23 @@ def compute_status_for_type(ctx: click.Context, type: str, force: bool = False):
 
 @stv.command()
 @click.option("--force/--no-force", default=True, help="Force compute")
-@click.option("--id", help="uuid of donation, submission, metadata, or event")
+@click.option("--uuid", help="uuid of donation, submission, metadata, or event")
 @click.option("--email", help="email of person")
-@click.pass_context
-def compute_status_of(
-    ctx: click.Context, id: str = None, email: str = None, force: bool = True
-):
-    verbose = ctx.obj["verbose"]
+def compute_status_of(uuid: str = None, email: str = None, force: bool = True):
     with Postgres.get_global_engine().connect() as conn:  # type: Connection
         if email:
             obj = ActionNetworkPerson.from_lookup(conn, email=email.lower())
-        elif id.startswith("action_network"):
+        elif uuid.startswith("action_network"):
             try:
-                obj = ActionNetworkDonation.from_lookup(conn, uuid=id)
+                obj = ActionNetworkDonation.from_lookup(conn, uuid=uuid)
             except KeyError:
-                obj = ActionNetworkSubmission.from_lookup(conn, uuid=id)
-        elif id.startswith("act_blue"):
-            obj = ActBlueDonationMetadata.from_lookup(conn, uuid=id)
-        elif id.isdigit():
-            obj = MobilizeEvent.from_lookup(conn, uuid=int(id))
+                obj = ActionNetworkSubmission.from_lookup(conn, uuid=uuid)
+        elif uuid.startswith("act_blue"):
+            obj = ActBlueDonationMetadata.from_lookup(conn, uuid=uuid)
+        elif uuid.isdigit():
+            obj = MobilizeEvent.from_lookup(conn, uuid=int(uuid))
         else:
-            raise ValueError(f"Can't parse object id: {id}")
+            raise ValueError(f"Can't parse object id: {uuid}")
         obj.compute_status(conn, force)
         obj.persist(conn)
         conn.commit()
@@ -435,13 +431,11 @@ def sync_webhooks(ctx: click.Context, force_remove: bool = False):
 
 @stv.command()
 @click.option("--queue", help="action_network, act_blue, airtable, or control")
-@click.option("--id", help="md5 webhook ID of the request")
-@click.pass_context
-def resubmit_successful_webhook(ctx: click.Context, queue: str = None, id: str = None):
-    verbose = ctx.obj["verbose"]
-    if not queue or not id:
+@click.option("--hook", help="md5 webhook ID of the request")
+def resubmit_successful_webhook(queue: str = None, hook: str = None):
+    if not queue or not hook:
         raise ValueError("You must specify both the queue and hook id")
-    control.resubmit_successful_requests(queue, [id])
+    control.resubmit_successful_requests(queue, [hook])
 
 
 @stv.command()

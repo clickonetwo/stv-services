@@ -28,6 +28,9 @@ from urllib.parse import urlencode
 from sqlalchemy.future import Connection
 
 from ..core import Configuration, Session
+from ..core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 def fetch_all_hashes(
@@ -42,13 +45,13 @@ def fetch_all_hashes(
     url = config["mobilize_api_base_url"] + f"/{hash_type}"
     if verbose:
         if query:
-            print(f"Fetching {hash_type} matching {query}...")
+            logger.info(f"Fetching {hash_type} matching {query}...")
         else:
-            print(f"Fetching all {hash_type}...")
+            logger.info(f"Fetching all {hash_type}...")
     if skip_pages:
         query["page"] = skip_pages + 1
         if verbose:
-            print(f"(Starting import on page {skip_pages + 1})")
+            logger.info(f"(Starting import on page {skip_pages + 1})")
     if query:
         url += "?" + urlencode(query)
     return fetch_hash_pages(
@@ -82,28 +85,24 @@ def fetch_hash_pages(
         if page_count == 0:
             break
         if verbose:
-            print(
-                f"Processing {page_count} {hash_type} on page {page_number}...",
-                end="",
-                flush=True,
-            )
+            logger.info(f"Processing {page_count} {hash_type} on page {page_number}...")
         import_count += page_processor(data)
         total_count += page_count
         if verbose:
-            print(f"({import_count}/{total_count})")
+            logger.info(f"({import_count}/{total_count})")
         if max_pages and page_number >= max_pages:
             if verbose:
-                print(f"(Stopped after importing {max_pages} pages)")
+                logger.info(f"(Stopped after importing {max_pages} pages)")
             break
     elapsed_process_time = process_time() - start_process_time
     elapsed_time = datetime.now() - start_time
     if verbose:
-        print(
+        logger.info(
             f"Imported {import_count} "
             f"of {total_count} {hash_type} "
             f"fetched on {page_number} page(s)."
         )
-        print(
+        logger.info(
             f"Fetch time was {elapsed_time} (processor time: {elapsed_process_time} seconds)."
         )
     return total_count
@@ -118,8 +117,8 @@ def compute_status(conn: Connection, objects: list, verbose: bool, force: bool):
         now = datetime.now(tz=timezone.utc)
         obj.persist(conn)
         if verbose and (now - progress_time).seconds > 5:
-            print(f"({count})...", flush=True)
+            logger.info(f"({count})...")
             progress_time = now
     if verbose:
         now = datetime.now(tz=timezone.utc)
-        print(f"({count}) done (in {(now - start_time).total_seconds()} secs).")
+        logger.info(f"({count}) done (in {(now - start_time).total_seconds()} secs).")

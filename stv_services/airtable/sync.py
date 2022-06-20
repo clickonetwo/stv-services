@@ -49,21 +49,21 @@ def analyze_report(report: SyncReport):
     match = True
     if count := len(report.empty_records):
         match = False
-        print(f"There are {count} records with no email.")
+        logger.info(f"There are {count} records with no email.")
     if len(report.unmatched_records):
         match = False
         count = sum([len(val) for val in report.unmatched_records.values()])
-        print(f"There are {count} records with emails that don't match people.")
+        logger.info(f"There are {count} records with emails that don't match people.")
     if len(report.adoptable_records) > 0:
         match = False
         count = sum([len(val) for val in report.adoptable_records.values()])
-        print(f"There are {count} records with emails for people with no record.")
+        logger.info(f"There are {count} records with emails for people with no record.")
     if len(report.extra_records) > 0:
         match = False
         deltas = []
         for email, extras in report.extra_records.items():
             if len(extras) > 1:
-                print(f"There are {len(extras)} extra records for '{email}'")
+                logger.info(f"There are {len(extras)} extra records for '{email}'")
             actual = report.matched_records[email]
             actual_created = parse(actual["createdTime"])
             for extra in extras:
@@ -72,11 +72,13 @@ def analyze_report(report: SyncReport):
         count = len(deltas)
         average = sum(deltas) / count
         min_delta, max_delta = min(deltas), max(deltas)
-        print(f"There are {count} extra records with matching emails.")
-        print(f"On average, the extra was created {average} hours before the actual.")
-        print(f"The differences range from {min_delta} to {max_delta} hours.")
+        logger.info(f"There are {count} extra records with matching emails.")
+        logger.info(
+            f"On average, the extra was created {average} hours before the actual."
+        )
+        logger.info(f"The differences range from {min_delta} to {max_delta} hours.")
     if match:
-        print(f"The records match the people completely.")
+        logger.info(f"The records match the people completely.")
 
 
 def sync_report(type_: str) -> SyncReport:
@@ -225,15 +227,15 @@ def delete_airtable_records(
     table_id = schema["table_id"]
     total, deletes = len(record_ids), 0
     if verbose:
-        print(f"Deleting {total} {type_} records...", flush=True)
+        logger.info(f"Deleting {total} {type_} records...")
     for start in range(0, total, 50):
         if verbose and deletes > 0:
-            print(f"({deletes})...", flush=True)
+            logger.info(f"({deletes})...")
         deletes += len(
             web.batch_delete(
                 base_id, table_id, record_ids[start : min(start + 50, total)]
             )
         )
     if verbose:
-        print(f"({deletes})")
+        logger.info(f"({deletes})")
     return deletes

@@ -32,8 +32,11 @@ from restnavigator import Navigator
 from sqlalchemy.future import Connection
 
 from ..core import Configuration, Session
+from ..core.logging import get_logger
 from ..data_store import Postgres
 from ..data_store.persisted_dict import PersistedDict
+
+logger = get_logger(__name__)
 
 
 class ActionNetworkObject(PersistedDict):
@@ -117,14 +120,14 @@ def fetch_all_hashes(
     if query:
         query_args["filter"] = query
         if verbose:
-            print(f"Fetching {hash_type} matching filter={query}...")
+            logger.info(f"Fetching {hash_type} matching filter={query}...")
     else:
         if verbose:
-            print(f"Fetching all {hash_type}...")
+            logger.info(f"Fetching all {hash_type}...")
     if skip_pages:
         query_args["page"] = skip_pages + 1
         if verbose:
-            print(f"(Starting import on page {skip_pages + 1})")
+            logger.info(f"(Starting import on page {skip_pages + 1})")
     if query_args:
         url += "?" + urlencode(query_args)
     return fetch_hash_pages(
@@ -149,12 +152,12 @@ def fetch_all_child_hashes(
     if query:
         url += "?" + urlencode({"filter": query})
         if verbose:
-            print(
+            logger.info(
                 f"Fetching {child_hash_type} from {parent_hash_type} matching filter={query}..."
             )
     else:
         if verbose:
-            print(f"Fetching {child_hash_type} from all {parent_hash_type}...")
+            logger.info(f"Fetching {child_hash_type} from all {parent_hash_type}...")
     session = Session.get_global_session("action_network")
     pages = Navigator.hal(url, session=session)
     total_count = 0
@@ -165,7 +168,7 @@ def fetch_all_child_hashes(
         for nav in navigators:
             if verbose:
                 parent_id = nav().get("identifiers", ["unknown"])[0]
-                print(f"Processing {parent_hash_type} {parent_id}...")
+                logger.info(f"Processing {parent_hash_type} {parent_id}...")
             total_count += fetch_related_hashes(
                 url=nav.uri + f"/{child_hash_type}",
                 hash_type=child_hash_type,
@@ -182,7 +185,7 @@ def fetch_related_hashes(
     verbose: bool = False,
 ) -> int:
     if verbose:
-        print(f"Fetching related {hash_type}...")
+        logger.info(f"Fetching related {hash_type}...")
     return fetch_hash_pages(hash_type=hash_type, url=url, cls=cls, verbose=verbose)
 
 
@@ -207,16 +210,12 @@ def fetch_hash_pages(
         page_number += 1
         if verbose:
             if last_page := page.state.get("total_pages", last_page):
-                print(
-                    f"Processing {page_count} {hash_type} on page {page_number}/{last_page}...",
-                    end="",
-                    flush=True,
+                logger.info(
+                    f"Processing {page_count} {hash_type} on page {page_number}/{last_page}..."
                 )
             else:
-                print(
-                    f"Processing {page_count} {hash_type} on page {page_number}...",
-                    end="",
-                    flush=True,
+                logger.info(
+                    f"Processing {page_count} {hash_type} on page {page_number}..."
                 )
         hash_list = [navigator.state for navigator in navigators]
         created, updated, ignored = import_or_update_objects(cls, hash_list)
@@ -225,22 +224,22 @@ def fetch_hash_pages(
         total_ignored += ignored
         total_count += page_count
         if verbose:
-            print(
+            logger.info(
                 f"(+{created} created, +{updated} updated, +{ignored} ignored "
                 f"= {total_count})"
             )
         if max_pages and page_number >= (skip_pages + max_pages):
             if verbose:
-                print(f"(Stopped after importing {max_pages} pages)")
+                logger.info(f"(Stopped after importing {max_pages} pages)")
             break
     elapsed_process_time = process_time() - start_process_time
     elapsed_time = datetime.now() - start_time
     if verbose:
-        print(f"Fetched {total_count} {hash_type}.")
-        print(
+        logger.info(f"Fetched {total_count} {hash_type}.")
+        logger.info(
             f"Created {total_created}, updated {total_updated}, ignored {total_ignored}"
         )
-        print(
+        logger.info(
             f"Fetch time was {elapsed_time} (processor time: {elapsed_process_time} seconds)."
         )
     return total_count
@@ -268,6 +267,6 @@ def import_or_update_objects(
                 obj = cls.from_hash(data)
                 obj.persist(conn)
             except ValueError as err:
-                print(f"Skipping import of invalid hash: {err}")
+                logger.info(f"Skipping import of invalid hash: {err}")
         conn.commit()
     return created, updated, ignored

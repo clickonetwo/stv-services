@@ -67,7 +67,7 @@ def register_hook(
     url = config["airtable_api_base_url"] + f"/bases/{base}/webhooks"
     response = session.post(url, json=body)
     if response.status_code == 422:
-        print("Unprocessable entity exception")
+        logger.info("Unprocessable entity exception")
         return
     else:
         response.raise_for_status()
@@ -106,7 +106,7 @@ def sync_hooks(verbose: bool = True, force_remove: bool = False):
     # fetch the existing hooks from Airtable
     base_name = config["airtable_stv_base_name"]
     if verbose:
-        print(f"Fetching Airtable webhooks for base '{base_name}'...")
+        logger.info(f"Fetching Airtable webhooks for base '{base_name}'...")
     base_id = fetch_airtable_base_id(base_name)
     session = Session.get_global_session("airtable")
     url = api_url + f"/bases/{base_id}/webhooks"
@@ -119,35 +119,35 @@ def sync_hooks(verbose: bool = True, force_remove: bool = False):
         name = find_spec(hook, hook_info)
         if name and not force_remove:
             if verbose:
-                print(f"Hook '{name}' is registered.")
+                logger.info(f"Hook '{name}' is registered.")
             matched.add(name)
         if force_remove or not name:
             hook_id = hook["id"]
             if name:
                 if verbose:
-                    print(f"Deleting hook '{name}'...")
+                    logger.info(f"Deleting hook '{name}'...")
                 del hook_info[name]
             else:
                 if verbose:
                     spec = hook["specification"]
-                    print(f"Deleting unknown hook with spec: {spec}...")
+                    logger.info(f"Deleting unknown hook with spec: {spec}...")
             url = api_url + f"/bases/{base_id}/webhooks/{hook_id}"
             session.delete(url).raise_for_status()
     if not force_remove:
         if missing := [name for name in hook_info if name not in matched]:
             if verbose:
-                print(f"Deleting unregistered hooks: {missing}")
+                logger.info(f"Deleting unregistered hooks: {missing}")
             for name in missing:
                 del hook_info[name]
         else:
             if verbose:
                 if hook_info:
-                    print(f"All hooks are registered.")
+                    logger.info(f"All hooks are registered.")
                 else:
-                    print(f"There are no registered hooks.")
+                    logger.info(f"There are no registered hooks.")
     else:
         if verbose:
-            print(f"There are no registered hooks.")
+            logger.info(f"There are no registered hooks.")
     config.save_to_data_store()
 
 

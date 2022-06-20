@@ -57,33 +57,36 @@ from stv_services.airtable.volunteer import (
     register_volunteer_hook,
 )
 from stv_services.core import Configuration
+from stv_services.core.logging import get_logger
 from stv_services.data_store import Postgres
 from stv_services.data_store.persisted_dict import PersistedDict
 from stv_services.mobilize.event import MobilizeEvent
+
+logger = get_logger(__name__)
 
 
 def verify_schemas(verbose: bool = True):
     config = Configuration.get_global_config()
     if verbose:
-        print("Verifying contact schema...")
+        logger.info("Verifying contact schema...")
     verify_contact_schema()
     if verbose:
-        print("Verifying volunteer schema...")
+        logger.info("Verifying volunteer schema...")
     verify_volunteer_schema()
     if verbose:
-        print("Verifying funder schema...")
+        logger.info("Verifying funder schema...")
     verify_funder_schema()
     if verbose:
-        print("Verifying donation schema...")
+        logger.info("Verifying donation schema...")
     verify_donation_schema()
     if verbose:
-        print("Verifying assignment schema...")
+        logger.info("Verifying assignment schema...")
     verify_assignment_schema()
     if verbose:
-        print("Verifying event schema...")
+        logger.info("Verifying event schema...")
     verify_event_schema()
     if verbose:
-        print("Saving verified schemas...")
+        logger.info("Saving verified schemas...")
     config.save_to_data_store()
 
 
@@ -148,7 +151,7 @@ def update_changed_event_records() -> dict:
 def update_contact_records(verbose: bool = True, force: bool = False) -> int:
     with Postgres.get_global_engine().connect() as conn:  # type: Connection
         if verbose:
-            print(f"Loading person data for contacts...")
+            logger.info(f"Loading person data for contacts...")
         people = ActionNetworkPerson.from_query(
             conn, find_records_to_update("contact", force)
         )
@@ -159,7 +162,7 @@ def update_contact_records(verbose: bool = True, force: bool = False) -> int:
 def update_volunteer_records(verbose: bool = True, force: bool = False) -> int:
     with Postgres.get_global_engine().connect() as conn:  # type: Connection
         if verbose:
-            print(f"Loading person data for historical volunteers...")
+            logger.info(f"Loading person data for historical volunteers...")
         people = ActionNetworkPerson.from_query(
             conn, find_records_to_update("volunteer", force)
         )
@@ -170,7 +173,7 @@ def update_volunteer_records(verbose: bool = True, force: bool = False) -> int:
 def update_funder_records(verbose: bool = True, force: bool = False) -> int:
     with Postgres.get_global_engine().connect() as conn:  # type: Connection
         if verbose:
-            print(f"Loading person data for funders...")
+            logger.info(f"Loading person data for funders...")
         people = ActionNetworkPerson.from_query(
             conn, find_records_to_update("funder", force)
         )
@@ -181,7 +184,7 @@ def update_funder_records(verbose: bool = True, force: bool = False) -> int:
 def update_donation_records(verbose: bool = True, force: bool = False) -> int:
     with Postgres.get_global_engine().connect() as conn:  # type: Connection
         if verbose:
-            print(f"Loading donation data...")
+            logger.info(f"Loading donation data...")
         donations = ActionNetworkDonation.from_query(
             conn, find_records_to_update("donation", force)
         )
@@ -192,7 +195,7 @@ def update_donation_records(verbose: bool = True, force: bool = False) -> int:
 def update_event_records(verbose: bool = True, force: bool = False) -> int:
     with Postgres.get_global_engine().connect() as conn:  # type: Connection
         if verbose:
-            print(f"Loading event data...")
+            logger.info(f"Loading event data...")
         events = MobilizeEvent.from_query(conn, find_records_to_update("event", force))
     bulk_upsert_records("event", create_event_record, events, verbose)
     return len(events)
@@ -250,10 +253,10 @@ def bulk_upsert_records(
 ):
     total, inserts, updates = len(dicts), 0, 0
     if verbose:
-        print(f"Updating {total} {record_type} records...", flush=True)
+        logger.info(f"Updating {total} {record_type} records...")
     for start in range(0, total, 100):
         if verbose and inserts + updates > 0:
-            print(f"({inserts+updates})...", flush=True)
+            logger.info(f"({inserts+updates})...")
         with Postgres.get_global_engine().connect() as conn:  # type: Connection
             pairs = [(p_dict, record_maker(conn, p_dict)) for p_dict in dicts]
             i, u = upsert_records(conn, record_type, pairs[start : start + 100])
@@ -264,8 +267,10 @@ def bulk_upsert_records(
         inserts += i
         updates += u
     if verbose:
-        print(f"({inserts+updates})")
-        print(f"Updated {inserts+updates} records ({inserts} new, {updates} existing).")
+        logger.info(f"({inserts+updates})")
+        logger.info(
+            f"Updated {inserts+updates} records ({inserts} new, {updates} existing)."
+        )
 
 
 def remove_contacts(verbose: bool = True):
@@ -313,16 +318,16 @@ def bulk_remove_records(
 ):
     total, deletes = len(dicts), 0
     if verbose:
-        print(f"Deleting {total} {record_type} records...", flush=True)
+        logger.info(f"Deleting {total} {record_type} records...")
     for start in range(0, total, 100):
         if verbose and deletes > 0:
-            print(f"({deletes})...", flush=True)
+            logger.info(f"({deletes})...")
         with Postgres.get_global_engine().connect() as conn:  # type: Connection
             deletes += delete_records(conn, record_type, dicts[start : start + 100])
             conn.commit()
     if verbose:
-        print(f"({deletes})")
-        print(f"Deleted {deletes} records.")
+        logger.info(f"({deletes})")
+        logger.info(f"Deleted {deletes} records.")
 
 
 def register_webhooks(verbose: bool = True, sync_first: bool = False):
@@ -330,21 +335,21 @@ def register_webhooks(verbose: bool = True, sync_first: bool = False):
     if sync_first:
         sync_webhooks(verbose)
     if verbose:
-        print(f"Registering contact webhook...")
+        logger.info(f"Registering contact webhook...")
     register_contact_hook()
     if verbose:
-        print(f"Registering volunteer webhook...")
+        logger.info(f"Registering volunteer webhook...")
     register_volunteer_hook()
     if verbose:
-        print(f"Registering assignment webhook...")
+        logger.info(f"Registering assignment webhook...")
     register_assignment_hook()
     if verbose:
-        print(f"Done.")
+        logger.info(f"Done.")
 
 
 def sync_webhooks(verbose: bool = True, force_remove: bool = False):
     if verbose:
-        print(f"Syncing webhooks against Airtable...")
+        logger.info(f"Syncing webhooks against Airtable...")
     webhook.sync_hooks(verbose, force_remove)
     if verbose:
-        print(f"Done.")
+        logger.info(f"Done.")

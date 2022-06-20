@@ -39,13 +39,18 @@ from .submission import (
 from .utils import fetch_related_hashes, fetch_hash
 from ..act_blue.metadata import ActBlueDonationMetadata
 from ..core import Configuration
+from ..core.logging import get_logger
 from ..core.utilities import action_network_timestamp
 from ..data_store import model, Postgres
+
+logger = get_logger(__name__)
 
 
 def import_person_cluster(person_id: str, verbose: bool = False):
     if verbose:
-        print(f"Fetching person '{person_id}' and their donations and submissions...")
+        logger.info(
+            f"Fetching person '{person_id}' and their donations and submissions..."
+        )
     data, links = fetch_hash("people", person_id)
     person = ActionNetworkPerson.from_hash(data)
     with Postgres.get_global_engine().connect() as conn:  # type: Connection
@@ -178,7 +183,7 @@ def compute_status_for_type(plural: str, verbose: bool = True, force: bool = Fal
         objects = cls.from_query(conn, query)
         total, count, start_time = len(objects), 0, datetime.now(tz=timezone.utc)
         if verbose:
-            print(f"Updating status for {total} {plural}...", flush=True)
+            logger.info(f"Updating status for {total} {plural}...")
             progress_time = start_time
         for obj in objects:
             count += 1
@@ -187,12 +192,12 @@ def compute_status_for_type(plural: str, verbose: bool = True, force: bool = Fal
             obj["updated_date"] = now
             obj.persist(conn)
             if verbose and (now - progress_time).seconds > 5:
-                print(f"({count})...", flush=True)
+                logger.info(f"({count})...")
                 progress_time = now
         conn.commit()
     if verbose:
         now = datetime.now(tz=timezone.utc)
-        print(f"({count}) done (in {(now - start_time).total_seconds()} secs).")
+        logger.info(f"({count}) done (in {(now - start_time).total_seconds()} secs).")
 
 
 def get_classification_parameters(plural: str) -> (sa.Table, Any):

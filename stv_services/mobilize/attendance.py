@@ -29,10 +29,13 @@ from sqlalchemy.future import Connection
 
 from stv_services.action_network.person import ActionNetworkPerson
 from stv_services.core import Configuration
+from stv_services.core.logging import get_logger
 from stv_services.data_store import model, Postgres
 from stv_services.data_store.persisted_dict import PersistedDict, lookup_objects
 from stv_services.mobilize.event import MobilizeEvent
 from stv_services.mobilize.utilities import fetch_all_hashes, compute_status
+
+logger = get_logger(__name__)
 
 
 class MobilizeAttendance(PersistedDict):
@@ -196,9 +199,9 @@ def compute_attendance_status(verbose: bool = True, force: bool = False):
     with Postgres.get_global_engine().connect() as conn:  # type: Connection
         attendances = MobilizeAttendance.from_query(conn, query)
         if verbose:
-            print(f"Updating status for {len(attendances)} attendances...")
+            logger.info(f"Updating status for {len(attendances)} attendances...")
         compute_status(conn, attendances, verbose, force)
         conn.commit()
     if verbose:
         counts = MobilizeAttendance.attendee_counts
-        print(f"Attendee cache lookups [hit/miss/no-person]: {counts}")
+        logger.info(f"Attendee cache lookups [hit/miss/no-person]: {counts}")
