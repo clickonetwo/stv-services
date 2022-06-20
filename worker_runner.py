@@ -20,8 +20,12 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 #
+import multiprocessing as mp
 
 from stv_services.worker.main import main
 
 if __name__ == "__main__":
+    # we always spawn new processes so they are completely independent
+    # without this, on Heroku/Unix, postgres gets confused.
+    mp.set_start_method("spawn")
     main()
