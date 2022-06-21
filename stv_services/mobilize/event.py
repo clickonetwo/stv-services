@@ -317,6 +317,12 @@ def compute_event_status(verbose: bool = True, force: bool = False):
 
 
 def make_event_calendar(verbose: bool = True, force: bool = False):
+    # first make sure the calendar exists.  if not, force it to exist
+    calendar_directory = os.path.dirname(calendar_file)
+    if not os.path.isdir(calendar_directory):
+        logger.info(f"Creating calendar directory")
+        os.mkdir(calendar_directory)
+        force = True
     with Postgres.get_global_engine().connect() as conn:  # type: Connection
         config = Configuration.get_session_config(conn)
         last_change = config.get("calendar_last_update_timestamp", 0)
@@ -374,10 +380,6 @@ def make_event_calendar(verbose: bool = True, force: bool = False):
         config.save_to_connection(conn)
         conn.commit()
     # output the calendar
-    calendar_directory = os.path.dirname(calendar_file)
-    if not os.path.isdir(calendar_directory):
-        logger.info(f"Creating calendar directory")
-        os.mkdir(calendar_directory)
     with open(calendar_file, mode="wb") as file:
         # we have added the events in our desired order
         file.write(cal.to_ical(sorted=False))
