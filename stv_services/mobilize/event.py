@@ -317,25 +317,21 @@ def compute_event_status(verbose: bool = True, force: bool = False):
 
 
 def make_event_calendar(verbose: bool = True, force: bool = False):
-    config = Configuration.get_global_config()
-    last_change = datetime.fromtimestamp(
-        config.get("calendar_last_update_timestamp", 0), tz=timezone.utc
-    )
-    last_create = datetime.fromtimestamp(
-        config.get("calendar_last_create_timestamp", 0), tz=timezone.utc
-    )
-    if not force and last_change < last_create:
-        if verbose:
-            logger.info("Calendar file is up to date, not remaking it")
-        return
-    if verbose:
-        logger.info("Bringing calendar file up to date")
-    config["calendar_last_create_timestamp"] = datetime.now(tz=timezone.utc).timestamp()
-    cal = Calendar()
-    cal.add("version", 2.0)
-    cal.add("prodid", "-//Seed the Vote Event Calendar//seedthevote.org//")
-    calendar_end = datetime(2099, 1, 1, tzinfo=timezone.utc)
     with Postgres.get_global_engine().connect() as conn:  # type: Connection
+        config = Configuration.get_session_config(conn)
+        last_change = config.get("calendar_last_update_timestamp", 0)
+        last_create = config.get("calendar_last_create_timestamp", 0)
+        if not force and last_change < last_create:
+            if verbose:
+                logger.info("Calendar file is up to date, not remaking it")
+            return
+        last_create = datetime.now(tz=timezone.utc).timestamp()
+        if verbose:
+            logger.info("Bringing calendar file up to date")
+        cal = Calendar()
+        cal.add("version", 2.0)
+        cal.add("prodid", "-//Seed the Vote Event Calendar//seedthevote.org//")
+        calendar_end = datetime(2099, 1, 1, tzinfo=timezone.utc)
         query = sa.select(model.event_info).where(model.event_info.c.is_featured)
         events = MobilizeEvent.from_query(conn, query)
         for event in events:
@@ -374,6 +370,9 @@ def make_event_calendar(verbose: bool = True, force: bool = False):
                 evt.add("dtstart", pt_start.date())
                 evt.add("location", event["event_url"])
                 cal.add_component(evt)
+        config["calendar_last_create_timestamp"] = last_create
+        config.save_to_connection(conn)
+        conn.commit()
     # output the calendar
     calendar_directory = os.path.dirname(calendar_file)
     if not os.path.isdir(calendar_directory):
@@ -382,6 +381,5 @@ def make_event_calendar(verbose: bool = True, force: bool = False):
     with open(calendar_file, mode="wb") as file:
         # we have added the events in our desired order
         file.write(cal.to_ical(sorted=False))
-    config.save_to_data_store()
     if verbose:
         logger.info("Calendar file is up to date")
