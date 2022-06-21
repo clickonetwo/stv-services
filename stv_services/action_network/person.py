@@ -61,6 +61,7 @@ class ActionNetworkPerson(ActionNetworkObject):
     contact_cutoff_lo = datetime(2022, 1, 1, tzinfo=timezone.utc)
     # we care specially about specific forms
     signup_form_2022 = "action_network:b399bd2b-b9a9-4916-9550-5a8a47e045fb"
+    canvass_form_2022 = "action_network:8af01c73-9951-4071-8c02-dea1fc8975b5"
 
     def __init__(self, **fields):
         if not fields.get("email") and not fields.get("phone"):

@@ -67,6 +67,7 @@ contact_table_schema = {
     "tb_shifts": FieldInfo("Total Text Banking Shift Signups*", "number", "compute"),
     "dk_shifts": FieldInfo("Total Door Knocking Shift Signups*", "number", "compute"),
 }
+radio_button_fields = ("Door knock commit",)
 signup_interest_map = {
     "2022_calls": "Phone Bank",
     "2022_doors": "Door Knock",
@@ -75,6 +76,22 @@ signup_interest_map = {
     "2022_podlead": "Start a Pod",
     "2022_branchlead": "Lead a Branch",
     "branch_lead_interest_I want to help build a branch in my region!": "Lead a Branch",
+    "2022_doorscommit": "Door Knock Commit",
+    "2022_doorsmaybe": "Door Knock Maybe",
+    "2022_nodooryesother": "No Door Knock Yes Other",
+    "2022_pa-interest": "Door Knock PA",
+    "2022_az-interest": "Door Knock AZ",
+    "2022_ga-interest": "Door Knock GA",
+    "2022_nv-interest": "Door Knock NV",
+    "2022_nc-interest": "Door Knock NC",
+    "2022_wi-interest": "Door Knock WI",
+    "2022_augdoorknock": "Door Knock Aug",
+    "2022_septdoorknock": "Door Knock Sept",
+    "2022_octdoorknock": "Door Knock Oct",
+    "2022_novdoorknock": "Door Knock Nov",
+    "2022_doorknock1-2weeks": "Door Knock 1-2 weeks",
+    "2022_doorknock-longerthan2weeks": "Door Knock 2+ weeks",
+    "2022_doorknock-weekend": "Door Knock Weekend",
 }
 fundraise_interest_map = {
     "2022_happyhour": "Host a Happy Hour",
@@ -82,6 +99,7 @@ fundraise_interest_map = {
     "2022_donate": "Donate",
     "2022_fundraiseidea": "Other Idea",
 }
+signup_notes_fields = ("2022_notes", "Door knock other notes")
 
 
 def verify_contact_schema() -> dict:
@@ -106,12 +124,24 @@ def create_contact_record(conn: Connection, person: ActionNetworkPerson) -> dict
     custom_fields = person["custom_fields"]
     signup_interests, fundraise_interests = set(), set()
     for name in custom_fields:
+        if name in radio_button_fields:
+            value = custom_fields.get(name)
+            if value and isinstance(value, str):
+                # radio buttons have "checked box names" as their value
+                name = value
+            else:
+                continue
         if interest := signup_interest_map.get(name):
             signup_interests.add(interest)
         if interest := fundraise_interest_map.get(name):
             fundraise_interests.add(interest)
     record[column_ids["signup_interests"]] = list(signup_interests)
-    record[column_ids["signup_notes"]] = custom_fields.get("2022_notes", "")
+    signup_notes = []
+    for field in signup_notes_fields:
+        if note := custom_fields.get(field, ""):
+            if note := note.strip():
+                signup_notes.append(note)
+    record[column_ids["signup_notes"]] = "\n".join(signup_notes)
     record[column_ids["fundraise_interests"]] = list(fundraise_interests)
     record[column_ids["fundraise_notes"]] = custom_fields.get("2022_fundraiseidea", "")
     query = sa.select(model.person_info.c.contact_record_id).where(

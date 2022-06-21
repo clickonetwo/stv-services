@@ -36,11 +36,18 @@ assignment_table_schema = {
     "refcode": FieldInfo("Referrer Code in ActBlue", "singleLineText", "immutable"),
 }
 field_assignment_map = {
+    # people with custom field key get auto-assignment value
     "2022_calls": "Phone Banker",
     "2022_doors": "Canvasser",
     "2022_recruit": "Recruiter",
     "2022_happyhour": "Happy Hour Host",
     "2022_fundraisepage": "Fundraising Page",
+}
+field_assignment_alias_map = {
+    # people with custom field key are treated as if they had custom field value
+    "2022_doorscommit": "2022_doors",
+    "2022_doorsmaybe": "2022_doors",
+    # "2022_nodooryesother": "2022_doors",
 }
 
 
@@ -92,6 +99,7 @@ def insert_needed_assignments(conn: Connection, people: list[PersistedDict]) -> 
         added = {}
         assignments = assignment_map.setdefault(record_id, [])
         for name in person["custom_fields"]:
+            name = field_assignment_alias_map.get(name, name)
             if existing_map.get(name):
                 continue
             if assignment_name := field_assignment_map.get(name):
