@@ -229,20 +229,21 @@ def compute_status_all(ctx: click.Context, force: bool = False):
 
 @stv.command()
 @click.option("--force/--no-force", default=False, help="Force compute of all")
+@click.option("--query", default="", help="Select query for objects of type")
 @click.option(
     "--type",
     default="people",
     help="metadata, fundraising_pages, donations, people, events, or attendances",
 )
 @click.pass_context
-def compute_status_for_type(ctx: click.Context, type: str, force: bool = False):
+def compute_status_for_type(ctx: click.Context, type: str, force: bool, query: str):
     verbose = ctx.obj["verbose"]
     if type == "events":
-        event.compute_event_status(verbose, force)
+        event.compute_event_status(verbose, query or force)
     elif type == "attendances":
-        attendance.compute_attendance_status(verbose, force)
+        attendance.compute_attendance_status(verbose, query or force)
     elif type in ("metadata", "fundraising_pages", "donations", "people"):
-        an_bulk.compute_status_for_type(type, verbose, force)
+        an_bulk.compute_status_for_type(type, verbose, query or force)
     else:
         raise ValueError(f"No such object type: {type}")
 

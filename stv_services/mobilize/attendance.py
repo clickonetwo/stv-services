@@ -21,7 +21,7 @@
 #  SOFTWARE.
 #
 from datetime import datetime, timezone
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Union
 
 import sqlalchemy as sa
 
@@ -188,12 +188,16 @@ def import_attendance_data(data: list[dict]) -> int:
     return import_count
 
 
-def compute_attendance_status(verbose: bool = True, force: bool = False):
+def compute_attendance_status(verbose: bool = True, force: Union[bool, str] = False):
     """Update the status for Mobilize attendances modified since last update"""
     MobilizeAttendance.initialize_caches()
     table = model.attendance_info
     if force:
-        query = sa.select(table)
+        if isinstance(force, str):
+            # query had better return attendances!
+            query = sa.text(force)
+        else:
+            query = sa.select(table)
     else:
         query = sa.select(table).where(table.c.modified_date >= table.c.updated_date)
     with Postgres.get_global_engine().connect() as conn:  # type: Connection

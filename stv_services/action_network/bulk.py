@@ -21,9 +21,10 @@
 #  SOFTWARE.
 #
 from datetime import datetime, timezone
-from typing import Optional, Any
+from typing import Optional, Any, Union
 
 import sqlalchemy as sa
+from dateutil.parser import parse
 from sqlalchemy.future import Connection
 
 from .donation import import_donations as _import_donations, ActionNetworkDonation
@@ -99,6 +100,12 @@ def import_people(
         config.save_to_data_store()
 
 
+def import_people_since(since: str, verbose: bool = True):
+    """Import Action Network people created or updated since the given time."""
+    cutoff_lo = parse(since)
+    _import_people(query=get_import_filter(cutoff_lo), verbose=verbose)
+
+
 def import_donations(
     verbose: bool = True, force: bool = False, skip_pages: int = 0, max_pages: int = 0
 ):
@@ -170,13 +177,19 @@ def compute_status_all(verbose: bool = True, force: bool = False):
     compute_status_for_type("people", verbose, force)
 
 
-def compute_status_for_type(plural: str, verbose: bool = True, force: bool = False):
+def compute_status_for_type(
+    plural: str, verbose: bool = True, force: Union[bool, str] = False
+):
     """
     Update the status for a specific type of object
     """
     table, cls = get_classification_parameters(plural)
     if force:
-        query = sa.select(table)
+        if isinstance(force, str):
+            # query had better return the right type of object!
+            query = sa.text(force)
+        else:
+            query = sa.select(table)
     else:
         query = sa.select(table).where(table.c.modified_date >= table.c.updated_date)
     with Postgres.get_global_engine().connect() as conn:  # type: Connection

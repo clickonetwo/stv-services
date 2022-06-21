@@ -22,7 +22,7 @@
 #
 import os
 from datetime import datetime, timezone
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Union
 from zoneinfo import ZoneInfo
 
 from icalendar import Calendar, Event
@@ -293,11 +293,15 @@ def import_event_data(data: list[dict]) -> int:
     return count
 
 
-def compute_event_status(verbose: bool = True, force: bool = False):
+def compute_event_status(verbose: bool = True, force: Union[bool, str] = False):
     """Update the status for Mobilize events modified since last update"""
     MobilizeEvent.initialize_caches()
     if force:
-        query = sa.select(model.event_info)
+        if isinstance(force, str):
+            # query had better return events!
+            query = sa.text(force)
+        else:
+            query = sa.select(model.event_info)
     else:
         cols = model.event_info.columns
         query = sa.select(model.event_info).where(
