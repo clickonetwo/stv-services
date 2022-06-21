@@ -247,7 +247,7 @@ def process_event_payloads(conn: Connection, name: str, payloads: list[dict]):
                     if field_name := field_map[key]:
                         fields[field_name] = val
     process_event_feature_values(conn, field_values)
-    config["last_calendar_change"] = datetime.now(tz=timezone.utc).timestamp()
+    config["calendar_last_update_timestamp"] = datetime.now(tz=timezone.utc).timestamp()
     config.save_to_connection(conn)
     logger.info(f"Event field processing done.")
 

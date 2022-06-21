@@ -319,15 +319,18 @@ def compute_event_status(verbose: bool = True, force: bool = False):
 def make_event_calendar(verbose: bool = True, force: bool = False):
     config = Configuration.get_global_config()
     last_change = datetime.fromtimestamp(
-        config.get("last_calendar_change", 0), tz=timezone.utc
+        config.get("calendar_last_update_timestamp", 0), tz=timezone.utc
     )
-    last_create = get_calendar_date()
+    last_create = datetime.fromtimestamp(
+        config.get("calendar_last_create_timestamp", 0), tz=timezone.utc
+    )
     if not force and last_change < last_create:
         if verbose:
             logger.info("Calendar file is up to date, not remaking it")
         return
     if verbose:
         logger.info("Bringing calendar file up to date")
+    config["calendar_last_create_timestamp"] = datetime.now(tz=timezone.utc).timestamp()
     cal = Calendar()
     cal.add("version", 2.0)
     cal.add("prodid", "-//Seed the Vote Event Calendar//seedthevote.org//")
@@ -372,22 +375,13 @@ def make_event_calendar(verbose: bool = True, force: bool = False):
                 evt.add("location", event["event_url"])
                 cal.add_component(evt)
     # output the calendar
-    with open(calendar_file, mode="wb") as file:
-        # we have sorted the events in our desired order
-        file.write(cal.to_ical(sorted=False))
-    if verbose:
-        logger.info("Calendar file is up to date")
-
-
-def get_calendar_date() -> datetime:
     calendar_directory = os.path.dirname(calendar_file)
     if not os.path.isdir(calendar_directory):
+        logger.info(f"Creating calendar directory")
         os.mkdir(calendar_directory)
-    if os.path.isfile(calendar_file):
-        try:
-            result = os.stat(calendar_file)
-            local_stamp = datetime.fromtimestamp(result.st_mtime)
-            return local_stamp.astimezone(tz=timezone.utc)
-        except IOError:
-            return model.epoch
-    return model.epoch
+    with open(calendar_file, mode="wb") as file:
+        # we have added the events in our desired order
+        file.write(cal.to_ical(sorted=False))
+    config.save_to_data_store()
+    if verbose:
+        logger.info("Calendar file is up to date")
