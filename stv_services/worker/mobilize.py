@@ -36,5 +36,5 @@ def import_and_update_all(verbose: bool = True, force: bool = False):
     # now load the attendances
     attendance.import_attendances(verbose, force)
     attendance.compute_attendance_status(verbose, force)
-    # finally, remake the calendar
-    event.make_event_calendar(verbose, force)
+    # finally, force remake the calendar
+    event.make_event_calendar(verbose, True)
