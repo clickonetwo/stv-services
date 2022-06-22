@@ -30,9 +30,9 @@ from stv_services.core import Configuration
 def init_logging():
     is_heroku = "HEROKU" == (os.getenv("STV_RUNTIME") or "LOCAL")
     if is_heroku:
-        log_format = "%(levelname)s:%(module)s:%(process)d: %(message)s"
+        log_format = "%(levelname)s:%(process)d:%(module)s: %(message)s"
     else:
-        log_format = "%(asctime)s:%(levelname)s:%(module)s:%(process)d: %(message)s"
+        log_format = "%(asctime)s:%(levelname)s:%(process)d:%(module)s: %(message)s"
     level = os.getenv("STV_LOG_LEVEL")
     if level:
         level = logging.getLevelName(level)
