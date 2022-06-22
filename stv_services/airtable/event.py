@@ -20,6 +20,10 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 #
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+import sqlalchemy as sa
 
 from sqlalchemy.future import Connection
 
@@ -32,6 +36,7 @@ from .webhook import register_hook
 from ..action_network.person import ActionNetworkPerson
 from ..core import Configuration
 from ..core.logging import get_logger
+from ..data_store import model
 from ..mobilize.event import MobilizeEvent
 
 logger = get_logger(__name__)
@@ -45,6 +50,8 @@ event_table_schema = {
     "shift_summary": FieldInfo("Shift Signup Summary*", "multilineText", "compute"),
     "contact": FieldInfo("Event Organizer*", "multipleRecordLinks", "compute"),
     "event_url": FieldInfo("Mobilize Event Link*", "url", "event"),
+    "first_slot": FieldInfo("Earliest Shift Date*", "date", "compute"),
+    "last_slot": FieldInfo("Latest Shift Date*", "date", "compute"),
     "is_featured": FieldInfo("Featured on calendar?", "checkbox", "event"),
     "featured_name": FieldInfo("STV Event Name", "singleLineText", "observe"),
     "featured_description": FieldInfo("Event Description", "multilineText", "observe"),
@@ -91,6 +98,20 @@ def create_event_record(conn: Connection, event: MobilizeEvent) -> dict:
             person.persist(conn)
     if contact_id:
         record[column_ids["contact"]] = [contact_id]
+    # now compute the first and last timeslot dates
+    query = (
+        sa.select(model.timeslot_info)
+        .where(model.timeslot_info.c.event_id == event["uuid"])
+        .order_by(model.timeslot_info.c.start_date)
+    )
+    rows = conn.execute(query).all()
+    if rows:
+        earliest_utc: datetime = rows[0].start_date
+        earliest_pst = earliest_utc.astimezone(tz=ZoneInfo("America/Los_Angeles"))
+        latest_utc: datetime = rows[-1].start_date
+        latest_pst = latest_utc.astimezone(tz=ZoneInfo("America/Los_Angeles"))
+        record[column_ids["first_slot"]] = earliest_pst.date().isoformat()
+        record[column_ids["last_slot"]] = latest_pst.date().isoformat()
     return record
 
 
