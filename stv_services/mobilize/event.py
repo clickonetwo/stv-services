@@ -344,11 +344,13 @@ def make_event_calendar(verbose: bool = True, force: bool = False):
         calendar_end = datetime(2099, 1, 1, tzinfo=timezone.utc)
         query = sa.select(model.event_info).where(model.event_info.c.is_featured)
         events = MobilizeEvent.from_query(conn, query)
+        event_count = 0
         for event in events:
             # compute the name and description
             event_id = event["uuid"]
             name = event.get("featured_name") or event["title"]
             description = event.get("featured_description") or event["description"]
+            url = event["event_url"]
             # find the featured timeslots in start-date order
             cutoff_lo = event.get("feature_start", model.epoch)
             cutoff_hi = event.get("feature_end", model.epoch)
@@ -367,19 +369,13 @@ def make_event_calendar(verbose: bool = True, force: bool = False):
             timeslots = MobilizeTimeslot.from_query(conn, query)
             # create the calendar entries, one per timeslot
             for timeslot in timeslots:
-                timeslot_id = timeslot["uuid"]
-                uid = f"/org.seedthevote.event/{event_id}/{timeslot_id}"
-                utc_start: datetime = timeslot["start_date"]
-                pt_start = utc_start.astimezone(tz=ZoneInfo("America/Los_Angeles"))
-                pt_string = pt_start.strftime("%I:%M%p")
-                evt = Event()
-                evt.add("dtstamp", datetime.now(tz=timezone.utc))
-                evt.add("uid", uid)
-                evt.add("summary", f"{name} (at {pt_string})")
-                evt.add("description", f"{description}")
-                evt.add("dtstart", pt_start.date())
-                evt.add("location", event["event_url"])
+                evt = make_event(event_id, name, description, url, timeslot)
                 cal.add_component(evt)
+                event_count += 1
+        if event_count == 0:
+            # not all platforms handle empty calendars, so we manufacture a fake
+            # event explaining that there are no featured events at this time.
+            cal.add_component(make_fake_event())
         config["calendar_last_create_timestamp"] = last_create
         config.save_to_connection(conn)
         conn.commit()
@@ -389,3 +385,40 @@ def make_event_calendar(verbose: bool = True, force: bool = False):
         file.write(cal.to_ical(sorted=False))
     if verbose:
         logger.info("Calendar file is up to date")
+
+
+def make_event(
+    event_id: str, name: str, description: str, url: str, timeslot: MobilizeTimeslot
+) -> Event:
+    timeslot_id = timeslot["uuid"]
+    uid = f"org.seedthevote.event.{event_id}.{timeslot_id}"
+    utc_start: datetime = timeslot["start_date"]
+    pt_start = utc_start.astimezone(tz=ZoneInfo("America/Los_Angeles"))
+    pt_string = pt_start.strftime("%I:%M%p")
+    evt = Event()
+    evt.add("dtstamp", datetime.now(tz=timezone.utc))
+    evt.add("uid", uid)
+    evt.add("summary", f"{name}")
+    evt.add("description", f"{description} (at {pt_string})")
+    evt.add("dtstart", pt_start.date())
+    evt.add("location", url)
+    return evt
+
+
+def make_fake_event() -> Event:
+    name = "No featured events at this time"
+    description = (
+        "There are no featured events at this time. "
+        "Please check back later.  In the meantime, "
+        "you can find a list of all events on Mobilize."
+    )
+    utc_start: datetime = datetime.now(tz=timezone.utc)
+    pt_start = utc_start.astimezone(tz=ZoneInfo("America/Los_Angeles"))
+    evt = Event()
+    evt.add("dtstamp", datetime.now(tz=timezone.utc))
+    evt.add("uid", "org.seedthevote.event.0.0")
+    evt.add("summary", f"{name}")
+    evt.add("description", f"{description}")
+    evt.add("dtstart", pt_start.date())
+    evt.add("location", "https://www.mobilize.us/seedthevote/")
+    return evt

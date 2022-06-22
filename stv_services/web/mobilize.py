@@ -31,8 +31,8 @@ mobilize = APIRouter()
 
 
 @mobilize.get("/calendar", response_class=FileResponse)
-def get_updated_calendar():
+def get_updated_calendar(force: bool = False):
     logger.info("Received event calendar request")
-    make_event_calendar()
+    make_event_calendar(force=force)
     logger.info("Returning calendar")
     return calendar_file
