@@ -27,10 +27,12 @@ import sqlalchemy as sa
 from dateutil.parser import parse
 from sqlalchemy.future import Connection
 
+from stv_services.action_network.donation import ActionNetworkDonation
 from stv_services.action_network.person import ActionNetworkPerson
 from stv_services.core import Session, Configuration
 from stv_services.core.logging import get_logger
 from stv_services.data_store import model, Postgres
+from stv_services.mobilize.event import MobilizeEvent
 
 logger = get_logger(__name__)
 SyncReport = namedtuple(
@@ -122,14 +124,13 @@ def sync_report(type_: str) -> SyncReport:
     with Postgres.get_global_engine().connect() as conn:  # type: Connection
         people = ActionNetworkPerson.from_query(conn, sa.select(model.person_info))
     emails = {person["email"]: person for person in people}
+    logger.info("Processing records from Airtable...")
     process_airtable_records(schema, page_processor)
     return SyncReport(matches, extras, adoptable, unmatched, empties)
 
 
 def process_airtable_records(
-    schema: dict,
-    processor: Callable[[list[dict]], None],
-    fields: list[str] = None,
+    schema: dict, processor: Callable[[list[dict]], None], fields: list[str] = None
 ):
     web = Session.get_airtable_api()
     base_id = schema["base_id"]
@@ -138,14 +139,16 @@ def process_airtable_records(
         iterator = web.iterate(base_id, table_id, fields=fields)
     else:
         iterator = web.iterate(base_id, table_id)
+    count = 0
     for page in iterator:
-        processor(page)
+        count += len(page)
+        if count > 0:
+            processor(page)
+            logger.info(f"({count})")
 
 
-def verify_match(
-    types: Union[str, Iterable[str]] = None, remove_extra: bool = False
-) -> dict:
-    all_types = {"volunteer", "contact", "funder", "donation"}
+def verify_match(types: Union[str, Iterable[str]] = None, repair: bool = False) -> dict:
+    all_types = {"volunteer", "contact", "funder", "donation", "event"}
     if not types or types == "all":
         types = list(all_types)
     elif isinstance(types, str):
@@ -158,84 +161,77 @@ def verify_match(
     results = {}
     for type_ in types:
         logger.info(f"Verifying match for {type_} records")
-        shortfall, extra_records = match_records(type_)
-        extra_count = len(extra_records)
-        results[type_] = (shortfall, extra_records)
-        if shortfall > 0:
-            if type_ == "donation":
-                msg = f"are {shortfall} donations" if shortfall > 1 else "is 1 donation"
-                logger.critical(f"There {msg} with no record")
-            else:
-                msg = f"are {shortfall} people" if shortfall > 1 else "is 1 person"
-                logger.critical(f"There {msg} with no {type_} record")
-        if extra_count > 0:
-            if extra_count == 1:
-                logger.critical(f"There is 1 extra {type_} record")
-            else:
-                logger.critical(f"There are {extra_count} extra {type_} records")
-            if remove_extra:
-                msg = "record" if extra_count == 1 else "records"
-                logger.info(f"Removing {extra_count} extra {type_} {msg}")
-                extra_ids = [record["id"] for record in extra_records]
-                delete_airtable_records(type_, extra_ids, verbose=False)
-        if shortfall == 0 and extra_count == 0:
-            logger.info(f"Verified match for {type_} records")
+        missing, extra = match_records(type_, repair)
+        results[type_] = (missing, extra)
+        level = logger.info if repair else logger.critical
+        if missing > 0:
+            verb = "Repaired" if repair else "Found"
+            s = "" if missing == 1 else "s"
+            level(f"{verb} {missing} {type_}{s} with no record in Airtable")
+        if extra > 0:
+            verb = "Deleted" if repair else "Found"
+            s = "" if extra == 1 else "s"
+            level(f"{verb} {extra} extra {type_} record{s} in Airtable")
+        if missing == 0 and extra == 0:
+            logger.info(f"All {type_} records match in Airtable")
     return results
 
 
-def match_records(type_: str) -> (int, list):
+def match_records(type_: str, repair: bool = False) -> (int, int):
     def page_processor(page: list[dict]):
-        nonlocal matches
         for record in page:
             record_id = record["id"]
-            if record_id not in record_ids:
+            if record_id not in record_id_map:
                 extra_records.append(record)
             else:
-                matches += 1
+                del record_id_map[record_id]
 
     schema = Configuration.get_global_config()[f"airtable_stv_{type_}_schema"]
-    matches = 0
-    record_ids = set()
+    record_id_map = {}
     extra_records = []
     with Postgres.get_global_engine().connect() as conn:  # type: Connection
+        cls = ActionNetworkPerson
+        table = model.person_info
         if type_ == "volunteer":
-            is_col = model.person_info.columns.is_volunteer
             id_col = model.person_info.columns.volunteer_record_id
         elif type_ == "contact":
-            is_col = model.person_info.columns.is_contact
             id_col = model.person_info.columns.contact_record_id
         elif type_ == "funder":
-            is_col = model.person_info.columns.is_funder
             id_col = model.person_info.columns.funder_record_id
         elif type_ == "donation":
-            is_col = model.donation_info.columns.is_donation
+            cls = ActionNetworkDonation
+            table = model.donation_info
             id_col = model.donation_info.columns.donation_record_id
+        elif type_ == "event":
+            cls = MobilizeEvent
+            table = model.event_info
+            id_col = model.event_info.columns.event_record_id
         else:
             raise ValueError(f"Unknown record type: {type_}")
-        rows = conn.execute(sa.select(id_col).where(is_col)).all()
-    record_ids = {row[0] for row in rows}
-    process_airtable_records(schema, page_processor, fields=[])
-    return matches - len(rows), extra_records
+        objects = cls.from_query(conn, sa.select(table).where(id_col != ""))
+        record_id_map = {obj[f"{type_}_record_id"]: obj for obj in objects}
+        logger.info("Matching records from Airtable...")
+        process_airtable_records(schema, page_processor, fields=[])
+        if repair:
+            for obj in record_id_map.values():
+                obj[f"{type_}_record_id"] = ""
+                obj.persist(conn)
+            conn.commit()
+            delete_airtable_records(type_, extra_records)
+    return len(record_id_map), len(extra_records)
 
 
-def delete_airtable_records(
-    type_: str, record_ids: list[str], verbose: bool = False
-) -> int:
+def delete_airtable_records(type_: str, record_ids: list[str]):
+    if not record_ids:
+        return
     web = Session.get_airtable_api()
     schema = Configuration.get_global_config()[f"airtable_stv_{type_}_schema"]
     base_id = schema["base_id"]
     table_id = schema["table_id"]
-    total, deletes = len(record_ids), 0
-    if verbose:
-        logger.info(f"Deleting {total} {type_} records...")
+    total = len(record_ids)
+    s = "" if total == 1 else "s"
+    logger.info(f"Deleting {total} Airtable {type_} record{s}...")
     for start in range(0, total, 50):
-        if verbose and deletes > 0:
-            logger.info(f"({deletes})...")
-        deletes += len(
-            web.batch_delete(
-                base_id, table_id, record_ids[start : min(start + 50, total)]
-            )
-        )
-    if verbose:
-        logger.info(f"({deletes})")
-    return deletes
+        end = min(start + 50, total)
+        web.batch_delete(base_id, table_id, record_ids[start:end])
+        logger.info(f"({end})")

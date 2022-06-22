@@ -113,8 +113,8 @@ def resubmit_failed_requests(requests: list[dict]):
 
 def match_and_repair(params: dict):
     types = params.get("types")
-    remove_extra = params.get("repair", False)
-    verify_match(types=types, remove_extra=remove_extra)
+    repair = params.get("repair", False)
+    verify_match(types=types, repair=repair)
     update_airtable_records(is_retry=True)
 
 

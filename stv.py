@@ -485,19 +485,15 @@ def update_from(
 
 @stv.command()
 @click.option(
-    "--type", default="all", help="volunteer, contact, funder, donation, or all"
+    "--type", default="all", help="volunteer, contact, funder, donation, event, or all"
 )
-@click.option(
-    "--remove-extra/--no-remove-extra",
-    default=False,
-    help="Remove unmatched records from Airtable",
-)
-def verify_match(type: str, remove_extra: bool = False):
-    sync.verify_match(type, remove_extra=remove_extra)
+@click.option("--repair/--no-repair", default=False, help="Fix non-matching records")
+def verify_match(type: str, repair: bool = False):
+    sync.verify_match(type, repair=repair)
 
 
 @stv.command()
-@click.option("--type", default="contact", help="volunteer, contact, or funder")
+@click.option("--type", default="contact", help="volunteer, contact, funder")
 def analyze_match(type: str):
     report = sync.sync_report(type)
     sync.analyze_report(report)

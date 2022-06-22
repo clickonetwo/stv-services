@@ -37,4 +37,4 @@ print("Fundraising report:")
 sync.analyze_report(funder_report)
 
 print("Verifying matches:")
-sync.verify_match(types=["contact", "funder", "donation"], remove_extra=True)
+sync.verify_match(types=["contact", "funder", "donation"], repair=True)
