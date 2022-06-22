@@ -114,7 +114,7 @@ class ActionNetworkPerson(ActionNetworkObject):
             sa.select(table)
             .where(
                 sa.and_(
-                    table.c.form_id == self["uuid"],
+                    table.c.person_id == self["uuid"],
                     table.c.created_date >= cutoff_lo,
                 )
             )
