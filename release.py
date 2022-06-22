@@ -57,7 +57,7 @@ def run_release_process():
     if not url or url.find("stv-services") < 0:
         assert env == "DEV", "DEV webserver but not in DEV"
         assert not os.getenv("DATABASE_URL"), "DEV builds must use the local database"
-    elif url.find("-stage") >= 0:
+    elif url.find("stv-services-") >= 0:
         assert env == "STG", "STG webserver but not in STG"
         assert os.getenv("DATABASE_URL"), "STG builds require a DATABASE_URL"
         assert os.getenv("REDIS_URL"), "STG builds require a REDIS_URL"
