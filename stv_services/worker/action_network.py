@@ -20,6 +20,8 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 #
+import requests
+from restnavigator.exc import HALNavigatorError
 from sqlalchemy.future import Connection
 
 from ..action_network.bulk import import_all, compute_status_all
@@ -102,5 +104,8 @@ def process_webhook_person_data(conn: Connection, person_id: str, body: dict):
 
 def import_and_update_all(verbose: bool = True, force: bool = False):
     """Get all new/updated records from Action Network"""
-    import_all(verbose, force)
+    try:
+        import_all(verbose, force)
+    except (requests.HTTPError, HALNavigatorError):
+        logger.info("Import failed, so computing status for what succeeded")
     compute_status_all(verbose, force)

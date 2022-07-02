@@ -29,10 +29,11 @@ import requests
 import sqlalchemy as sa
 from dateutil.parser import parse
 from restnavigator import Navigator
+from restnavigator.exc import HALNavigatorError
 from sqlalchemy.future import Connection
 
 from ..core import Configuration, Session
-from ..core.logging import get_logger
+from ..core.logging import get_logger, log_exception
 from ..data_store import Postgres
 from ..data_store.persisted_dict import PersistedDict
 
@@ -204,6 +205,16 @@ def fetch_hash_pages(
     page_number, total_count, last_page = skip_pages, 0, None
     total_created, total_updated, total_ignored = 0, 0, 0
     for page in pages:
+        try:
+            page.fetch()
+        except requests.HTTPError:
+            logger.critical(f"Got HTTP error on {page.uri}")
+            log_exception(logger, "Fetching page from Action Network")
+            raise
+        except HALNavigatorError:
+            logger.critical(f"Got malformed response on {page.uri}")
+            log_exception(logger, "Fetching page from Action Network")
+            raise
         navigators = page.embedded()[f"osdi:{hash_type}"]
         if (page_count := len(navigators)) == 0:
             break
