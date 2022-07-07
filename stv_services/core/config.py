@@ -22,6 +22,7 @@
 #
 import json
 import sys
+from copy import deepcopy
 from os import getenv
 from typing import ClassVar
 
@@ -32,10 +33,18 @@ from ..data_store import model, Postgres
 
 
 class Configuration(dict):
+    """A dictionary with persistence in the database.
+
+    Because we often have multiple processes updating this dictionary,
+    and each process reads and write the entire dictionary at one time,
+    we keep track of the values loaded from the database and only save
+    changes to the database (to avoid unnecessary conflicts)."""
+
     _singleton: ClassVar["Configuration"] = None
     _env: ClassVar[str] = "DEV"
 
     def __init__(self, *args, **kwargs):
+        self.original = {}
         super().__init__(*args, **kwargs)
 
     @classmethod
@@ -65,17 +74,40 @@ class Configuration(dict):
 
     def load_from_connection(self, conn: Connection):
         """Load from database, replacing values for existing keys"""
-        update = {key: val for key, val in conn.execute(sa.select(model.configuration))}
-        self.update(update)
+        self.original = {
+            key: val for key, val in conn.execute(sa.select(model.configuration))
+        }
+        self.update(deepcopy(self.original))
 
     def save_to_connection(self, conn: Connection):
         """Save current state of keys and values"""
+        # find all the deleted keys
+        deleted = []
+        for key in self.original:
+            if key not in self:
+                deleted.append(key)
+        # find all the updated keys
+        updated = []
+        new = {}
+        for key, val in self.items():
+            if key not in self.original:
+                new[key] = val
+            elif val != self.original[key]:
+                new[key] = val
+                updated.append(key)
         # out with the old
-        conn.execute(sa.delete(model.configuration))
+        to_remove = updated + deleted
+        if to_remove:
+            conn.execute(
+                sa.delete(model.configuration).where(
+                    model.configuration.c.key.in_(to_remove)
+                )
+            )
         # in with the new
-        if self:
-            new = [dict(key=key, value=val) for key, val in self.items()]
-            conn.execute(sa.insert(model.configuration), new)
+        if new:
+            values = [dict(key=key, value=val) for key, val in new.items()]
+            conn.execute(sa.insert(model.configuration), values)
+        self.original = deepcopy(self)
 
     def load_from_data_store(self):
         db = Postgres.get_global_engine()
