@@ -7,18 +7,18 @@ authors = ["Daniel Brotsky <dan@clickonetwo.io>"]
 [tool.poetry.dependencies]
 python = "^3.9"
 SQLAlchemy = {version = "^1.4.32", extras = ["postgresql"]}
-alembic = {extras = ["tz"], version = "^1.7.7"}
+alembic = {extras = ["tz"], version = "^1.8"}
 restnavigator = "^1.0.1"
 python-dateutil = "^2.8.2"
 click = "^8.1.2"
-pyairtable = "^1.1.0"
+pyairtable = "^1.2"
 click-shell = "^2.1"
 redis = "^4.2.2"
-fastapi = "^0.78.0"
+fastapi = "^0.79"
 aioredis = "^2.0.1"
 uvicorn = {extras = ["standard"], version = "^0.18.2"}
 gunicorn = "^20.1.0"
-icalendar = "^4.0.9"
+icalendar = "^4.1"
 
 [tool.poetry.dev-dependencies]
 black = "^22.3.0"
