@@ -50,10 +50,7 @@ def process_webhook_notification(conn: Connection, body: dict):
 
 def process_donation_webhook(conn: Connection, body: dict):
     logger.info(f"Processing incoming donation webhook")
-    donation = ensure_new_object(conn, body, ActionNetworkDonation)
-    if not donation:
-        # we've already processed this webhook
-        return
+    donation = ensure_known_object(conn, body, ActionNetworkDonation)
     # first make sure the donation exists in the database
     donation.compute_status(conn)
     donation.persist(conn)
@@ -67,10 +64,7 @@ def process_donation_webhook(conn: Connection, body: dict):
 
 def process_submission_webhook(conn: Connection, body: dict):
     logger.info(f"Processing incoming form submission webhook")
-    submission = ensure_new_object(conn, body, ActionNetworkSubmission)
-    if not submission:
-        # we've already processed this webhook
-        return
+    submission = ensure_known_object(conn, body, ActionNetworkSubmission)
     # make sure the submission exists in the database
     submission.persist(conn)
     # make sure we have the person in the database
@@ -124,14 +118,12 @@ def import_and_update_all(verbose: bool = True, force: bool = False):
 T = TypeVar("T", bound=ActionNetworkObject, covariant=True)
 
 
-def ensure_new_object(conn: Connection, body: dict, cls: Type[T]) -> Optional[T]:
+def ensure_known_object(conn: Connection, body: dict, cls: Type[T]) -> Optional[T]:
     try:
         uuid, _, modified_date = validate_hash(body)
         obj = cls.from_lookup(conn, uuid=uuid)
-        if modified_date <= obj["modified_date"]:
-            # we've already got this object
-            return None
-        obj.update_from_hash(body)
+        if modified_date > obj["modified_date"]:
+            obj.update_from_hash(body)
     except KeyError:
         # no existing one, so build a new one
         obj = cls.from_webhook(body)
