@@ -68,9 +68,19 @@ class ActionNetworkObject(PersistedDict):
         raise NotImplementedError("You must implement update_from_hash")
 
     @classmethod
-    def from_hash(cls, _data: dict) -> "ActionNetworkObject":
+    def from_hash(cls, data: dict = None) -> "ActionNetworkObject":
         # meant to be overridden by subclasses
         raise NotImplementedError("You must implement from_hash")
+
+    @classmethod
+    def from_webhook(cls, data: dict = None) -> "ActionNetworkObject":
+        # meant to be overridden by subclasses
+        raise NotImplementedError("You must implement from_webhook")
+
+    @classmethod
+    def from_lookup(cls, conn: Connection, uuid: str = None) -> "ActionNetworkObject":
+        # meant to be overridden by subclasses
+        raise NotImplementedError("You must implement from_lookup")
 
 
 def validate_hash(data: dict) -> (str, datetime, datetime):

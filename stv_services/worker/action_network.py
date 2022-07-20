@@ -20,6 +20,8 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 #
+from typing import TypeVar, Type, Optional
+
 import requests
 from restnavigator.exc import HALNavigatorError
 from sqlalchemy.future import Connection
@@ -28,7 +30,7 @@ from ..action_network.bulk import import_all, compute_status_all
 from ..action_network.donation import ActionNetworkDonation
 from ..action_network.person import ActionNetworkPerson
 from ..action_network.submission import ActionNetworkSubmission
-from ..action_network.utils import validate_hash
+from ..action_network.utils import validate_hash, ActionNetworkObject
 from ..core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -40,47 +42,57 @@ def process_webhook_notification(conn: Connection, body: dict):
             process_donation_webhook(conn, val)
         elif key == "osdi:submission":
             process_submission_webhook(conn, val)
+        elif key == "action_network:upload":
+            process_upload_webhook(conn, val)
         else:
             raise NotImplementedError(f"Don't know how to handle webhook '{key}'")
 
 
 def process_donation_webhook(conn: Connection, body: dict):
     logger.info(f"Processing incoming donation webhook")
-    try:
-        uuid, _, modified_date = validate_hash(body)
-        donation = ActionNetworkDonation.from_lookup(conn, uuid)
-        if modified_date <= donation["modified_date"]:
-            # we have already seen this data
-            return
-        donation.update_from_hash(body)
-    except KeyError:
-        # no existing one, so build a new one
-        donation = ActionNetworkDonation.from_webhook(body)
-    # make sure the donation exists in the database
+    donation = ensure_new_object(conn, body, ActionNetworkDonation)
+    if not donation:
+        # we've already processed this webhook
+        return
+    # first make sure the donation exists in the database
     donation.compute_status(conn)
     donation.persist(conn)
-    # now make sure we have the person in the database
-    process_webhook_person_data(conn, donation["donor_id"], body)
+    # next make sure we have the person in the database
+    donor = process_webhook_person_data(conn, donation["donor_id"], body)
+    # now annotate the person with the donation
+    donor.notice_donation(conn, donation)
+    donor.persist(conn)
     logger.info(f"Donation webhook processing done")
 
 
 def process_submission_webhook(conn: Connection, body: dict):
     logger.info(f"Processing incoming form submission webhook")
-    try:
-        uuid, _, modified_date = validate_hash(body)
-        submission = ActionNetworkSubmission.from_lookup(conn, uuid)
-        if modified_date <= submission["modified_date"]:
-            # we have already seen this data
-            return
-        submission.update_from_hash(body)
-    except KeyError:
-        # no existing one, so build a new one
-        submission = ActionNetworkSubmission.from_webhook(body)
+    submission = ensure_new_object(conn, body, ActionNetworkSubmission)
+    if not submission:
+        # we've already processed this webhook
+        return
     # make sure the submission exists in the database
     submission.persist(conn)
-    # now make sure we have the person in the database
-    process_webhook_person_data(conn, submission["person_id"], body)
+    # make sure we have the person in the database
+    submitter = process_webhook_person_data(conn, submission["person_id"], body)
+    # make sure the person knows of the submission, even if it's old
+    submitter.notice_submission(conn, submission)
+    submitter.persist(conn)
     logger.info(f"Form submission webhook processing done")
+
+
+def process_upload_webhook(conn: Connection, body: dict):
+    logger.info(f"Processing incoming upload webhook")
+    link = body.get("_links", {}).get("osdi:person", {}).get("href", "")
+    if link and (start := link.rfind("/")):
+        uuid = "action_network:" + link[start + 1 :]
+        person = ActionNetworkPerson.from_action_network(uuid)
+        # completely update status, since the fetch may have changed a lot
+        person.compute_status(conn, True)
+        person.persist(conn)
+        logger.info("Upload webhook processing done")
+    else:
+        logger.warning("No valid person link found in upload webhook body")
 
 
 def process_webhook_person_data(conn: Connection, person_id: str, body: dict):
@@ -91,15 +103,13 @@ def process_webhook_person_data(conn: Connection, person_id: str, body: dict):
         if person_data := body.get("person"):
             person_data["identifiers"] = [person_id]
             _, _, modified_date = validate_hash(person_data)
-            if modified_date <= person["modified_date"]:
-                # we have already seen this data
-                return
-            person.update_from_hash(person_data)
+            if modified_date > person["modified_date"]:
+                person.update_from_hash(person_data)
     except KeyError:
         person = ActionNetworkPerson.from_action_network(person_id)
-    # now update the person status given the donation
+    # update the person status based on new info
     person.compute_status(conn)
-    person.persist(conn)
+    return person
 
 
 def import_and_update_all(verbose: bool = True, force: bool = False):
@@ -109,3 +119,20 @@ def import_and_update_all(verbose: bool = True, force: bool = False):
     except (requests.HTTPError, HALNavigatorError):
         logger.info("Import failed, so computing status for what succeeded")
     compute_status_all(verbose, force)
+
+
+T = TypeVar("T", bound=ActionNetworkObject, covariant=True)
+
+
+def ensure_new_object(conn: Connection, body: dict, cls: Type[T]) -> Optional[T]:
+    try:
+        uuid, _, modified_date = validate_hash(body)
+        obj = cls.from_lookup(conn, uuid=uuid)
+        if modified_date <= obj["modified_date"]:
+            # we've already got this object
+            return None
+        obj.update_from_hash(body)
+    except KeyError:
+        # no existing one, so build a new one
+        obj = cls.from_webhook(body)
+    return obj

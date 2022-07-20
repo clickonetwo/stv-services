@@ -182,7 +182,7 @@ def match_records(type_: str, repair: bool = False) -> (int, int):
         for record in page:
             record_id = record["id"]
             if record_id not in record_id_map:
-                extra_records.append(record)
+                extra_records.append(record_id)
             else:
                 del record_id_map[record_id]
 
