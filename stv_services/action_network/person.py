@@ -162,7 +162,7 @@ class ActionNetworkPerson(ActionNetworkObject):
             .order_by(table.c.created_date.asc())
         )
         donations: list[dict] = conn.execute(query).mappings().all()
-        max_2021 = datetime(2022, 1, 1, tzinfo=timezone.utc)
+        max_2021 = self.funder_cutoff_lo  # no overlap between 2021 and 2022
         max_2020 = datetime(2021, 1, 1, tzinfo=timezone.utc)
         if model.epoch < cutoff_lo < max_2021:
             raise ValueError("Invalid cutoff date for historical donations")
