@@ -77,7 +77,7 @@ def create_event_record(conn: Connection, event: MobilizeEvent) -> dict:
     for field_name, info in event_table_schema.items():
         if info.source == "event":
             # all fields should have values, but we are cautious
-            if value := event.get(field_name):
+            if (value := event.get(field_name)) is not None:
                 record[column_ids[field_name]] = value
     # compute the shift summary
     record[column_ids["shift_summary"]] = event.create_shift_summary(conn)

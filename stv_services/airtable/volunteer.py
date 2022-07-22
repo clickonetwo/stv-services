@@ -87,7 +87,7 @@ def create_volunteer_record(conn: Connection, person: ActionNetworkPerson) -> di
     for field_name, info in volunteer_table_schema.items():
         if info.source == "person":
             # not all fields have values, so only assign if there is one
-            if value := person.get(field_name):
+            if (value := person.get(field_name)) is not None:
                 record[column_ids[field_name]] = value
         elif info.source == "external":
             if match and (value := match.get(field_name)):

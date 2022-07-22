@@ -119,7 +119,7 @@ def create_contact_record(conn: Connection, person: ActionNetworkPerson) -> dict
     for field_name, info in contact_table_schema.items():
         if info.source == "person":
             # not all fields have values, so only assign if there is one
-            if value := person.get(field_name):
+            if (value := person.get(field_name)) is not None:
                 record[column_ids[field_name]] = value
     custom_fields = person["custom_fields"]
     signup_interests, fundraise_interests = set(), set()
