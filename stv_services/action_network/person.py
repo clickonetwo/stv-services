@@ -258,7 +258,7 @@ class ActionNetworkPerson(ActionNetworkObject):
     def notice_cancellation(self, _conn: Connection, metadata: dict = None):
         if not metadata:
             return
-        cancel_date = metadata["create_date"]
+        cancel_date = metadata["created_date"]
         if cancel_date > self.get("recur_end", model.epoch):
             self["recur_end"] = cancel_date
         self["updated_date"] = datetime.now(tz=timezone.utc)
