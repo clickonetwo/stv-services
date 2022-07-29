@@ -381,6 +381,9 @@ class ActionNetworkPerson(ActionNetworkObject):
             if entry.get("primary"):
                 if lines := entry.get("address_lines"):
                     street_address = "\n".join(lines)
+                    # check for invalid action network street addresses
+                    if street_address.find("\x00") >= 0:
+                        street_address = ""
                 locality = entry.get("locality")
                 region = entry.get("region")
                 postal_code = entry.get("postal_code")
