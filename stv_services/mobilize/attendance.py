@@ -53,10 +53,13 @@ class MobilizeAttendance(PersistedDict):
 
     def compute_status(self, conn: Connection, force: bool = False):
         if force or not self.get("person_id"):
-            if person := self.attendees.get(self["email"]):
+            email = self["email"].lower()  # emails in action network are lowercase
+            if person := self.attendees.get(email):
+                self.attendee_counts[0] += 1
                 self.notice_person(conn, person)
             else:
                 # no such person
+                self.attendee_counts[2] += 1
                 self["updated_date"] = datetime.now(tz=timezone.utc)
         if force or self.get("updated_date", model.epoch) == model.epoch:
             event_id = self["event_id"]
@@ -89,10 +92,11 @@ class MobilizeAttendance(PersistedDict):
         with Postgres.get_global_engine().connect() as conn:  # type: Connection
             cls.attendees = {}
             for row in conn.execute(sa.select(model.attendance_info)):
-                if not cls.attendees.get(row.email):
+                email = row.email.lower()
+                if not cls.attendees.get(email):
                     if uuid := row.person_id:
                         person = ActionNetworkPerson.from_lookup(conn, uuid=uuid)
-                        cls.attendees[row.email] = person
+                        cls.attendees[email] = person
             cls.events = {}
             for row in conn.execute(sa.select(model.event_info)):
                 if not cls.events.get(row.uuid):
@@ -230,3 +234,6 @@ def compute_attendance_status(verbose: bool = True, force: Union[bool, str] = Fa
             logger.info(f"Updating status for {len(attendances)} attendances...")
         compute_status(conn, attendances, verbose, force)
         conn.commit()
+    if verbose:
+        hit, lookup, miss = MobilizeAttendance.attendee_counts
+        logger.info(f"Attendee cache lookups [hit/miss]: {hit}/{miss}")
