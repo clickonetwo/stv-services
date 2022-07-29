@@ -23,13 +23,13 @@
 from datetime import datetime, timezone
 from typing import Any, ClassVar, Union
 
+import requests
 import sqlalchemy as sa
-
 from sqlalchemy.future import Connection
 
 from stv_services.action_network.person import ActionNetworkPerson
 from stv_services.core import Configuration
-from stv_services.core.logging import get_logger
+from stv_services.core.logging import get_logger, log_exception
 from stv_services.data_store import model, Postgres
 from stv_services.data_store.persisted_dict import PersistedDict, lookup_objects
 from stv_services.mobilize.event import MobilizeEvent
@@ -54,18 +54,10 @@ class MobilizeAttendance(PersistedDict):
     def compute_status(self, conn: Connection, force: bool = False):
         if force or not self.get("person_id"):
             if person := self.attendees.get(self["email"]):
-                self.attendee_counts[0] += 1
                 self.notice_person(conn, person)
             else:
-                try:
-                    person = ActionNetworkPerson.from_lookup(conn, email=self["email"])
-                    self.attendee_counts[1] += 1
-                    self.attendees[self["email"]] = person
-                    self.notice_person(conn, person)
-                except KeyError:
-                    # no such person
-                    self["updated_date"] = datetime.now(tz=timezone.utc)
-                    self.attendee_counts[2] += 1
+                # no such person
+                self["updated_date"] = datetime.now(tz=timezone.utc)
         if force or self.get("updated_date", model.epoch) == model.epoch:
             event_id = self["event_id"]
             event = self.events[event_id]
@@ -141,12 +133,39 @@ class MobilizeAttendance(PersistedDict):
         """
         return lookup_objects(conn, query, lambda d: cls(**d))
 
+    @classmethod
+    def register_attendee(cls, conn: Connection, body: dict):
+        if addresses := body.get("email_addresses", []):
+            if email := addresses[0].get("address"):
+                email: str = email.lower()
+                if cls.attendees.get(email):
+                    cls.attendee_counts[0] += 1
+                    return
+                try:
+                    person = ActionNetworkPerson.from_lookup(conn, email=email)
+                    cls.attendee_counts[1] += 1
+                    cls.attendees[email] = person
+                except KeyError:
+                    # no such person, so create one
+                    try:
+                        person = ActionNetworkPerson.import_mobilize_person(body)
+                        person.compute_status(conn)
+                        person.persist(conn)
+                        cls.attendees[email] = person
+                        cls.attendee_counts[2] += 1
+                    except (KeyError, requests.HTTPError):
+                        log_exception(logger, "While importing Mobilize person")
+                        logger.info("Ignoring Mobilize person import failure")
+
 
 def import_attendances(
     verbose: bool = True, force: bool = False, skip_pages: int = 0, max_pages: int = 0
 ):
     # first make sure the events are cached, so attendance import can find them
     MobilizeEvent.initialize_caches()
+    # now make sure prior attendances are cached, so attendance import doesn't
+    # have to look people up over and over
+    MobilizeAttendance.initialize_caches()
     # now do the import
     config = Configuration.get_global_config()
     start_timestamp = datetime.now(tz=timezone.utc)
@@ -157,6 +176,9 @@ def import_attendances(
     if not max_pages:
         config["attendances_last_update_timestamp"] = start_timestamp.timestamp()
         config.save_to_data_store()
+    if verbose:
+        counts = MobilizeAttendance.attendee_counts
+        logger.info(f"Attendee cache lookups [repeat/first-time/imported]: {counts}")
 
 
 def attendance_query(timestamp: float = None, force: bool = False) -> dict:
@@ -179,6 +201,7 @@ def import_attendance_data(data: list[dict]) -> int:
         for attendance_dict in data:
             try:
                 attendance = MobilizeAttendance.from_hash(attendance_dict)
+                MobilizeAttendance.register_attendee(conn, attendance_dict["person"])
             except ValueError:
                 # data hiding prevents using this attendance
                 continue
@@ -190,6 +213,7 @@ def import_attendance_data(data: list[dict]) -> int:
 
 def compute_attendance_status(verbose: bool = True, force: Union[bool, str] = False):
     """Update the status for Mobilize attendances modified since last update"""
+    # Cache the existing attendees, so people can be looked up quickly
     MobilizeAttendance.initialize_caches()
     table = model.attendance_info
     if force:
@@ -206,6 +230,3 @@ def compute_attendance_status(verbose: bool = True, force: Union[bool, str] = Fa
             logger.info(f"Updating status for {len(attendances)} attendances...")
         compute_status(conn, attendances, verbose, force)
         conn.commit()
-    if verbose:
-        counts = MobilizeAttendance.attendee_counts
-        logger.info(f"Attendee cache lookups [hit/miss/no-person]: {counts}")

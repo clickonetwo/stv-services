@@ -27,6 +27,7 @@ import sqlalchemy as sa
 from sqlalchemy.future import Connection
 
 from .utils import validate_hash, fetch_all_hashes, fetch_hash, ActionNetworkObject
+from ..core import Configuration, Session
 from ..core.logging import get_logger
 from ..data_store import model
 from ..data_store.persisted_dict import PersistedDict, lookup_objects
@@ -408,8 +409,8 @@ class ActionNetworkPerson(ActionNetworkObject):
         )
 
     @classmethod
-    def from_hash(cls, data: dict) -> "ActionNetworkPerson":
-        parse = cls._parse_hash(data)
+    def from_hash(cls, data: dict = None) -> "ActionNetworkPerson":
+        parse = cls._parse_hash(data or {})
         return cls(**parse)
 
     @classmethod
@@ -441,6 +442,31 @@ class ActionNetworkPerson(ActionNetworkObject):
         data, _ = fetch_hash("people", hash_id)
         person = ActionNetworkPerson.from_hash(data)
         return person
+
+    @classmethod
+    def import_mobilize_person(cls, body: dict) -> "ActionNetworkPerson":
+        an_person = {
+            "person": {
+                "family_name": body["family_name"],
+                "given_name": body["given_name"],
+                "postal_addresses": body["postal_addresses"],
+                "email_addresses": body["email_addresses"],
+                "phone_numbers": body["phone_numbers"],
+            }
+        }
+        config = Configuration.get_global_config()
+        session = Session.get_global_session("action_network")
+        url = config["action_network_api_base_url"] + f"/people"
+        response = session.post(url, json=an_person)
+        if response.status_code != 200:
+            response.raise_for_status()
+        an_hash = response.json()
+        person = cls.from_hash(an_hash)
+        return person
+
+    @classmethod
+    def from_webhook(cls, data: dict = None) -> "ActionNetworkObject":
+        raise NotImplementedError("Action Network People can't come from webhooks")
 
 
 def import_people(
