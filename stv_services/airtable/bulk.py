@@ -122,6 +122,8 @@ def update_all_records(verbose: bool = True, force: bool = False) -> int:
             with Postgres.get_global_engine().connect() as conn:  # type: Connection
                 person = ActionNetworkPerson.from_lookup(conn, uuid=exc.uuid)
                 person.compute_status(conn, True)
+                person.persist(conn)
+                conn.commit()
     return total
 
 
@@ -141,6 +143,8 @@ def update_changed_records() -> dict:
             with Postgres.get_global_engine().connect() as conn:  # type: Connection
                 person = ActionNetworkPerson.from_lookup(conn, uuid=exc.uuid)
                 person.compute_status(conn, True)
+                person.persist(conn)
+                conn.commit()
     return results
 
 
