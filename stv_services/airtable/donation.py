@@ -34,6 +34,7 @@ from ..core import Configuration
 from ..core.logging import get_logger
 from ..core.utilities import airtable_timestamp
 from ..data_store import model
+from ..data_store.persisted_dict import ForceRecomputeError
 
 logger = get_logger(__name__)
 donation_table_name = "Donations"
@@ -78,7 +79,17 @@ def create_donation_record(conn: Connection, donation: ActionNetworkDonation) ->
     if not donor:
         raise KeyError("Donation '{donation['uuid']}' has no donor")
     if not donor["contact_record_id"]:
-        raise KeyError(f"Donor '{donor['uuid']}' is not a contact")
+        # Recurring donations after the first don't modify their Action Network
+        # person so, although the person is notified for re-import, we won't
+        # see their modification date as changed, and so we won't have
+        # recomputed their status.  In most cases, this doesn't matter, because
+        # their first recurring donation will have marked them as a donor, but
+        # in the case of annual recurring donations they may not have been
+        # so marked.  We recompute their status to keep this error from
+        # recurring, and we fail this update to force an immediate re-update.
+        raise ForceRecomputeError(
+            f"Donor '{donor['uuid']}' is not a contact", uuid=donor["uuid"]
+        )
     attribution_record_id = None
     if attribution_id := donation["attribution_id"]:
         # find the matching fundraising page record, if there is one

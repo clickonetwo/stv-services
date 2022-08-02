@@ -63,7 +63,7 @@ from stv_services.airtable.volunteer import (
 from stv_services.core import Configuration
 from stv_services.core.logging import get_logger
 from stv_services.data_store import Postgres
-from stv_services.data_store.persisted_dict import PersistedDict
+from stv_services.data_store.persisted_dict import PersistedDict, ForceRecomputeError
 from stv_services.mobilize.event import MobilizeEvent
 
 logger = get_logger(__name__)
@@ -107,12 +107,21 @@ def update_all_records(verbose: bool = True, force: bool = False) -> int:
     inserting new event records without the link to the contact and then
     updating them after the contact has been updated.  This double-update of
     event records costs very little because new events are rarely created."""
-    total = 0
-    total += update_volunteer_records(verbose, force)
-    total += update_contact_records(verbose, force)
-    total += update_funder_records(verbose, force)
-    total += update_donation_records(verbose, force)
-    total += update_event_records(verbose, force)
+    while True:
+        total = 0
+        total += update_volunteer_records(verbose, force)
+        total += update_contact_records(verbose, force)
+        total += update_funder_records(verbose, force)
+        try:
+            total += update_donation_records(verbose, force)
+            total += update_event_records(verbose, force)
+            break
+        except ForceRecomputeError as exc:
+            logger.warning(f"Forcing status update: {exc.message}")
+            # One of the updates noticed a person who needs to be recomputed
+            with Postgres.get_global_engine().connect() as conn:  # type: Connection
+                person = ActionNetworkPerson.from_lookup(conn, uuid=exc.uuid)
+                person.compute_status(conn, True)
     return total
 
 
@@ -120,9 +129,18 @@ def update_changed_records() -> dict:
     """Update records that need it.  See the commentary on `update_all_records`
     to understand why event records are updated last, even though contact
     records may have links to them."""
-    results = update_changed_person_records()
-    results.update(update_changed_donation_records())
-    results.update(update_changed_event_records())
+    while True:
+        results = update_changed_person_records()
+        try:
+            results.update(update_changed_donation_records())
+            results.update(update_changed_event_records())
+            break
+        except ForceRecomputeError as exc:
+            logger.warning(f"Forcing status update: {exc.message}")
+            # One of the updates noticed a person who needs to be recomputed
+            with Postgres.get_global_engine().connect() as conn:  # type: Connection
+                person = ActionNetworkPerson.from_lookup(conn, uuid=exc.uuid)
+                person.compute_status(conn, True)
     return results
 
 

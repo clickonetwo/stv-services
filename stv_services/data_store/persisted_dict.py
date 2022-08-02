@@ -27,6 +27,13 @@ from sqlalchemy.dialects import postgresql as psql
 from sqlalchemy.future import Connection
 
 
+class ForceRecomputeError(Exception):
+    def __init__(self, msg, uuid):
+        super().__init__(msg)
+        self.message = msg
+        self.uuid = uuid
+
+
 class PersistedDict(dict):
     """
     A `PersistedDict` is a standard dictionary with an associated table
