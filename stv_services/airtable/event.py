@@ -47,6 +47,7 @@ event_table_schema = {
     "title": FieldInfo("Mobilize Event Name*", "singleLineText", "event"),
     "event_type": FieldInfo("Mobilize Event Type*", "singleSelect", "event"),
     "partner_name": FieldInfo("Mobilize Partner Name*", "singleLineText", "event"),
+    "is_coordinated": FieldInfo("Coordinated?*", "checkbox", "event"),
     "shift_summary": FieldInfo("Shift Signup Summary*", "multilineText", "compute"),
     "contact": FieldInfo("Event Organizer*", "multipleRecordLinks", "compute"),
     "event_url": FieldInfo("Mobilize Event Link*", "url", "event"),

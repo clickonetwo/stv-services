@@ -159,7 +159,7 @@ class MobilizeEvent(PersistedDict):
         modified_date = datetime.fromtimestamp(body["modified_date"], tz=timezone.utc)
         title = body["title"]
         description = body["description"]
-        sponsor_id, partner_name = cls.org_info(body["sponsor"])
+        sponsor_id, partner_name, is_coordinated = cls.org_info(body["sponsor"])
         event_type = body["event_type"]
         event_url = body["browser_url"]
         contact_email = cls.contact_info(body["contact"])
@@ -170,6 +170,7 @@ class MobilizeEvent(PersistedDict):
             title=title,
             description=description,
             sponsor_id=sponsor_id,
+            is_coordinated=is_coordinated,
             partner_name=partner_name,
             event_type=event_type,
             event_url=event_url,
@@ -178,15 +179,13 @@ class MobilizeEvent(PersistedDict):
         )
 
     @classmethod
-    def org_info(cls, body: dict) -> (int, str):
+    def org_info(cls, body: dict) -> (int, str, bool):
         org_id = body["id"]
         org_name = body["name"]
-        if body.get("is_coordinated"):
-            # we are an independent org, we can't get data from coordinated events
-            raise ValueError(f"Event organization '{org_name}' is coordinated")
+        is_coordinated = body.get("is_coordinated", False)
         if org_id == cls.our_org_id:
             org_name = ""
-        return org_id, org_name
+        return org_id, org_name, is_coordinated
 
     @classmethod
     def contact_info(cls, body: dict) -> str:
@@ -256,12 +255,7 @@ def event_query(timestamp: float = None, force: bool = False) -> dict:
     if timestamp and not force:
         query["updated_since"] = int(timestamp)
     if force:
-        # we never return events created/modified before 1/1/2022
-        # EXCEPT in dev we test back to 2021
-        if Configuration.get_env() == "DEV":
-            cutoff_lo = datetime(2021, 1, 1, tzinfo=timezone.utc)
-        else:
-            cutoff_lo = datetime(2022, 1, 1, tzinfo=timezone.utc)
+        cutoff_lo = datetime(2022, 1, 1, tzinfo=timezone.utc)
         query["timeslot_start"] = f"gte_{int(cutoff_lo.timestamp())}"
     else:
         query["timeslot_start"] = "gte_now"

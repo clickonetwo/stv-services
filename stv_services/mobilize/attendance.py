@@ -107,6 +107,8 @@ class MobilizeAttendance(PersistedDict):
     @classmethod
     def from_hash(cls, body: dict) -> "MobilizeAttendance":
         uuid = body["id"]
+        if not uuid:
+            raise ValueError(f"Attendance is for a coordinated event")
         created_date = datetime.fromtimestamp(body["created_date"], tz=timezone.utc)
         modified_date = datetime.fromtimestamp(body["modified_date"], tz=timezone.utc)
         event = body["event"]
@@ -115,6 +117,8 @@ class MobilizeAttendance(PersistedDict):
             raise ValueError(f"Attendance is for unknown event {event_id}")
         event_type = event["event_type"]
         timeslot_id = body["timeslot"]["id"]
+        if not timeslot_id:
+            raise ValueError(f"Attendance is for a coordinated event")
         email = None
         if emails := body["person"]["email_addresses"]:
             email = emails[0].get("address")
@@ -190,11 +194,7 @@ def attendance_query(timestamp: float = None, force: bool = False) -> dict:
         return dict(updated_since=int(timestamp))
     else:
         # we never return attendances created/modified before 1/1/2022
-        # EXCEPT in dev we test back to 2021
-        if Configuration.get_env() == "DEV":
-            cutoff_lo = datetime(2021, 1, 1, tzinfo=timezone.utc)
-        else:
-            cutoff_lo = datetime(2022, 1, 1, tzinfo=timezone.utc)
+        cutoff_lo = datetime(2022, 1, 1, tzinfo=timezone.utc)
         return dict(updated_since=int(cutoff_lo.timestamp()))
 
 

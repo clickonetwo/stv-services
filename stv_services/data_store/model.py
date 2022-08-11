@@ -184,6 +184,7 @@ event_info = sa.Table(
     sa.Column("title", sa.Text, nullable=False),
     sa.Column("description", sa.Text, default=""),
     sa.Column("sponsor_id", sa.Integer, index=True, nullable=False),
+    sa.Column("is_coordinated", sa.Boolean, default=False),
     sa.Column("partner_name", sa.Text, index=True, default=""),
     sa.Column("event_type", sa.Text, index=True, nullable=False),
     sa.Column("event_url", sa.Text, nullable=False),
