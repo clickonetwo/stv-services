@@ -27,14 +27,14 @@ from stv_services.mobilize import event, attendance
 def import_and_update_all(verbose: bool = True, force: bool = False):
     """Get all new and updated events and attendances from Mobilize"""
     # events and timeslots first, because we only import attendances for those
-    event.import_events(verbose, force)
-    event.compute_event_status(verbose, force)
+    event.import_events(verbose, True)
+    event.compute_event_status(verbose, True)
     # next, make sure the organizers are contacts and re-update the events
     # that were waiting for them to become contacts
     bulk.update_contact_records(verbose)
     bulk.update_event_records(verbose)
     # now load the attendances
-    attendance.import_attendances(verbose, force)
-    attendance.compute_attendance_status(verbose, force)
+    attendance.import_attendances(verbose, True)
+    attendance.compute_attendance_status(verbose, True)
     # finally, force remake the calendar
     event.make_event_calendar(verbose, True)
