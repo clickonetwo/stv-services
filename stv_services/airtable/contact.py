@@ -52,6 +52,7 @@ contact_table_schema = {
     "summary_2021": FieldInfo("2021 Donations Summary*", "multilineText", "person"),
     "is_funder": FieldInfo("In Fundraising Table?", "checkbox", "person"),
     "assigns_2020": FieldInfo("2020 Assignments*", "multipleSelects", "compute"),
+    "shifts_2020": FieldInfo("2020 Shifts*", "number", "compute"),
     "signup_interests": FieldInfo(
         "2022 Signup Interests*", "multipleSelects", "compute"
     ),
@@ -145,7 +146,7 @@ def create_contact_record(conn: Connection, person: ActionNetworkPerson) -> dict
     record[column_ids["signup_notes"]] = "\n".join(signup_notes)
     record[column_ids["fundraise_interests"]] = list(fundraise_interests)
     record[column_ids["fundraise_notes"]] = custom_fields.get("2022_fundraiseidea", "")
-    # find the matching external record, if there is one
+    # find the matching external record, if there is one, and set values
     query = sa.select(model.external_info).where(
         model.external_info.c.email == person["email"]
     )
@@ -154,6 +155,8 @@ def create_contact_record(conn: Connection, person: ActionNetworkPerson) -> dict
         # convert comma-separated text to multi-select array
         values = value.split(",")
         record[column_ids["assigns_2020"]] = [v.strip() for v in values]
+    if match and (value := match.get("shifts_2020")):
+        record[column_ids["shifts_2020"]] = value
     # for team leads, find all the team members
     query = sa.select(model.person_info.c.contact_record_id).where(
         sa.and_(
