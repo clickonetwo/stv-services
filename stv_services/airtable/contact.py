@@ -52,7 +52,10 @@ contact_table_schema = {
     "summary_2021": FieldInfo("2021 Donations Summary*", "multilineText", "person"),
     "is_funder": FieldInfo("In Fundraising Table?", "checkbox", "person"),
     "assigns_2020": FieldInfo("2020 Assignments*", "multipleSelects", "compute"),
-    "shifts_2020": FieldInfo("2020 Shifts*", "number", "compute"),
+    "shifts_2020": FieldInfo("2020 Shifts*", "number", "external"),
+    "delegate_ga_2020": FieldInfo("2020 GA Delegation*", "checkbox", "external"),
+    "delegate_pa_2020": FieldInfo("2020 PA Delegation*", "checkbox", "external"),
+    "delegate_az_2020": FieldInfo("2020 AZ Delegation*", "checkbox", "external"),
     "signup_interests": FieldInfo(
         "2022 Signup Interests*", "multipleSelects", "compute"
     ),
@@ -118,10 +121,18 @@ def create_contact_record(conn: Connection, person: ActionNetworkPerson) -> dict
     config = Configuration.get_global_config()
     column_ids = config["airtable_stv_contact_schema"]["column_ids"]
     record = dict()
+    # find the matching external record, if there is one, and set values
+    query = sa.select(model.external_info).where(
+        model.external_info.c.email == person["email"]
+    )
+    external = conn.execute(query).mappings().first()
     for field_name, info in contact_table_schema.items():
         if info.source == "person":
             # not all fields have values, so only assign if there is one
             if (value := person.get(field_name)) is not None:
+                record[column_ids[field_name]] = value
+        elif info.source == "external":
+            if external and (value := external.get(field_name)):
                 record[column_ids[field_name]] = value
     custom_fields = person["custom_fields"]
     signup_interests, fundraise_interests = set(), set()
@@ -146,17 +157,10 @@ def create_contact_record(conn: Connection, person: ActionNetworkPerson) -> dict
     record[column_ids["signup_notes"]] = "\n".join(signup_notes)
     record[column_ids["fundraise_interests"]] = list(fundraise_interests)
     record[column_ids["fundraise_notes"]] = custom_fields.get("2022_fundraiseidea", "")
-    # find the matching external record, if there is one, and set values
-    query = sa.select(model.external_info).where(
-        model.external_info.c.email == person["email"]
-    )
-    match = conn.execute(query).mappings().first()
-    if match and (value := match.get("assigns_2020")):
+    if external and (value := external.get("assigns_2020")):
         # convert comma-separated text to multi-select array
         values = value.split(",")
         record[column_ids["assigns_2020"]] = [v.strip() for v in values]
-    if match and (value := match.get("shifts_2020")):
-        record[column_ids["shifts_2020"]] = value
     # for team leads, find all the team members
     query = sa.select(model.person_info.c.contact_record_id).where(
         sa.and_(
