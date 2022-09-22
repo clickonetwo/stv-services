@@ -229,23 +229,23 @@ def compute_status_all(ctx: click.Context, force: bool = False):
 
 @stv.command()
 @click.option("--force/--no-force", default=False, help="Force compute of all")
-@click.option("--query", default="", help="Select query for objects of type")
+@click.option("--query", default="", help="Select query for objects of kind")
 @click.option(
-    "--type",
+    "--kind",
     default="people",
     help="metadata, fundraising_pages, donations, people, events, or attendances",
 )
 @click.pass_context
-def compute_status_for_type(ctx: click.Context, type: str, force: bool, query: str):
+def compute_status_for_type(ctx: click.Context, kind: str, force: bool, query: str):
     verbose = ctx.obj["verbose"]
-    if type == "events":
+    if kind == "events":
         event.compute_event_status(verbose, query or force)
-    elif type == "attendances":
+    elif kind == "attendances":
         attendance.compute_attendance_status(verbose, query or force)
-    elif type in ("metadata", "fundraising_pages", "donations", "people"):
-        an_bulk.compute_status_for_type(type, verbose, query or force)
+    elif kind in ("metadata", "fundraising_pages", "donations", "people"):
+        an_bulk.compute_status_for_type(kind, verbose, query or force)
     else:
-        raise ValueError(f"No such object type: {type}")
+        raise ValueError(f"No such object type: {kind}")
 
 
 @stv.command()
@@ -485,17 +485,17 @@ def update_from(
 
 @stv.command()
 @click.option(
-    "--type", default="all", help="volunteer, contact, funder, donation, event, or all"
+    "--kind", default="all", help="volunteer, contact, funder, donation, event, or all"
 )
 @click.option("--repair/--no-repair", default=False, help="Fix non-matching records")
-def verify_match(type: str, repair: bool = False):
-    sync.verify_match(type, repair=repair)
+def verify_match(kind: str, repair: bool = False):
+    sync.verify_match(kind, repair=repair)
 
 
 @stv.command()
-@click.option("--type", default="contact", help="volunteer, contact, funder")
-def analyze_match(type: str):
-    report = sync.sync_report(type)
+@click.option("--kind", default="contact", help="volunteer, contact, funder")
+def analyze_match(kind: str):
+    report = sync.sync_report(kind)
     sync.analyze_report(report)
 
 
