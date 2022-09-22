@@ -36,10 +36,8 @@ logger = get_logger(__name__)
 def fetch_all_hashes(
     hash_type: str,
     page_processor: Callable[[list[dict]], int],
-    query: dict = None,
+    query: list[tuple] = None,
     verbose: bool = True,
-    skip_pages: int = 0,
-    max_pages: int = 0,
 ) -> int:
     config = Configuration.get_global_config()
     url = config["mobilize_api_base_url"] + f"/{hash_type}"
@@ -48,10 +46,6 @@ def fetch_all_hashes(
             logger.info(f"Fetching {hash_type} matching {query}...")
         else:
             logger.info(f"Fetching all {hash_type}...")
-    if skip_pages:
-        query["page"] = skip_pages + 1
-        if verbose:
-            logger.info(f"(Starting import on page {skip_pages + 1})")
     if query:
         url += "?" + urlencode(query)
     return fetch_hash_pages(
@@ -59,7 +53,6 @@ def fetch_all_hashes(
         url=url,
         page_processor=page_processor,
         verbose=verbose,
-        max_pages=max_pages,
     )
 
 
@@ -68,7 +61,6 @@ def fetch_hash_pages(
     url: str,
     page_processor: Callable[[list[dict]], int],
     verbose: bool = True,
-    max_pages: int = 0,
 ) -> int:
     start_time = datetime.now()
     start_process_time = process_time()
@@ -90,10 +82,6 @@ def fetch_hash_pages(
         total_count += page_count
         if verbose:
             logger.info(f"({import_count}/{total_count})")
-        if max_pages and page_number >= max_pages:
-            if verbose:
-                logger.info(f"(Stopped after importing {max_pages} pages)")
-            break
     elapsed_process_time = process_time() - start_process_time
     elapsed_time = datetime.now() - start_time
     if verbose:

@@ -166,9 +166,7 @@ class MobilizeAttendance(PersistedDict):
                         logger.info("Ignoring Mobilize person import failure")
 
 
-def import_attendances(
-    verbose: bool = True, force: bool = False, skip_pages: int = 0, max_pages: int = 0
-):
+def import_attendances(verbose: bool = True, force: bool = False):
     # first make sure the events are cached, so attendance import can find them
     MobilizeEvent.initialize_caches()
     # now make sure prior attendances are cached, so attendance import doesn't
@@ -178,24 +176,21 @@ def import_attendances(
     config = Configuration.get_global_config()
     start_timestamp = datetime.now(tz=timezone.utc)
     query = attendance_query(config.get("attendances_last_update_timestamp"), force)
-    fetch_all_hashes(
-        "attendances", import_attendance_data, query, verbose, skip_pages, max_pages
-    )
-    if not max_pages:
-        config["attendances_last_update_timestamp"] = start_timestamp.timestamp()
-        config.save_to_data_store()
+    fetch_all_hashes("attendances", import_attendance_data, query, verbose)
     if verbose:
         counts = MobilizeAttendance.attendee_counts
         logger.info(f"Attendee cache lookups [repeat/first-time/imported]: {counts}")
+    config["attendances_last_update_timestamp"] = start_timestamp.timestamp()
+    config.save_to_data_store()
 
 
-def attendance_query(timestamp: float = None, force: bool = False) -> dict:
+def attendance_query(timestamp: float = None, force: bool = False) -> list[tuple]:
     if timestamp and not force:
-        return dict(updated_since=int(timestamp))
+        return list(dict(updated_since=int(timestamp)).items())
     else:
         # we never return attendances created/modified before 1/1/2022
         cutoff_lo = datetime(2022, 1, 1, tzinfo=timezone.utc)
-        return dict(updated_since=int(cutoff_lo.timestamp()))
+        return list(dict(updated_since=int(cutoff_lo.timestamp())).items())
 
 
 def import_attendance_data(data: list[dict]) -> int:

@@ -238,19 +238,16 @@ class MobilizeTimeslot(PersistedDict):
         return lookup_objects(conn, query, lambda d: cls(**d))
 
 
-def import_events(
-    verbose: bool = True, force: bool = False, skip_pages: int = 0, max_pages: int = 0
-):
+def import_events(verbose: bool = True, force: bool = False):
     config = Configuration.get_global_config()
     start_timestamp = datetime.now(tz=timezone.utc)
     query = event_query(config.get("events_last_update_timestamp"), force)
-    fetch_all_hashes("events", import_event_data, query, verbose, skip_pages, max_pages)
-    if not max_pages:
-        config["events_last_update_timestamp"] = start_timestamp.timestamp()
-        config.save_to_data_store()
+    fetch_all_hashes("events", import_event_data, query, verbose)
+    config["events_last_update_timestamp"] = start_timestamp.timestamp()
+    config.save_to_data_store()
 
 
-def event_query(timestamp: float = None, force: bool = False) -> dict:
+def event_query(timestamp: float = None, force: bool = False) -> list[tuple]:
     query = {}
     if timestamp and not force:
         query["updated_since"] = int(timestamp)
@@ -259,7 +256,11 @@ def event_query(timestamp: float = None, force: bool = False) -> dict:
         query["timeslot_start"] = f"gte_{int(cutoff_lo.timestamp())}"
     else:
         query["timeslot_start"] = "gte_now"
-    return query
+    # hack to handle the Mobilize API convention
+    items = list(query.items())
+    items.append(("visibility", "PRIVATE"))
+    items.append(("visibility", "PUBLIC"))
+    return items
 
 
 def import_event_data(data: list[dict]) -> int:
