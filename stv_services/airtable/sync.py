@@ -214,7 +214,12 @@ def match_records(type_: str, repair: bool = False) -> (int, int):
         process_airtable_records(schema, page_processor, fields=[])
         if repair:
             for obj in record_id_map.values():
+                if type_ == "contact":
+                    ensure_no_event_for_contact_id(conn, obj["contact_record_id"])
                 obj[f"{type_}_record_id"] = ""
+                obj[f"{type_}_updated"] = model.epoch
+                if type_ == "event":
+                    obj[f"{type_}_contact_id"] = ""
                 obj.persist(conn)
             conn.commit()
             delete_airtable_records(type_, extra_records)
@@ -235,3 +240,14 @@ def delete_airtable_records(type_: str, record_ids: list[str]):
         end = min(start + 50, total)
         web.batch_delete(base_id, table_id, record_ids[start:end])
         logger.info(f"({end})")
+
+
+def ensure_no_event_for_contact_id(conn: Connection, contact_id: str):
+    query = sa.select(model.event_info).where(
+        model.event_info.c.contact_id == contact_id
+    )
+    events = MobilizeEvent.from_query(conn, query)
+    for event in events:
+        event["contact_id"] = ""
+        event.persist(conn)
+    pass
