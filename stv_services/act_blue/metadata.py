@@ -82,25 +82,29 @@ class ActBlueDonationMetadata(PersistedDict):
         if self["item_type"] != "contribution":
             # we don't process returns or other types
             return
-        # look for a person with the refcode or email.  Note that refcodes are
-        # only received against general pages, whereas emails are only found
-        # on supporter pages, so it can only be one or the other
+        # look for a person with the refcode or page owner email.  We have
+        # discovered that sometimes people use refcodes with their supporter
+        # pages, so while we prefer refcodes to page owners when attributing,
+        # we have to check to see whether the refcode is tied to a person
+        # before we decide to prefer the refcode to the page owner.
         if force:
             # remove computed attributions
             self["attribution_id"] = ""
+        person = None
         if code := self["refcode"]:
             query = sa.select(model.person_info).where(
                 model.person_info.c.funder_refcode == code
             )
-        elif email := self["form_owner_email"]:
+            person = conn.execute(query).mappings().first()
+        if not person and (email := self["form_owner_email"]):
             query = sa.select(model.person_info).where(
                 model.person_info.c.email == email
             )
+            person = conn.execute(query).mappings().first()
+        if person:
+            self.notice_person(conn, person)
         else:
             self["updated_date"] = datetime.now(tz=timezone.utc)
-            return
-        if person := conn.execute(query).mappings().first():
-            self.notice_person(conn, person)
 
     def notice_person(self, conn: Connection, person: dict):
         if self["attribution_id"]:
