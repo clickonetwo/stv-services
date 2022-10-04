@@ -236,7 +236,7 @@ def compute_status_all(ctx: click.Context, force: bool = False):
     help="metadata, fundraising_pages, donations, people, events, or attendances",
 )
 @click.pass_context
-def compute_status_for_type(ctx: click.Context, kind: str, force: bool, query: str):
+def compute_status_for(ctx: click.Context, kind: str, force: bool, query: str):
     verbose = ctx.obj["verbose"]
     if kind == "events":
         event.compute_event_status(verbose, query or force)
@@ -245,7 +245,7 @@ def compute_status_for_type(ctx: click.Context, kind: str, force: bool, query: s
     elif kind in ("metadata", "fundraising_pages", "donations", "people"):
         an_bulk.compute_status_for_type(kind, verbose, query or force)
     else:
-        raise ValueError(f"No such object type: {kind}")
+        raise ValueError(f"No such kind: {kind}")
 
 
 @stv.command()
