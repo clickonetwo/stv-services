@@ -43,6 +43,8 @@ async def receive_notifications(body: list[dict]):
         for key, val in hash_dict.items():
             if key == "action_network:sponsor":
                 logger.info(f"Ignoring '{key}' content")
+            elif key == "idempotency_key":
+                logger.info(f"Ignoring idempotency key: '{val}'")
             else:
                 compact = json.dumps({key: val}, separators=(",", ":"))
                 length: int = await db.lpush("action_network", compact)
