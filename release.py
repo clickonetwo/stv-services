@@ -46,7 +46,7 @@ def run_release_process():
     if not config.get("airtable_stv_base_name"):
         logging.error(
             "No configuration data: "
-            "be sure to load configuration before starting services"
+            "Execute the stv.py command `load-config`"
         )
         return
 

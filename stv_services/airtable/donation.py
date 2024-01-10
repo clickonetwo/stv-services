@@ -77,7 +77,7 @@ def create_donation_record(conn: Connection, donation: ActionNetworkDonation) ->
     query = sa.select(table).where(table.c.uuid == donation["donor_id"])
     donor: dict = conn.execute(query).mappings().first()
     if not donor:
-        raise KeyError("Donation '{donation['uuid']}' has no donor")
+        raise KeyError(f"Donation '{donation['uuid']}' has no donor")
     if not donor["contact_record_id"]:
         # Recurring donations after the first don't modify their Action Network
         # person so, although the person is notified for re-import, we won't

@@ -28,7 +28,7 @@ class RedisAsync:
     A singleton dispenser of async redis connections.
     """
 
-    from aioredis import Redis, RedisError
+    from redis.asyncio import Redis, RedisError
 
     _pool = None
     Error = RedisError
